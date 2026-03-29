@@ -1,0 +1,139 @@
+---
+title: "Proxy Quickstart"
+description: "Get the AI Firewall proxy running in 2 minutes"
+---
+
+## Prerequisites
+
+- Node.js 20+
+- npm 9+
+
+## Install & Start
+
+<CodeGroup>
+```bash npm
+# From the repo root
+npm install
+cd packages/scanner && npm run build
+cd ../.. && cd proxy && npm run build && npm start
+```
+
+```bash Docker
+docker compose up proxy
+```
+</CodeGroup>
+
+The proxy starts on `http://localhost:8080`. Verify:
+
+```bash
+curl http://localhost:8080/health
+# → { "status": "ok" }
+```
+
+## Connect Your AI Tool
+
+Point any OpenAI-compatible client to the proxy:
+
+<Tabs>
+<Tab title="VS Code Extension">
+The extension auto-starts the proxy when you open VS Code. No configuration needed — it spawns `node proxy/dist/server.js` and connects to port 8080.
+</Tab>
+
+<Tab title="CLI Agent">
+```bash
+cd extensions/cli && npm run build
+node dist/index.js
+```
+The CLI automatically routes through `localhost:8080`.
+</Tab>
+
+<Tab title="Any OpenAI Client">
+```python
+import openai
+
+client = openai.OpenAI(
+    base_url="http://localhost:8080/v1",
+    api_key="your-key"  # or set in proxy vault
+)
+
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Hello world"}]
+)
+# Response includes X-AF-* headers with scan results
+```
+</Tab>
+
+<Tab title="curl">
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-your-key" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Write a hello world function"}]
+  }'
+```
+</Tab>
+</Tabs>
+
+## Test the Scanner
+
+Send a request with a secret to see it blocked:
+
+```bash
+curl -X POST http://localhost:8080/api/estimate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [
+      {"role": "user", "content": "Deploy with key AKIAIOSFODNN7EXAMPLE to postgres://admin:pass@prod/db"}
+    ]
+  }'
+```
+
+Response:
+```json
+{
+  "estimatedInputTokens": 24,
+  "tokenMethod": "tiktoken",
+  "scan": {
+    "action": "BLOCK",
+    "secretsFound": 2,
+    "riskScore": 80,
+    "reasons": ["Critical secret detected"]
+  }
+}
+```
+
+## Scan a File
+
+```bash
+curl -X POST http://localhost:8080/api/scan/file \
+  -H "Content-Type: application/json" \
+  -d '{"filePath": "./proxy/.env.example"}'
+```
+
+## Configuration
+
+Edit `proxy/policy.json` to customize scanner behavior:
+
+```json
+{
+  "rules": {
+    "block_private_keys": true,
+    "block_aws_keys": true,
+    "redact_emails": true,
+    "redact_phone": true
+  },
+  "smart_routing": {
+    "enabled": false,
+    "cost_routing": { "enabled": false }
+  },
+  "approval": { "enabled": false }
+}
+```
+
+<Info>
+All features are disabled by default and opt-in via `policy.json`. The proxy never modifies your prompts without explicit configuration.
+</Info>

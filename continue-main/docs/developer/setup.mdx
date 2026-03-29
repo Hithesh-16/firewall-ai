@@ -1,0 +1,144 @@
+---
+title: "Developer Setup"
+description: "Set up the AI Firewall development environment from scratch"
+---
+
+<Info>
+The canonical setup guide is **LOCAL_SETUP.md** in the repo root. This page summarizes the key steps and links to the detailed guides.
+</Info>
+
+## Prerequisites
+
+| Requirement | Version | Check |
+|---|---|---|
+| Node.js | >= 20.19.0 | `node --version` |
+| npm | >= 10.x | `npm --version` |
+| Python | 3.9 - 3.11 | `python3 --version` |
+| VS Code | >= 1.70.0 | `code --version` |
+
+<Warning>
+**macOS users:** If you have Python 3.12+, use `/usr/bin/python3` (system Python 3.9) for native module builds: `npm_config_python=/usr/bin/python3 npm install`
+</Warning>
+
+## Quick Start (Proxy Only)
+
+```bash
+git clone https://github.com/your-org/ai-firewall.git
+cd ai-firewall && npm install
+
+# Build scanner package (required by proxy)
+cd packages/scanner && npm run build && cd ../..
+
+# Build and start proxy
+cd proxy && npm run build && npm start
+# → http://localhost:8080
+```
+
+## Full Setup (with VS Code Extension)
+
+See **LOCAL_SETUP.md** for the complete 7-step guide:
+
+<Steps>
+<Step title="Install root dependencies">
+```bash
+npm install
+```
+</Step>
+<Step title="Build shared packages">
+```bash
+node scripts/build-packages.js
+```
+Builds in 3 phases: `config-types` + `terminal-security` → `fetch` + `config-yaml` + `llm-info` → `openai-adapters`
+</Step>
+<Step title="Install and link core engine">
+```bash
+cd core && PUPPETEER_SKIP_DOWNLOAD=true npm install && npm link && cd ..
+```
+</Step>
+<Step title="Build GUI">
+```bash
+cd gui && npm install && npm link @continuedev/core && NODE_OPTIONS="--max-old-space-size=4096" npm run build && cd ..
+```
+</Step>
+<Step title="Package VS Code extension">
+```bash
+cd extensions/vscode && npm install && npm link @continuedev/core && npm run package && cd ../..
+```
+VSIX at `extensions/vscode/build/ai-firewall-{VERSION}.vsix`
+</Step>
+<Step title="Install into VS Code">
+```bash
+code --install-extension extensions/vscode/build/ai-firewall-*.vsix
+```
+</Step>
+<Step title="Start the security proxy">
+```bash
+cd proxy && npm install && npm run build && node dist/server.js
+```
+</Step>
+</Steps>
+
+## Development Modes
+
+<Tabs>
+<Tab title="Proxy Dev (Hot Reload)">
+```bash
+cd proxy && npm run dev
+# Starts on :8080 with nodemon, auto-restarts on changes
+```
+</Tab>
+<Tab title="GUI Dev (Vite HMR)">
+```bash
+cd gui && npm run dev
+# Starts on :3000 with hot module replacement
+```
+</Tab>
+<Tab title="Extension Debug">
+1. Open repo in VS Code
+2. Run and Debug → Select "Launch extension" → Press F5
+3. Separate terminal: `cd proxy && npm run dev`
+</Tab>
+<Tab title="CLI Agent">
+```bash
+cd extensions/cli && npm install && npm run build && node dist/index.js
+```
+</Tab>
+</Tabs>
+
+## Running Tests
+
+```bash
+cd proxy && npm test   # 90 tests (scanners, token, file scan, MCP, control plane, enterprise, reducer)
+cd core && npm test    # Core agent engine tests
+cd gui && npm test     # GUI component tests
+
+# Type check without emit
+cd proxy && npx tsc --noEmit
+
+# Run benchmark (investor demo)
+cd proxy && npx ts-node src/test/benchmark.ts
+```
+
+## Environment Configuration
+
+Copy `proxy/.env.example` to `proxy/.env`:
+
+```bash
+PORT=8080                     # Proxy port
+DB_PATH=./data/firewall.db    # SQLite database
+MASTER_KEY=your-secret-key    # Vault encryption key (required for provider keys)
+STRICT_LOCAL=false             # Block all cloud providers
+LOG_LEVEL=info                 # Pino log level (debug|info|warn|error)
+CACHE_STORE=memory             # memory | valkey
+```
+
+## Key Developer Reference Files
+
+| File | What It Contains |
+|------|-----------------|
+| `CLAUDE.md` | Full developer reference — architecture, all modules, 22 DB tables, 35+ endpoints, SOLID patterns, conventions |
+| `LOCAL_SETUP.md` | Step-by-step installation, proxy config, troubleshooting |
+| `CONTRIBUTING.md` | Git workflow, PR process, code standards, architecture diagrams |
+| `SECURITY.md` | Vulnerability reporting |
+| `IMPLEMENTATION_PLAN.md` | Master plan (Phases 1-7) with build order |
+| `proxy/policy.json` | Default security policy (all scanner rules, routing, approval config) |

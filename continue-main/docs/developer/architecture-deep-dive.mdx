@@ -1,0 +1,183 @@
+---
+title: "Architecture Deep Dive"
+description: "Internal architecture, module responsibilities, SOLID principles, and how to extend AI Firewall"
+---
+
+## Module Map
+
+Every module has a **single responsibility**. Here's what each does and where to find it:
+
+### Proxy Core (`proxy/src/`)
+
+| Module | File | SRP (Does ONE Thing) |
+|--------|------|---------------------|
+| Token Counter | `gateway/tokenCounter.ts` | Counts tokens via tiktoken with heuristic fallback |
+| Context Window | `gateway/contextWindow.ts` | Checks if messages fit context window (advisory only) |
+| Cost Estimator | `gateway/costEstimator.ts` | Estimates request cost from tokens + model pricing |
+| Chat Schemas | `schemas/chatSchemas.ts` | Validates chat input via Zod (strict roles, multimodal) |
+| Smart Router | `router/smartRouter.ts` | Risk-based + cost-aware model routing |
+| File Scan Service | `scanner/fileScanService.ts` | Orchestrates scanner pipeline for files |
+| File Scan Cache | `scanner/fileScanCache.ts` | Cache read/write/invalidate for file scans |
+| MCP Scan Pipeline | `mcp/mcpScanPipeline.ts` | Scans MCP tool I/O text through scanner pipeline |
+| MCP Audit Logger | `mcp/mcpAuditLogger.ts` | Writes/reads MCP audit log entries |
+| WebSocket Manager | `ws/wsManager.ts` | Connection lifecycle + message delivery |
+| Approval Service | `services/approvalService.ts` | Approval workflow (create/wait/resolve/timeout) |
+| Session Tracker | `services/sessionTracker.ts` | Active session lifecycle |
+| Notification Service | `notifications/notificationService.ts` | Pluggable notification dispatch |
+| Webhook Queue | `services/webhookQueue.ts` | Stripe-pattern delivery (6 retries, HMAC, idempotency) |
+| Cache Adapter | `cache/cacheAdapter.ts` | Cache interface + factory (memory or Valkey) |
+| License Verifier | `license/licenseVerifier.ts` | Ed25519 offline license key verification |
+| Feature Guard | `license/featureGuard.ts` | Fastify preHandler for license feature gating |
+| Grep Reducer | `reducer/grepReducer.ts` | Find matching lines by keyword |
+| Window Reducer | `reducer/windowReducer.ts` | Expand matches to N-line context windows |
+| Comment Stripper | `reducer/commentStripper.ts` | Remove comments, blanks, duplicate lines |
+| Hybrid Reducer | `reducer/hybridReducer.ts` | Orchestrate: grep → window → strip → budget |
+
+### Shared Package (`packages/scanner/`)
+
+| Module | SRP |
+|--------|-----|
+| `secretScanner.ts` | Detects 12 secret patterns via regex |
+| `piiScanner.ts` | Detects 7 PII patterns (with Luhn check for credit cards) |
+| `entropyScanner.ts` | Shannon entropy analysis for high-entropy tokens |
+| `promptInjectionScanner.ts` | 13 jailbreak/injection pattern categories |
+| `contextScanner.ts` | Adjusts severity based on file paths |
+| `patterns.ts` | Centralized regex patterns (OCP: add here, scanners auto-detect) |
+
+## SOLID Principles Applied
+
+### Single Responsibility (SRP)
+
+Every module has exactly **one reason to change**:
+
+```
+wsManager.ts       → Changes only when WebSocket protocol changes
+approvalService.ts → Changes only when approval workflow changes
+notificationService.ts → Changes only when dispatch logic changes
+```
+
+They don't know about each other. The route handler (approval.route.ts) wires them together.
+
+### Open/Closed (OCP)
+
+Add new capabilities without modifying existing code:
+
+```typescript
+// Add a new scanner pattern — edit patterns.ts only, scanners unchanged:
+export const secretPatterns = [
+  ...existingPatterns,
+  { type: "NEW_SECRET_TYPE", regex: /new-pattern/g, severity: "high" },
+];
+
+// Add a new notification channel — implement interface, register in server.ts:
+export const slackChannel: NotificationChannelHandler = {
+  type: "slack",
+  async send(userId, event, config) { /* ... */ }
+};
+registerChannel(slackChannel);  // In server.ts
+```
+
+### Dependency Inversion (DIP)
+
+Routes depend on **interfaces**, not implementations:
+
+```typescript
+// approval.route.ts depends on:
+import { getPendingApprovals, resolveApproval } from "../services/approvalService";
+// NOT on: import db from "../db/database" (implementation detail)
+
+// Cache consumers depend on CacheAdapter interface:
+const cache = await getCache();  // Returns memory or Valkey — caller doesn't know
+await cache.set("key", "value", 300);
+```
+
+### Interface Segregation (ISP)
+
+`@ai-firewall/scanner` exports **only scanner types** — no policy, auth, or gateway types:
+
+```typescript
+// Consumer only imports what they need:
+import { scanSecrets, type SecretScanResult } from "@ai-firewall/scanner";
+// NOT: import { PolicyConfig, User, Provider, ... }
+```
+
+## How to Add a New Feature
+
+### New Scanner Pattern
+
+1. Edit `packages/scanner/src/patterns.ts` — add pattern to `secretPatterns` or `piiPatterns`
+2. Rebuild: `cd packages/scanner && npm run build`
+3. Run tests: `cd proxy && npm test` — existing tests verify the pipeline
+4. Done. No other files need changes (OCP).
+
+### New Proxy Route
+
+1. Create `proxy/src/routes/yourFeature.route.ts`
+2. Define Zod schema in `proxy/src/schemas/` (don't inline)
+3. Register in `proxy/src/server.ts` — add before the `/v1/*` catch-all
+4. Add types to `proxy/src/types/index.ts` if needed
+5. Write tests in `proxy/src/test/yourFeature.test.ts`
+6. Register tests in `proxy/src/test/run-tests.ts`
+
+### New Notification Channel
+
+1. Create `proxy/src/notifications/channels/slack.ts`
+2. Implement `NotificationChannelHandler` interface
+3. Register in `server.ts`: `registerChannel(slackChannel)`
+4. No other files need changes (OCP + DIP).
+
+### New MCP Server
+
+1. Build as a standalone process in `packages/mcp-servers/src/servers/`
+2. Use `@ai-firewall/scanner` for scanning (not proxy internals)
+3. Register in MCP config — existing MCPConnection client connects automatically
+4. All tool calls scan through the gateway route
+
+## Database Schema
+
+22 tables in SQLite (WAL mode). Key tables:
+
+| Table | Phase | Rows Grow By |
+|-------|-------|-------------|
+| `logs` | 1 | Every LLM request |
+| `usage_logs` | 4 | Every LLM request (tokens + cost) |
+| `file_scan_cache` | P2 | Every unique file scanned |
+| `mcp_audit` | P3 | Every MCP tool call |
+| `approval_requests` | P4 | Every high-risk action |
+| `webhook_deliveries` | P5 | Every webhook event (with retries) |
+
+All tables use `INTEGER PRIMARY KEY AUTOINCREMENT` and `INTEGER` timestamps (ms since epoch).
+
+## Test Architecture
+
+90 tests in `proxy/src/test/run-tests.ts`:
+
+```
+14 — Original (policy, injection, STRICT_LOCAL, model policy, BlindMI)
+20 — Phase 1: Token Intelligence
+ 9 — Phase 2: File Scanning
+ 9 — Phase 3: MCP Gateway
+10 — Phase 4: Control Plane
+13 — Phase 5: Enterprise (cache, license, webhook)
+15 — Context Reducer (grep, window, strip, hybrid)
+```
+
+Tests are split into sync (original) and async (Phase 1+) arrays. Run with:
+
+```bash
+cd proxy && npm test  # or: npx ts-node src/test/run-tests.ts
+```
+
+## Design Decisions
+
+| Decision | Why |
+|---------|-----|
+| SQLite not Postgres (default) | Local-first, zero setup, single-file DB. Postgres optional via Phase 5 adapter. |
+| Pure-function scanners | No side effects = safe to use anywhere (proxy, MCP servers, CLI, tests) |
+| Advisory context window | OWASP: never silently modify user input. Warn via headers, user decides. |
+| Cost routing disabled by default | New features are opt-in via policy.json. Never surprise the user. |
+| Scanner re-exports in proxy | Backward compatibility. All existing imports still work after extraction. |
+| tini in Docker | Node.js doesn't handle SIGTERM as PID 1. Required for K8s graceful shutdown. |
+| bookworm-slim not alpine | better-sqlite3 is native C++. musl libc (Alpine) has documented segfault risks. |
+| Ed25519 for licenses | Offline verification, no phone-home. Same pattern as GitLab/n8n. |
+| Valkey not Redis | Redis SSPL license. Valkey is BSD-3, Linux Foundation backed. ioredis works unchanged. |

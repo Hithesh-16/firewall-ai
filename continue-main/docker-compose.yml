@@ -1,0 +1,75 @@
+# AI Firewall — Docker Compose
+#
+# Default: proxy only (SQLite, no external deps)
+# With PostgreSQL + Valkey: DB_TYPE=postgres CACHE_STORE=valkey docker compose up
+# With local LLM: docker compose --profile local-llm up
+# With dashboard: docker compose --profile dashboard up
+#
+# All services on internal bridge network. Only proxy port exposed.
+
+services:
+  proxy:
+    build: .
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file: .env
+    environment:
+      - PORT=8080
+      - DB_PATH=/app/proxy/data/firewall.db
+    volumes:
+      - proxy-data:/app/proxy/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      valkey:
+        condition: service_healthy
+        required: false
+    networks:
+      - internal
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: firewall
+      POSTGRES_USER: firewall
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "firewall"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+    profiles:
+      - postgres
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+    profiles:
+      - valkey
+
+  ollama:
+    image: ollama/ollama
+    networks:
+      - internal
+    profiles:
+      - local-llm
+
+volumes:
+  proxy-data:
+  pgdata:
+
+networks:
+  internal:
+    driver: bridge

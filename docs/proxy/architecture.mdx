@@ -1,0 +1,88 @@
+---
+title: "Architecture"
+description: "How AI Firewall's security proxy works — request flow, scanner pipeline, and system design"
+---
+
+## System Overview
+
+AI Firewall is a monorepo with four main components:
+
+```
+continue-main/
+├── proxy/              Security proxy (Fastify, port 8080)
+├── core/               Agent engine (60+ LLM providers, 26 tools)
+├── gui/                React + Redux webview UI
+├── extensions/         VS Code, JetBrains, CLI
+└── packages/
+    └── scanner/        Shared security scanners (@ai-firewall/scanner)
+```
+
+The **proxy** is the security boundary. Every LLM request, file read, and MCP tool call passes through it.
+
+## Request Flow
+
+Every chat request follows this pipeline:
+
+<Steps>
+<Step title="Token Estimation">
+Real token counting via `js-tiktoken` (WASM BPE tokenizer). Falls back to character heuristic if WASM fails. Sets `X-AF-Input-Tokens` header.
+</Step>
+
+<Step title="Scanner Pipeline">
+Six scanners run in sequence:
+1. **Secret Scanner** — 12 regex patterns (AWS keys, private keys, JWTs, DB URLs, GitHub tokens, etc.)
+2. **PII Scanner** — 7 patterns (email, phone, SSN, Aadhaar, PAN, credit card, IP)
+3. **Entropy Scanner** — Shannon entropy analysis for high-entropy tokens near context keywords
+4. **Context Scanner** — Adjusts severity based on file paths (test files get downgraded, auth files upgraded)
+5. **Prompt Injection Scanner** — 13 jailbreak/injection pattern categories
+6. **Policy Engine** — Weighted risk scoring → BLOCK / REDACT / ALLOW decision
+</Step>
+
+<Step title="Context Window Advisory">
+Checks if total tokens fit within the model's context window. **Never truncates** — sets `X-AF-Context-Overflow` header and lets the client warn the user. The request proceeds regardless.
+</Step>
+
+<Step title="Cost-Aware Routing (opt-in)">
+If enabled in `policy.json`, routes requests to cheaper models based on estimated cost. Disabled by default — falls through to risk-based routing.
+</Step>
+
+<Step title="Provider Adapter">
+Formats the request for the target provider (OpenAI, Anthropic, Gemini, Ollama) and forwards. Response is scanned for leaks on the way back.
+</Step>
+
+<Step title="Audit + Headers">
+Logs to SQLite, records token usage and cost, returns response with `X-AF-*` scan metadata headers.
+</Step>
+</Steps>
+
+## Response Headers
+
+Every proxied response includes these headers:
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `X-AF-Action` | ALLOW/BLOCK/REDACT | Policy decision |
+| `X-AF-Risk-Score` | 0-100 | Aggregate risk score |
+| `X-AF-Secrets-Count` | number | Secrets detected |
+| `X-AF-PII-Count` | number | PII items detected |
+| `X-AF-Input-Tokens` | number | Real tiktoken count |
+| `X-AF-Estimated-Cost` | number | Pre-request cost estimate |
+| `X-AF-Token-Method` | tiktoken/heuristic | Which tokenizer was used |
+| `X-AF-Context-Overflow` | true | Only when over context limit |
+| `X-AF-Context-Warning` | string | Advisory message |
+
+## Database
+
+SQLite with WAL mode. 22 tables covering audit logs, auth, providers, credits, file scan cache, MCP audit, approval workflow, and session tracking.
+
+<Tip>
+The proxy is designed as a **gateway, not a controller**. It informs via headers — never silently modifies your prompts, truncates your context, or blocks oversized requests. The client (extension/CLI) reads headers and lets you decide.
+</Tip>
+
+## Design Principles
+
+1. **Proxy is a gateway, not a controller** — informs, never modifies silently
+2. **Loosely coupled** — every feature toggleable via `policy.json`
+3. **Never truncate automatically** — warn via headers, let the user decide
+4. **Scan, don't manage** — proxy scans content, doesn't store/manage files
+5. **SOLID everywhere** — SRP per module, OCP via patterns, DIP via interfaces

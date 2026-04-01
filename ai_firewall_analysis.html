@@ -1,0 +1,488 @@
+
+<style>
+  :root { --gap: 16px; }
+  body { font-family: var(--font-sans); }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 20px; border-bottom: 0.5px solid var(--color-border-tertiary); padding-bottom: 8px; }
+  .tab { padding: 6px 14px; border-radius: var(--border-radius-md); border: 0.5px solid transparent; font-size: 13px; cursor: pointer; color: var(--color-text-secondary); background: transparent; transition: all .15s; }
+  .tab:hover { background: var(--color-background-secondary); }
+  .tab.active { background: var(--color-background-secondary); border-color: var(--color-border-secondary); color: var(--color-text-primary); font-weight: 500; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--gap); }
+  .card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
+  .card-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .card-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+  .card-sub { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .badge-purple { background: #EEEDFE; color: #3C3489; }
+  .badge-teal { background: #E1F5EE; color: #0F6E56; }
+  .badge-amber { background: #FAEEDA; color: #854F0B; }
+  .badge-blue { background: #E6F1FB; color: #185FA5; }
+  .badge-coral { background: #FAECE7; color: #993C1D; }
+  .badge-gray { background: #F1EFE8; color: #5F5E5A; }
+  @media (prefers-color-scheme: dark) {
+    .badge-purple { background: #26215C; color: #CECBF6; }
+    .badge-teal { background: #04342C; color: #9FE1CB; }
+    .badge-amber { background: #412402; color: #FAC775; }
+    .badge-blue { background: #042C53; color: #B5D4F4; }
+    .badge-coral { background: #4A1B0C; color: #F5C4B3; }
+    .badge-gray { background: #2C2C2A; color: #B4B2A9; }
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--color-background-secondary); color: var(--color-text-secondary); border: 0.5px solid var(--color-border-tertiary); }
+  .desc { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.6; margin: 6px 0 0; }
+  .metric-row { display: flex; gap: 12px; margin-top: 10px; }
+  .metric { flex: 1; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 8px 10px; }
+  .metric-label { font-size: 11px; color: var(--color-text-tertiary); }
+  .metric-val { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-top: 2px; }
+  .section-title { font-size: 16px; font-weight: 500; color: var(--color-text-primary); margin: 0 0 4px; }
+  .section-sub { font-size: 13px; color: var(--color-text-secondary); margin: 0 0 16px; }
+  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .feat-card { border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); padding: 14px 16px; background: var(--color-background-primary); }
+  .feat-icon { width: 32px; height: 32px; border-radius: var(--border-radius-md); display: flex; align-items: center; justify-content: center; font-size: 16px; margin-bottom: 10px; }
+  .feat-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
+  .feat-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
+  .maturity { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 8px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .dot-new { background: #D85A30; }
+  .dot-mid { background: #BA7517; }
+  .dot-mature { background: #1D9E75; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); text-align: left; padding: 8px 10px; border-bottom: 0.5px solid var(--color-border-tertiary); background: var(--color-background-secondary); }
+  td { padding: 8px 10px; border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); vertical-align: top; }
+  td:first-child { font-weight: 500; }
+  .check { color: #1D9E75; font-weight: 500; }
+  .cross { color: var(--color-text-tertiary); }
+  .partial { color: #BA7517; }
+  .bar-wrap { background: var(--color-background-secondary); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
+  .roadmap-item { display: flex; gap: 14px; padding: 12px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .roadmap-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; flex-shrink: 0; }
+  .roadmap-content { flex: 1; }
+  .roadmap-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
+  .roadmap-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+  .priority-high { background: #FAECE7; color: #993C1D; }
+  .priority-mid { background: #FAEEDA; color: #854F0B; }
+  .priority-low { background: #E1F5EE; color: #0F6E56; }
+  @media (prefers-color-scheme: dark) {
+    .priority-high { background: #4A1B0C; color: #F5C4B3; }
+    .priority-mid { background: #412402; color: #FAC775; }
+    .priority-low { background: #04342C; color: #9FE1CB; }
+  }
+  .chart-wrap { position: relative; height: 260px; margin: 16px 0; }
+  #radarChart { max-height: 260px; }
+  .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .flt { padding: 4px 10px; border-radius: 20px; border: 0.5px solid var(--color-border-secondary); font-size: 12px; cursor: pointer; color: var(--color-text-secondary); background: transparent; transition: all .15s; }
+  .flt.on { background: var(--color-background-secondary); color: var(--color-text-primary); border-color: var(--color-border-primary); font-weight: 500; }
+</style>
+
+<div style="padding: 4px 0 20px;">
+  <div style="font-size: 11px; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px;">AI Security Landscape 2025</div>
+  <div style="font-size: 22px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 6px;">AI Firewall: Competitive analysis & build blueprint</div>
+  <div style="font-size: 14px; color: var(--color-text-secondary);">12 competitors profiled · 9 core capability categories · 18 novel features to implement</div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('competitors')">Competitors</button>
+  <button class="tab" onclick="switchTab('matrix')">Feature matrix</button>
+  <button class="tab" onclick="switchTab('novel')">Novel features</button>
+  <button class="tab" onclick="switchTab('architecture')">What to build</button>
+</div>
+
+<!-- COMPETITORS TAB -->
+<div id="competitors" class="panel active">
+  <p class="section-sub" style="margin-bottom: 14px;">Click any card to drill into capabilities. Filter by deployment type.</p>
+  <div class="filter-bar">
+    <button class="flt on" onclick="filterCards('all', this)">All (12)</button>
+    <button class="flt" onclick="filterCards('cloud', this)">Cloud API</button>
+    <button class="flt" onclick="filterCards('oss', this)">Open source</button>
+    <button class="flt" onclick="filterCards('enterprise', this)">Enterprise</button>
+    <button class="flt" onclick="filterCards('sdk', this)">SDK/library</button>
+  </div>
+  <div class="grid2" id="company-grid"></div>
+</div>
+
+<!-- FEATURE MATRIX TAB -->
+<div id="matrix" class="panel">
+  <p class="section-sub">Coverage across 9 core security dimensions. ✓ = native · ~ = partial/plugin · — = absent</p>
+  <div style="overflow-x: auto;">
+    <table id="matrix-table"></table>
+  </div>
+  <div style="margin-top: 20px;">
+    <div class="section-title" style="font-size: 14px; margin-bottom: 12px;">Coverage depth by category</div>
+    <div id="coverage-bars"></div>
+  </div>
+</div>
+
+<!-- NOVEL FEATURES TAB -->
+<div id="novel" class="panel">
+  <p class="section-sub">18 high-impact capabilities that are absent or immature across existing products — prime whitespace for a new entrant.</p>
+  <div class="feature-grid" id="novel-grid"></div>
+</div>
+
+<!-- ARCHITECTURE TAB -->
+<div id="architecture" class="panel">
+  <p class="section-sub">Prioritised implementation roadmap — what to build, in what order, and why it wins.</p>
+  <div id="roadmap-list"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const COMPANIES = [
+  {
+    name: "Lakera Guard",
+    category: "cloud",
+    badge: "badge-purple",
+    badgeLabel: "Cloud API",
+    hq: "Switzerland",
+    founded: 2022,
+    funding: "$20M+",
+    desc: "Pioneer in prompt injection and jailbreak detection. REST API wraps any LLM call with <1ms overhead. Powers Fortune 500 enterprise deployments. Best-in-class on injection taxonomy.",
+    tags: ["Prompt injection", "Jailbreak", "PII", "NSFW", "Hate speech"],
+    strengths: "Fastest inference, deepest injection taxonomy, enterprise SLAs",
+    weakness: "Limited output-side validation, no hallucination detection",
+    pricing: "Usage-based",
+    deploy: "Cloud API + self-host"
+  },
+  {
+    name: "Azure Prompt Shield",
+    category: "cloud",
+    badge: "badge-blue",
+    badgeLabel: "Cloud API",
+    hq: "USA (Microsoft)",
+    founded: 2024,
+    funding: "Microsoft",
+    desc: "Microsoft Azure AI Content Safety's dedicated shield against prompt injection for both direct user attacks and indirect document-embedded attacks. Native Azure integration.",
+    tags: ["Direct attack", "Indirect/RAG injection", "Groundedness", "Content safety"],
+    strengths: "Indirect injection detection for RAG pipelines, Azure native",
+    weakness: "Closed ecosystem, weaker on social engineering vectors",
+    pricing: "Pay-per-call",
+    deploy: "Azure cloud only"
+  },
+  {
+    name: "Guardrails AI",
+    category: "oss",
+    badge: "badge-teal",
+    badgeLabel: "Open source",
+    hq: "USA",
+    founded: 2023,
+    funding: "$7.5M",
+    desc: "Python framework for adding structural guardrails to LLM outputs. Validators run on structured output schemas; huge community hub of 50+ pre-built validators. Pythonic DSL.",
+    tags: ["Output validation", "Schema enforcement", "PII", "Toxicity", "Regex"],
+    strengths: "Highly composable, output-focused, great for structured generation",
+    weakness: "Input-side protection thin, latency overhead from Python",
+    pricing: "Free OSS + hosted",
+    deploy: "Self-hosted / cloud"
+  },
+  {
+    name: "NVIDIA NeMo Guardrails",
+    category: "sdk",
+    badge: "badge-teal",
+    badgeLabel: "SDK",
+    hq: "USA (NVIDIA)",
+    founded: 2023,
+    funding: "NVIDIA",
+    desc: "Colang-based declarative language for defining conversation boundaries. Integrates with LangChain and custom chains. Strong topic restriction and dialog flow control.",
+    tags: ["Dialog control", "Topic boundaries", "Jailbreak", "Custom policies"],
+    strengths: "Declarative policy language (Colang), conversational state tracking",
+    weakness: "Complex setup, NVIDIA ecosystem dependency, no cloud API",
+    pricing: "Open source",
+    deploy: "Self-hosted"
+  },
+  {
+    name: "Meta LlamaGuard 3",
+    category: "oss",
+    badge: "badge-teal",
+    badgeLabel: "Open source",
+    hq: "USA (Meta)",
+    founded: 2023,
+    funding: "Meta",
+    desc: "Fine-tuned Llama model acting as a safety classifier. LlamaGuard 3 covers 13 hazard categories per the MLCommons taxonomy. Input + output classification in one pass.",
+    tags: ["Hazard classification", "Violence", "CSAM", "Privacy", "Misinformation"],
+    strengths: "Open weights, customisable, MLCommons standard taxonomy",
+    weakness: "Adds 7-8B model latency, needs GPU, not an API product",
+    pricing: "Free / Meta license",
+    deploy: "Self-hosted (GPU)"
+  },
+  {
+    name: "ProtectAI",
+    category: "enterprise",
+    badge: "badge-coral",
+    badgeLabel: "Enterprise",
+    hq: "USA",
+    founded: 2023,
+    funding: "$35M",
+    desc: "Platform covering ML supply chain security (model scanning, dependency audits) plus runtime guardrails. Operates Guardian product for inference-time protection and Huntr bug bounty for AI vulns.",
+    tags: ["Model scanning", "Supply chain", "Runtime guard", "CVE/vulns", "MLflow"],
+    strengths: "Unique ML supply chain security angle, broadest attack surface coverage",
+    weakness: "Complex enterprise platform, overkill for simple API use cases",
+    pricing: "Enterprise contract",
+    deploy: "Hybrid"
+  },
+  {
+    name: "HiddenLayer",
+    category: "enterprise",
+    badge: "badge-coral",
+    badgeLabel: "Enterprise",
+    hq: "USA",
+    founded: 2022,
+    funding: "$50M",
+    desc: "AI detection and response (AI-DR) platform. Detects adversarial ML attacks, model extraction/inversion, data poisoning at the model layer. Treats AI security like EDR for models.",
+    tags: ["Adversarial ML", "Model extraction", "Data poisoning", "AML attacks", "SIEM integration"],
+    strengths: "Deepest adversarial ML expertise, EDR-style detection & response",
+    weakness: "High cost, mainly targets large enterprises with model portfolios",
+    pricing: "Enterprise contract",
+    deploy: "Cloud + on-prem"
+  },
+  {
+    name: "CalypsoAI",
+    category: "enterprise",
+    badge: "badge-coral",
+    badgeLabel: "Enterprise",
+    hq: "USA",
+    founded: 2018,
+    funding: "$30M+",
+    desc: "Enterprise-focused LLM security and observability platform. Specialises in government/defence use cases with FedRAMP consideration. Logs all LLM interactions for audit.",
+    tags: ["Audit logs", "Policy enforcement", "DLP", "Compliance", "Gov/defence"],
+    strengths: "Compliance-first, full audit trail, government sector focus",
+    weakness: "Older tech stack, weaker on latest injection attack vectors",
+    pricing: "Enterprise contract",
+    deploy: "On-prem / private cloud"
+  },
+  {
+    name: "Rebuff",
+    category: "oss",
+    badge: "badge-teal",
+    badgeLabel: "Open source",
+    hq: "Community",
+    founded: 2023,
+    funding: "Community",
+    desc: "Self-hardening prompt injection detector using a layered approach: heuristics → LLM-based checks → VectorDB of past attacks. Attack memory improves detection over time.",
+    tags: ["Prompt injection", "Heuristic", "LLM check", "Vector memory", "Self-hardening"],
+    strengths: "Attack memory concept, self-improving from blocked attempts",
+    weakness: "No longer actively maintained, limited production readiness",
+    pricing: "Free / community",
+    deploy: "Self-hosted"
+  },
+  {
+    name: "Arthur Shield",
+    category: "cloud",
+    badge: "badge-purple",
+    badgeLabel: "Cloud API",
+    hq: "USA",
+    founded: 2023,
+    funding: "$42M (Arthur)",
+    desc: "LLM firewall focused on hallucination detection and factual grounding. Shield verifies LLM outputs against source documents and flags ungrounded claims — a rare capability.",
+    tags: ["Hallucination detection", "Groundedness", "PII", "Toxicity", "Sensitive topics"],
+    strengths: "Best-in-class hallucination and groundedness detection",
+    weakness: "Requires source context docs, less effective for open-ended generation",
+    pricing: "Usage-based",
+    deploy: "Cloud API"
+  },
+  {
+    name: "WhyLabs LangKit",
+    category: "oss",
+    badge: "badge-teal",
+    badgeLabel: "Open source",
+    hq: "USA",
+    founded: 2023,
+    funding: "WhyLabs ($10M+)",
+    desc: "ML observability toolkit extended for LLMs. Extracts text quality metrics (sentiment, toxicity, reading level, topic), logs to WhyLabs platform for drift and anomaly detection.",
+    tags: ["Observability", "Drift detection", "Toxicity", "Sentiment", "Topic monitoring"],
+    strengths: "Statistical drift detection, long-term quality monitoring",
+    weakness: "Monitoring-first not firewall-first, no real-time blocking",
+    pricing: "Free OSS + cloud",
+    deploy: "Hybrid"
+  },
+  {
+    name: "Vigil LLM",
+    category: "oss",
+    badge: "badge-teal",
+    badgeLabel: "Open source",
+    hq: "Community",
+    founded: 2023,
+    funding: "Community",
+    desc: "Lightweight Python scanner with multiple detection layers: vector similarity against known attacks, YARA rules, transformer model scoring, and canary token injection.",
+    tags: ["YARA rules", "Vector similarity", "Canary tokens", "Injection", "Lightweight"],
+    strengths: "YARA integration, canary tokens, very lightweight and hackable",
+    weakness: "Community project, limited enterprise support, no SaaS",
+    pricing: "Free / OSS",
+    deploy: "Self-hosted"
+  }
+];
+
+const FEATURES = [
+  "Prompt injection", "Jailbreak", "PII/data leakage", "Toxicity/hate", 
+  "Hallucination detection", "Output schema", "Multi-turn tracking", "Supply chain sec", "Audit/compliance"
+];
+
+const MATRIX_DATA = {
+  "Lakera Guard":       ["✓","✓","✓","✓","—","~","—","—","~"],
+  "Azure Prompt Shield":["✓","✓","~","✓","✓","—","—","—","✓"],
+  "Guardrails AI":      ["~","~","✓","✓","—","✓","—","—","—"],
+  "NeMo Guardrails":    ["✓","✓","~","✓","—","✓","✓","—","—"],
+  "Meta LlamaGuard 3":  ["✓","✓","✓","✓","—","—","—","—","—"],
+  "ProtectAI":          ["✓","~","✓","~","—","—","—","✓","✓"],
+  "HiddenLayer":        ["~","~","~","—","—","—","—","✓","✓"],
+  "CalypsoAI":          ["✓","✓","✓","✓","—","~","—","—","✓"],
+  "Rebuff":             ["✓","~","—","—","—","—","—","—","—"],
+  "Arthur Shield":      ["~","~","✓","✓","✓","—","—","—","~"],
+  "WhyLabs LangKit":    ["~","—","✓","✓","~","—","~","—","✓"],
+  "Vigil LLM":          ["✓","✓","—","~","—","—","—","—","—"]
+};
+
+const NOVEL_FEATURES = [
+  { icon: "🧠", title: "Multi-turn attack memory", desc: "Detect prompt injection campaigns that unfold across multiple conversation turns — each message looks benign alone but the sequence is malicious. Stateful session tracking with TTL.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "🎯", title: "Semantic intent clustering", desc: "Cluster incoming prompts in real time to detect coordinated attacks from different users targeting the same jailbreak. Statistical anomaly detection across the entire fleet.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "🔍", title: "Indirect RAG injection shield", desc: "Scan documents and URLs before they enter a RAG pipeline. Detect injected instructions hidden in PDFs, web pages, emails — the vector currently exploited most in production.", maturity: "mid", color: "#FAEEDA", tcolor: "#854F0B" },
+  { icon: "🏷️", title: "Adversarial watermark detection", desc: "Identify text that has been adversarially crafted to bypass existing keyword and embedding-based filters using typosquatting, homoglyphs, zero-width characters, and encoding attacks.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "🖼️", title: "Multi-modal threat detection", desc: "Detect prompt injection embedded in images (OCR + vision model), audio transcripts, and structured files — not just text. Crucial as LLMs go multi-modal.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "⚖️", title: "Regulatory compliance mapping", desc: "Tag every flagged event with specific regulatory obligations (GDPR Art. 22, EU AI Act Art. 13, HIPAA §164.514). Auto-generate compliance evidence packages.", maturity: "mid", color: "#FAEEDA", tcolor: "#854F0B" },
+  { icon: "🧬", title: "Behavioral fingerprinting", desc: "Build per-user and per-session behavioral profiles. Flag statistically anomalous prompt patterns — users suddenly trying edge-case inputs they've never used before.", maturity: "mid", color: "#FAEEDA", tcolor: "#854F0B" },
+  { icon: "🔗", title: "LLM supply chain integrity", desc: "Verify model weights haven't been tampered with (hash checking), detect backdoor triggers in fine-tuned models, and audit training data provenance.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "💡", title: "Hallucination grounding engine", desc: "Cross-reference LLM outputs against source documents, knowledge bases, and structured facts in real time. Return a grounding score and flag unverifiable claims inline.", maturity: "mid", color: "#FAEEDA", tcolor: "#854F0B" },
+  { icon: "🌐", title: "Federated threat intelligence", desc: "Anonymously share novel attack signatures across tenants (privacy-preserving). New jailbreak vectors detected on one customer become defences for all within minutes.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "🏗️", title: "Business logic enforcement", desc: "Define organisation-specific rules (e.g. 'never quote competitor prices', 'always escalate medical questions'). Policy-as-code DSL that non-engineers can author.", maturity: "mid", color: "#FAEEDA", tcolor: "#854F0B" },
+  { icon: "🧩", title: "Shadow AI discovery", desc: "Passively detect employees using unapproved LLM APIs (ChatGPT, Claude, Gemini) by analysing network traffic patterns — without full MITM inspection.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "🛡️", title: "Zero-knowledge PII vault", desc: "Replace sensitive entities (names, SSNs, card numbers) with reversible tokens before the prompt reaches the LLM. De-anonymise only the relevant parts of the output.", maturity: "mid", color: "#FAEEDA", tcolor: "#854F0B" },
+  { icon: "🔁", title: "Continuous red team agent", desc: "Autonomous adversarial agent that probes your own deployed LLM 24/7 for new vulnerabilities — surfacing regressions when models or prompts are updated.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "📊", title: "Real-time threat dashboard", desc: "SIEM-quality dashboard: attack velocity, top attack patterns, blocked/allowed ratio, latency percentiles, cost attribution per tenant — with sub-second refresh.", maturity: "mature", color: "#E1F5EE", tcolor: "#0F6E56" },
+  { icon: "🤝", title: "Cross-model attack correlation", desc: "If the same attack hits GPT-4, Claude, and Gemini endpoints in your stack, correlate them into a single incident instead of three isolated alerts.", maturity: "new", color: "#FAECE7", tcolor: "#993C1D" },
+  { icon: "⚡", title: "Sub-millisecond heuristic layer", desc: "A fast O(1) heuristic pre-filter (Bloom filter + YARA rules + encoding checks) that blocks 80% of known attacks with <0.1ms overhead before deeper ML models run.", maturity: "mature", color: "#E1F5EE", tcolor: "#0F6E56" },
+  { icon: "🔐", title: "Prompt confidentiality shield", desc: "Detect and block attempts to extract system prompts, fine-tuning data, or internal instructions via indirect extraction attacks and model inversion techniques.", maturity: "mid", color: "#FAEEDA", tcolor: "#854F0B" }
+];
+
+const ROADMAP = [
+  { priority: "high", title: "Layer 1 — Heuristic + YARA fast filter", desc: "Regex/YARA rules, homoglyph normalisation, encoding attack detection, known injection pattern matching. <0.2ms. Blocks ~75% of commodity attacks. Pure deterministic — no ML needed. Ship this first; it gives you a working product in weeks.", why: "Fastest path to value. Zero dependency on models. Works at any scale." },
+  { priority: "high", title: "Layer 2 — Embedding-based injection detector", desc: "Fine-tune a small (125M param) sentence transformer on curated prompt injection datasets (Lakera, HuggingFace, your own collection). Deploy as a sidecar. Target: <8ms P95 latency. Cover direct injection, jailbreaks, and role-play attacks.", why: "Handles novel phrasings that YARA misses. Highest ROI ML investment." },
+  { priority: "high", title: "Layer 3 — PII tokenisation vault", desc: "Entity recognition (spaCy + fine-tuned NER) to identify 25+ PII types. Replace before prompt reaches LLM, restore in output. Reversible tokenisation with per-session keys. Zero PII leaves the firewall.", why: "Regulatory requirement for GDPR, HIPAA, PCI. Strong enterprise sales driver." },
+  { priority: "high", title: "Layer 4 — Indirect injection / RAG scanner", desc: "Scan every document chunk entering a RAG pipeline. Run heuristic + embedding checks on retrieved context before injection into the prompt. Flag suspicious instructions embedded in third-party content.", why: "Most exploited real-world vector in 2024-25 enterprise deployments. Almost nobody does this well." },
+  { priority: "mid", title: "Layer 5 — Multi-turn session state tracker", desc: "Maintain a rolling window of conversation state per session. Score each turn in context of the full conversation. Detect slow-burn manipulation campaigns that span 10+ turns.", why: "Unique differentiator. Rebuff sketched the idea; nobody has productionised it." },
+  { priority: "mid", title: "Layer 6 — Hallucination grounding engine", desc: "For RAG/retrieval apps: compute cosine similarity between output claims and source chunks. Output a grounding score per sentence. Flag claims with no supporting evidence in context.", why: "Arthur Shield's biggest edge — you need parity for enterprise RAG." },
+  { priority: "mid", title: "Layer 7 — Business logic policy DSL", desc: "A Colang-inspired but simpler YAML/JSON DSL for expressing organisation-specific rules. Non-engineers should be able to write policies. Version-controlled, auditable, hot-reloadable.", why: "NeMo's Colang has the right idea but is too complex. Simplicity here is the product." },
+  { priority: "mid", title: "Layer 8 — Federated threat intelligence network", desc: "Privacy-preserving attack signature sharing. Hash attack embeddings (locality-sensitive hashing) before sharing. New attack patterns propagate to all tenants automatically via a shared signature store.", why: "Network effect moat. First to critical mass wins this permanently." },
+  { priority: "mid", title: "Layer 9 — Multi-modal input scanner", desc: "OCR pipeline for images, audio transcription check, structured file (PDF/DOCX) injection scanner. Run through same heuristic + embedding layers as text.", why: "GPT-4o, Claude, Gemini are all multi-modal. Text-only firewalls are already obsolete." },
+  { priority: "low", title: "Layer 10 — Continuous red team agent", desc: "Autonomous adversarial agent (a separate LLM with jailbreak persona prompts) that probes your deployed models 24/7. Surfaces new vulnerabilities. Integrated into CI/CD so prompt changes are tested before deployment.", why: "Long-term defensibility. Proves your security posture continuously." },
+  { priority: "low", title: "Layer 11 — Compliance evidence generator", desc: "Auto-generate audit reports mapping every detected/blocked event to specific clauses in GDPR, EU AI Act, NIST AI RMF, ISO 42001. One-click export for compliance officers.", why: "Enterprise procurement unlocker. Compliance teams sign purchase orders." },
+  { priority: "low", title: "Layer 12 — Shadow AI network detector", desc: "Agent deployed at network edge to identify unapproved LLM API traffic via TLS fingerprinting and timing analysis. Policy enforcement without full MITM.", why: "CISOs want visibility before enforcement. Opens a new buyer persona." }
+];
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'matrix') buildMatrix();
+}
+
+function filterCards(type, btn) {
+  document.querySelectorAll('.flt').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  document.querySelectorAll('.company-card').forEach(c => {
+    if (type === 'all' || c.dataset.cat === type) c.style.display = '';
+    else c.style.display = 'none';
+  });
+}
+
+function buildCards() {
+  const grid = document.getElementById('company-grid');
+  COMPANIES.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'card company-card';
+    div.dataset.cat = c.category;
+    div.innerHTML = `
+      <div class="card-hdr">
+        <div>
+          <div class="card-title">${c.name}</div>
+          <div class="card-sub">${c.hq} · Est. ${c.founded}</div>
+        </div>
+        <span class="badge ${c.badge}">${c.badgeLabel}</span>
+      </div>
+      <div class="desc">${c.desc}</div>
+      <div class="tags">${c.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+      <div class="metric-row">
+        <div class="metric"><div class="metric-label">Pricing</div><div class="metric-val" style="font-size:12px">${c.pricing}</div></div>
+        <div class="metric"><div class="metric-label">Deploy</div><div class="metric-val" style="font-size:12px">${c.deploy}</div></div>
+        ${c.funding !== 'Community' ? `<div class="metric"><div class="metric-label">Funding</div><div class="metric-val" style="font-size:12px">${c.funding}</div></div>` : ''}
+      </div>
+      <div style="margin-top:10px; padding-top:10px; border-top: 0.5px solid var(--color-border-tertiary);">
+        <div style="font-size:11px; color:var(--color-text-tertiary); margin-bottom:3px;">Strength</div>
+        <div style="font-size:12px; color:var(--color-text-secondary);">${c.strengths}</div>
+        <div style="font-size:11px; color:var(--color-text-tertiary); margin-bottom:3px; margin-top:6px;">Gap</div>
+        <div style="font-size:12px; color:var(--color-text-secondary);">${c.weakness}</div>
+      </div>`;
+    grid.appendChild(div);
+  });
+}
+
+function buildMatrix() {
+  if (document.getElementById('matrix-table').innerHTML) return;
+  const t = document.getElementById('matrix-table');
+  let html = '<thead><tr><th>Company</th>' + FEATURES.map(f => `<th style="min-width:80px">${f}</th>`).join('') + '</tr></thead><tbody>';
+  Object.entries(MATRIX_DATA).forEach(([co, vals]) => {
+    html += `<tr><td>${co}</td>` + vals.map(v => {
+      if (v === '✓') return `<td class="check">✓</td>`;
+      if (v === '~') return `<td class="partial">~</td>`;
+      return `<td class="cross">—</td>`;
+    }).join('') + '</tr>';
+  });
+  html += '</tbody>';
+  t.innerHTML = html;
+
+  const coverage = document.getElementById('coverage-bars');
+  FEATURES.forEach((feat, i) => {
+    const total = Object.values(MATRIX_DATA).length;
+    const full = Object.values(MATRIX_DATA).filter(r => r[i] === '✓').length;
+    const partial = Object.values(MATRIX_DATA).filter(r => r[i] === '~').length;
+    const pct = Math.round((full + partial * 0.5) / total * 100);
+    const colors = ['#7F77DD','#1D9E75','#639922','#D85A30','#185FA5','#BA7517','#D4537E','#888780','#3B8BD4'];
+    coverage.innerHTML += `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+          <span style="color:var(--color-text-secondary)">${feat}</span>
+          <span style="color:var(--color-text-tertiary)">${full} full · ${partial} partial / 12</span>
+        </div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${colors[i]}"></div></div>
+      </div>`;
+  });
+}
+
+function buildNovel() {
+  const grid = document.getElementById('novel-grid');
+  NOVEL_FEATURES.forEach(f => {
+    const maturityLabel = f.maturity === 'new' ? 'Uncharted whitespace' : f.maturity === 'mid' ? 'Partially covered' : 'Table stakes';
+    const dotClass = f.maturity === 'new' ? 'dot-new' : f.maturity === 'mid' ? 'dot-mid' : 'dot-mature';
+    const div = document.createElement('div');
+    div.className = 'feat-card';
+    div.innerHTML = `
+      <div class="feat-icon" style="background:${f.color};color:${f.tcolor}">${f.icon}</div>
+      <div class="feat-title">${f.title}</div>
+      <div class="feat-desc">${f.desc}</div>
+      <div class="maturity"><span class="dot ${dotClass}"></span><span style="font-size:11px;color:var(--color-text-tertiary)">${maturityLabel}</span></div>`;
+    grid.appendChild(div);
+  });
+}
+
+function buildRoadmap() {
+  const list = document.getElementById('roadmap-list');
+  ROADMAP.forEach((item, i) => {
+    const pClass = item.priority === 'high' ? 'priority-high' : item.priority === 'mid' ? 'priority-mid' : 'priority-low';
+    const pLabel = item.priority === 'high' ? 'Phase 1' : item.priority === 'mid' ? 'Phase 2' : 'Phase 3';
+    list.innerHTML += `
+      <div class="roadmap-item">
+        <div class="roadmap-num ${pClass}" style="font-size:11px">${pLabel}</div>
+        <div class="roadmap-content">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <div class="roadmap-title">${item.title}</div>
+          </div>
+          <div class="roadmap-desc">${item.desc}</div>
+          <div style="margin-top:6px;font-size:11px;color:var(--color-text-tertiary);font-style:italic">Why this: ${item.why}</div>
+        </div>
+      </div>`;
+  });
+}
+
+buildCards();
+buildNovel();
+buildRoadmap();
+</script>

@@ -1,0 +1,243 @@
+---
+title: "Extending AI Firewall"
+description: "How to add new scanners, routes, notification channels, MCP servers, and tools"
+---
+
+## Adding a New Secret Pattern
+
+**Effort:** 1 line. **Files changed:** 1.
+
+Edit `packages/scanner/src/patterns.ts`:
+
+```typescript
+export const secretPatterns: SecretPattern[] = [
+  // ... existing patterns ...
+  {
+    type: "STRIPE_KEY",
+    regex: /sk_live_[A-Za-z0-9]{24,}/g,
+    severity: "critical",
+  },
+];
+```
+
+Rebuild scanner and run tests:
+
+```bash
+cd packages/scanner && npm run build
+cd ../proxy && npm test
+```
+
+The new pattern is automatically picked up by all scanners (proxy routes, file scan, MCP gateway). No other code changes needed.
+
+<Tip>
+This works because of the **Open/Closed Principle** — scanners iterate over `secretPatterns` at runtime. Adding a pattern never requires changing scanner logic.
+</Tip>
+
+## Adding a New Proxy Route
+
+**Effort:** ~30 min. **Files changed:** 3.
+
+<Steps>
+<Step title="Create the route file">
+```typescript
+// proxy/src/routes/myFeature.route.ts
+import { FastifyInstance } from "fastify";
+import { z } from "zod";
+
+const mySchema = z.object({
+  input: z.string().min(1),
+});
+
+export async function registerMyFeatureRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/api/my-feature", async (request, reply) => {
+    const parsed = mySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+    }
+    return { result: "ok" };
+  });
+}
+```
+</Step>
+
+<Step title="Register in server.ts">
+```typescript
+import { registerMyFeatureRoutes } from "./routes/myFeature.route";
+
+// Add BEFORE the ai.route registration (line ~127)
+await registerMyFeatureRoutes(app);
+```
+
+<Warning>
+Register specific routes (`/api/*`) BEFORE the `/v1/*` catch-all. Otherwise the catch-all intercepts your route.
+</Warning>
+</Step>
+
+<Step title="Write tests">
+```typescript
+// proxy/src/test/myFeature.test.ts
+import assert from "node:assert";
+
+export function testMyFeature() {
+  assert.ok(true, "My feature works");
+}
+```
+
+Register in `run-tests.ts`:
+```typescript
+import * as myTests from "./myFeature.test";
+// Add to asyncTests array:
+["myFeature:basic", myTests.testMyFeature],
+```
+</Step>
+</Steps>
+
+## Adding a New Notification Channel
+
+**Effort:** ~20 min. **Files changed:** 2.
+
+<Steps>
+<Step title="Implement the channel interface">
+```typescript
+// proxy/src/notifications/channels/slack.ts
+import type { WsEvent } from "../../types";
+import type { NotificationChannelHandler } from "../notificationService";
+
+export const slackChannel: NotificationChannelHandler = {
+  type: "slack",
+
+  async send(userId: number, event: WsEvent, config: Record<string, unknown>): Promise<boolean> {
+    const webhookUrl = config.webhookUrl as string;
+    if (!webhookUrl) return false;
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: `AI Firewall: ${event.type}`,
+        blocks: [
+          { type: "section", text: { type: "mrkdwn", text: `*${event.type}*\n${JSON.stringify(event.payload)}` } }
+        ]
+      }),
+    });
+    return response.ok;
+  },
+};
+```
+</Step>
+
+<Step title="Register in server.ts">
+```typescript
+import { slackChannel } from "./notifications/channels/slack";
+registerChannel(slackChannel);
+```
+</Step>
+</Steps>
+
+No changes to `notificationService.ts` needed (OCP). The service discovers channels via the registry.
+
+## Adding a New Database Table
+
+**Effort:** ~10 min. **Files changed:** 2.
+
+<Steps>
+<Step title="Add CREATE TABLE to database.ts">
+```sql
+-- Add before the file_scan_cache table
+CREATE TABLE IF NOT EXISTS my_table (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  data TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_my_table_user ON my_table(user_id);
+```
+</Step>
+
+<Step title="Add types to types/index.ts">
+```typescript
+export type MyRecord = {
+  id: number;
+  userId: number | null;
+  data: string;
+  createdAt: number;
+};
+```
+</Step>
+</Steps>
+
+<Warning>
+Always use `INTEGER` for timestamps (milliseconds since epoch, via `Date.now()`). Never use `datetime()` — SQLite-specific and breaks PostgreSQL migration path.
+</Warning>
+
+## Adding a New Tool to Core
+
+**Effort:** ~1 hour. **Files changed:** 4.
+
+<Steps>
+<Step title="Create tool definition">
+```typescript
+// core/tools/definitions/myTool.ts
+import { ToolDefinition } from "..";
+
+export const myToolDefinition: ToolDefinition = {
+  name: "my_tool",
+  description: "Does something useful",
+  parameters: {
+    type: "object",
+    properties: {
+      input: { type: "string", description: "The input" },
+    },
+    required: ["input"],
+  },
+  readonly: true,
+  instant: false,
+  defaultPolicy: "allowedWithPermission",
+};
+```
+</Step>
+
+<Step title="Create tool implementation">
+```typescript
+// core/tools/implementations/myTool.ts
+import { ToolImpl } from ".";
+
+export const myToolImpl: ToolImpl = async (args, extras) => {
+  const input = args.input as string;
+  // Your logic here
+  return [{ name: "result", description: "My tool output", content: `Processed: ${input}` }];
+};
+```
+</Step>
+
+<Step title="Register in builtIn.ts">
+```typescript
+export enum BuiltInToolNames {
+  // ... existing tools ...
+  MyTool = "my_tool",
+}
+```
+</Step>
+
+<Step title="Wire in callTool.ts">
+```typescript
+// In callBuiltInTool():
+case BuiltInToolNames.MyTool:
+  return myToolImpl(args, extras);
+```
+</Step>
+</Steps>
+
+## Conventions Checklist
+
+Before submitting code:
+
+- [ ] No `any` types — use `unknown` and narrow
+- [ ] No `console.log` — use Fastify's Pino logger
+- [ ] No inline Zod schemas — import from `proxy/src/schemas/`
+- [ ] No `Math.ceil(text.length / 4)` — use `countMessageTokens()` from tokenCounter
+- [ ] No raw secrets in tests — use placeholder values
+- [ ] Zod validation on all route inputs
+- [ ] Tests written and registered in `run-tests.ts`
+- [ ] `npx tsc --noEmit` passes with zero errors
+- [ ] `npm test` passes (all 90 tests)

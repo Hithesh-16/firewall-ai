@@ -1,0 +1,254 @@
+
+<style>
+*{box-sizing:border-box}
+.sec-table{width:100%;border-collapse:collapse;font-size:11px}
+.sec-table th{font-size:10px;font-weight:500;color:var(--color-text-secondary);padding:5px 6px;text-align:center;border-bottom:0.5px solid var(--color-border-secondary);white-space:nowrap}
+.sec-table th:first-child{text-align:left;min-width:110px}
+.sec-table td{padding:5px 6px;border-bottom:0.5px solid var(--color-border-tertiary);text-align:center;vertical-align:middle}
+.sec-table td:first-child{text-align:left;font-weight:500;font-size:11px}
+.sec-table tr:hover td{background:var(--color-background-secondary)}
+.dot-r{width:12px;height:12px;border-radius:50%;display:inline-block;background:#E24B4A}
+.dot-a{width:12px;height:12px;border-radius:50%;display:inline-block;background:#EF9F27}
+.dot-g{width:12px;height:12px;border-radius:50%;display:inline-block;background:#1D9E75}
+.dot-b{width:12px;height:12px;border-radius:50%;display:inline-block;background:var(--color-border-secondary)}
+.cve-pill{font-size:9px;font-weight:500;padding:1px 5px;border-radius:3px;background:var(--color-background-danger);color:var(--color-text-danger);white-space:nowrap}
+.cve-none{font-size:9px;color:var(--color-text-tertiary)}
+.tool-sub{font-size:9px;font-weight:400;color:var(--color-text-secondary);margin-top:1px}
+.section-label{font-size:10px;font-weight:500;color:var(--color-text-secondary);padding:8px 6px 3px;background:var(--color-background-secondary);text-transform:uppercase;letter-spacing:.04em;text-align:left}
+.legend-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:10px;color:var(--color-text-secondary)}
+.leg{display:flex;align-items:center;gap:4px}
+</style>
+
+<div style="overflow-x:auto">
+<table class="sec-table">
+<thead>
+<tr>
+  <th style="text-align:left">Tool</th>
+  <th>Proxy layer</th>
+  <th>PII scan</th>
+  <th>Inject detect</th>
+  <th>Secrets scan</th>
+  <th>Agent perms</th>
+  <th>Audit logs</th>
+  <th>Air-gap</th>
+  <th>Output filter</th>
+  <th>Certs</th>
+  <th>Known CVEs</th>
+</tr>
+</thead>
+<tbody>
+
+<tr><td colspan="11" class="section-label">IDE-native / standalone agents</td></tr>
+
+<tr>
+<td><div>Cursor</div><div class="tool-sub">VS Code fork</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td>SOC2</td>
+<td><span class="cve-pill">CVE-2025-49150</span> <span class="cve-pill">CVE-2025-61590</span></td>
+</tr>
+
+<tr>
+<td><div>Windsurf</div><div class="tool-sub">ex-Codeium IDE</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td>GDPR</td>
+<td><span class="cve-pill">IDEsaster affected</span> <span class="cve-pill">Chromium 94+ CVEs</span></td>
+</tr>
+
+<tr>
+<td><div>Replit Agent</div><div class="tool-sub">Browser cloud</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td>None public</td>
+<td><span class="cve-none">not assessed</span></td>
+</tr>
+
+<tr><td colspan="11" class="section-label">Extension / plugin tools</td></tr>
+
+<tr>
+<td><div>GitHub Copilot</div><div class="tool-sub">MS / OpenAI</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td>SOC2 ISO27001</td>
+<td><span class="cve-pill">CVE-2025-53773 RCE</span> <span class="cve-pill">CamoLeak CVSS 9.6</span> <span class="cve-pill">CVE-2025-64660</span></td>
+</tr>
+
+<tr>
+<td><div>Codeium</div><div class="tool-sub">Free tier</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-r"></span></td>
+<td>Zero retention</td>
+<td><span class="cve-none">Windsurf overlap</span></td>
+</tr>
+
+<tr>
+<td><div>Tabnine</div><div class="tool-sub">Privacy-first</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-a"></span></td>
+<td>SOC2 GDPR HIPAA</td>
+<td><span class="cve-none">none public</span></td>
+</tr>
+
+<tr>
+<td><div>Continue</div><div class="tool-sub">Open source</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-r"></span></td>
+<td>Self-hostable</td>
+<td><span class="cve-none">no security layer</span></td>
+</tr>
+
+<tr>
+<td><div>JetBrains AI</div><div class="tool-sub">IntelliJ-native</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td>GDPR</td>
+<td><span class="cve-pill">IDEsaster affected</span></td>
+</tr>
+
+<tr><td colspan="11" class="section-label">Terminal agents</td></tr>
+
+<tr>
+<td><div>Claude Code</div><div class="tool-sub">Anthropic</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td>FedRAMP ISO42001</td>
+<td><span class="cve-pill">CVE-2025-59536 RCE</span> <span class="cve-pill">CVE-2026-21852</span></td>
+</tr>
+
+<tr>
+<td><div>Aider</div><div class="tool-sub">Open source</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-r"></span></td>
+<td>None</td>
+<td><span class="cve-none">not assessed</span></td>
+</tr>
+
+<tr><td colspan="11" class="section-label">Cloud / enterprise specialised</td></tr>
+
+<tr>
+<td><div>Amazon Q Dev</div><div class="tool-sub">ex-CodeWhisperer</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-g"></span></td>
+<td>SOC2 HIPAA GDPR</td>
+<td><span class="cve-pill">IDEsaster affected</span> <span class="cve-pill">AWS-2025-019</span></td>
+</tr>
+
+<tr>
+<td><div>Sourcegraph Amp</div><div class="tool-sub">Cody / Amp</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td>SOC2</td>
+<td><span class="cve-none">no public CVEs</span></td>
+</tr>
+
+<tr>
+<td><div>Devin</div><div class="tool-sub">Cognition Labs</div></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-r"></span></td>
+<td><span class="dot-r"></span></td>
+<td>Cloud-only</td>
+<td><span class="cve-none">not assessed</span></td>
+</tr>
+
+<tr style="background:var(--color-background-success)">
+<td><div style="color:var(--color-text-success)">Your system</div><div class="tool-sub">AI Firewall proxy</div></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-g"></span></td>
+<td><span class="dot-a"></span></td>
+<td><span class="dot-a"></span></td>
+<td>Building</td>
+<td><span class="cve-none">none public</span></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+
+<div class="legend-row">
+<span class="leg"><span class="dot-g"></span> Strong / implemented</span>
+<span class="leg"><span class="dot-a"></span> Partial / limited</span>
+<span class="leg"><span class="dot-r"></span> Missing / none</span>
+<span style="margin-left:auto;font-size:10px;color:var(--color-text-danger);font-style:italic">Note: proxy layer = 0 out of 14 competitors. Your moat is unique.</span>
+</div>

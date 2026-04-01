@@ -1,0 +1,889 @@
+{
+  "name": "ai-firewall",
+  "icon": "media/icon.png",
+  "author": "AI Firewall Inc",
+  "version": "1.3.33",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ai-firewall/ai-firewall"
+  },
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "bugs": {
+    "url": "https://github.com/ai-firewall/ai-firewall/issues",
+    "email": "hello@ai-firewall.dev"
+  },
+  "homepage": "https://ai-firewall.dev",
+  "qna": "https://github.com/ai-firewall/ai-firewall/issues/new/choose",
+  "license": "Apache-2.0",
+  "displayName": "AI Firewall - AI code agent",
+  "pricing": "Free",
+  "description": "The leading open-source AI code agent",
+  "publisher": "ai-firewall",
+  "engines": {
+    "vscode": "^1.70.0",
+    "node": ">=20.19.0"
+  },
+  "engine-strict": true,
+  "galleryBanner": {
+    "color": "#1E1E1E",
+    "theme": "dark"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages",
+    "Education",
+    "Machine Learning",
+    "Snippets"
+  ],
+  "keywords": [
+    "chatgpt",
+    "cline",
+    "roo",
+    "github",
+    "copilot",
+    "claude",
+    "mistral",
+    "codestral",
+    "ai"
+  ],
+  "activationEvents": [
+    "onUri",
+    "onStartupFinished",
+    "onView:aiFirewallGUIView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "walkthroughs": [
+      {
+        "id": "aiFirewallGetStarted",
+        "title": "Get Started with AI Firewall",
+        "description": "Learn the key features of AI Firewall — security scanning, token intelligence, and approval workflows.",
+        "steps": [
+          {
+            "id": "chat",
+            "title": "Chat with AI",
+            "description": "Open the sidebar and start chatting. Ask questions, get code suggestions, and let the agent use tools.\n\n[Open AI Firewall](command:aiFirewall.focusContinueInput)",
+            "media": { "markdown": "Every message is scanned for secrets and PII before reaching the LLM." }
+          },
+          {
+            "id": "security",
+            "title": "Security Scanning",
+            "description": "AI Firewall scans every request through 6 scanners: secrets, PII, entropy, prompt injection, context-aware severity, and policy engine.\n\nLook for the shield icon in the status bar — it shows scan results in real-time.",
+            "media": { "markdown": "**12 secret patterns** (AWS keys, JWTs, DB URLs) + **7 PII patterns** (email, SSN, credit card) + **13 injection categories**" }
+          },
+          {
+            "id": "tokens",
+            "title": "Token Intelligence",
+            "description": "Every response shows real token counts and cost. The context reducer can save up to 75% of tokens by stripping comments and irrelevant code.\n\nCheck the response headers: `X-AF-Input-Tokens`, `X-AF-Estimated-Cost`.",
+            "media": { "markdown": "Real tiktoken counting — not character heuristics. See exactly what you're spending." }
+          },
+          {
+            "id": "tools",
+            "title": "Agent Tools",
+            "description": "The AI can read files, search your codebase, run terminal commands, and more — all through the firewall.\n\n26 built-in tools, each with configurable permission policies.",
+            "media": { "markdown": "Tools like `read_file`, `grep_search`, `run_terminal_command` all pass through scanning." }
+          },
+          {
+            "id": "approvals",
+            "title": "Permission Control",
+            "description": "You approve every file access and tool use. High-risk actions show a prominent permission card with the reason and risk level.\n\nKeyboard shortcuts: **Cmd+Enter** to Accept, **Cmd+Backspace** to Reject.",
+            "media": { "markdown": "Accept/Reject every tool call. Or set tools to auto-approve in Settings > Tools." }
+          }
+        ]
+      }
+    ],
+    "languages": [
+      {
+        "filenames": [
+          "config.json",
+          ".ai-firewallrc.json"
+        ],
+        "id": "jsonc"
+      },
+      {
+        "id": "promptLanguage",
+        "extensions": [
+          ".prompt"
+        ],
+        "aliases": [
+          "Prompt Language"
+        ],
+        "configuration": "./prompt-file-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "promptLanguage",
+        "scopeName": "source.prompt",
+        "path": "./media/prompt.tmLanguage.json"
+      }
+    ],
+    "authentication": [
+      {
+        "id": "ai-firewall",
+        "label": "AI Firewall"
+      }
+    ],
+    "configuration": {
+      "title": "AI Firewall",
+      "properties": {
+        "aiFirewall.telemetryEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "AI Firewall collects anonymous usage data, cleaned of PII, to help us improve the product. Telemetry can be fully disabled.",
+          "markdownDeprecationMessage": "This setting is deprecated and will be removed in a later version. Please use the _Telemetry > Allow Anonymous Telemetry_ setting in the extension's User Settings page.",
+          "deprecationMessage": "Please use the _Telemetry > Allow Anonymous Telemetry_ setting in the extension's User Settings page."
+        },
+        "aiFirewall.showInlineTip": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline suggestion to use the AI Firewall keyboard shortcuts (e.g. \"Cmd/Ctrl L to select code, Cmd/Ctrl I to edit\")."
+        },
+        "aiFirewall.disableQuickFix": {
+          "type": "boolean",
+          "default": false,
+          "description": "Disable the quick fix feature."
+        },
+        "aiFirewall.enableQuickActions": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Enable the experimental Quick Actions feature. Read our walkthrough to learn about configuration and how to share feedback: [AI Firewall Docs › Quick Actions](https://docs.ai-firewall.dev/customize/deep-dives/vscode-actions#quick-actions)"
+        },
+        "aiFirewall.enableTabAutocomplete": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable AI Firewall's tab autocomplete feature. Read our walkthrough to learn about configuration and how to share feedback: [AI Firewall Docs › Tab Autocomplete](https://docs.ai-firewall.dev/features/tab-autocomplete)"
+        },
+        "aiFirewall.enableNextEdit": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable AI Firewall's next edit feature. Read our docs to learn about configuration and how to share feedback: [AI Firewall Docs › Next Edit](https://docs.ai-firewall.dev/features/autocomplete/next-edit)"
+        },
+        "aiFirewall.pauseTabAutocompleteOnBattery": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Pause AI Firewall's tab autocomplete feature when your battery is low."
+        },
+        "aiFirewall.pauseCodebaseIndexOnStart": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Pause AI Firewall's codebase index on start."
+        },
+        "aiFirewall.enableConsole": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Enable a console to log and explore model inputs and outputs. It can be found in the bottom panel."
+        },
+        "aiFirewall.remoteConfigServerUrl": {
+          "type": "string",
+          "default": null,
+          "markdownDescription": "If your team is set up to use shared configuration, enter the server URL here and your user token below to enable automatic syncing."
+        },
+        "aiFirewall.userToken": {
+          "type": "string",
+          "default": null,
+          "markdownDescription": "If your team is set up to use shared configuration, enter your user token here and your server URL above to enable automatic syncing."
+        },
+        "aiFirewall.remoteConfigSyncPeriod": {
+          "type": "number",
+          "default": 60,
+          "description": "The period of time in minutes between automatic syncs."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "aiFirewall.applyCodeFromChat",
+        "category": "AI Firewall",
+        "title": "Apply code from chat",
+        "icon": "$(run)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.acceptDiff",
+        "category": "AI Firewall",
+        "title": "Accept Diff",
+        "icon": "$(check)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.rejectDiff",
+        "category": "AI Firewall",
+        "title": "Reject Diff",
+        "icon": "$(close)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.acceptVerticalDiffBlock",
+        "category": "AI Firewall",
+        "title": "Accept Vertical Diff Block",
+        "icon": "$(diff-added)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.rejectVerticalDiffBlock",
+        "category": "AI Firewall",
+        "title": "Reject Vertical Diff Block",
+        "icon": "$(diff-removed)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.focusEdit",
+        "category": "AI Firewall",
+        "title": "Add to Edit",
+        "icon": "$(edit)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.focusContinueInput",
+        "category": "AI Firewall",
+        "title": "Add Highlighted Code to Context and Clear Chat",
+        "icon": "$(comment-discussion)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.focusContinueInputWithoutClear",
+        "category": "AI Firewall",
+        "title": "Add to Chat",
+        "icon": "$(comment)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.debugTerminal",
+        "category": "AI Firewall",
+        "title": "Debug Terminal",
+        "icon": "$(terminal)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.exitEditMode",
+        "category": "AI Firewall",
+        "title": "Exit Edit Mode",
+        "icon": "$(arrow-left)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.openConfigPage",
+        "category": "AI Firewall",
+        "title": "Open Settings",
+        "icon": "$(settings-gear)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.toggleTabAutocompleteEnabled",
+        "category": "AI Firewall",
+        "title": "Toggle Autocomplete Enabled",
+        "icon": "$(sparkle)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.forceAutocomplete",
+        "title": "AI Firewall: Force Autocomplete",
+        "icon": "$(zap)",
+        "category": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.selectFilesAsContext",
+        "category": "AI Firewall",
+        "title": "Select Files as Context",
+        "icon": "$(files)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.newSession",
+        "category": "AI Firewall",
+        "title": "New Session",
+        "icon": "$(new-file)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.shareSession",
+        "category": "AI Firewall",
+        "title": "Share Current Chat Session as Markdown",
+        "icon": "$(export)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.viewHistory",
+        "category": "AI Firewall",
+        "title": "View History",
+        "icon": "$(history)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.viewLogs",
+        "category": "AI Firewall",
+        "title": "View Logs",
+        "icon": "$(output)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.clearConsole",
+        "category": "AI Firewall",
+        "title": "Clear Console",
+        "icon": "$(clear-all)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.navigateTo",
+        "category": "AI Firewall",
+        "title": "Navigate to a path",
+        "icon": "$(go-to-file)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.writeCommentsForCode",
+        "category": "AI Firewall",
+        "title": "Write Comments for this Code",
+        "icon": "$(comment)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.writeDocstringForCode",
+        "category": "AI Firewall",
+        "title": "Write a Docstring for this Code",
+        "icon": "$(book)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.fixCode",
+        "category": "AI Firewall",
+        "title": "Fix this Code",
+        "icon": "$(wrench)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.optimizeCode",
+        "category": "AI Firewall",
+        "title": "Optimize this Code",
+        "icon": "$(rocket)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.fixGrammar",
+        "category": "AI Firewall",
+        "title": "Fix Grammar / Spelling",
+        "icon": "$(pencil)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.codebaseForceReIndex",
+        "category": "AI Firewall",
+        "title": "Codebase Force Re-Index",
+        "icon": "$(sync)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.rebuildCodebaseIndex",
+        "category": "AI Firewall",
+        "title": "Rebuild codebase index",
+        "icon": "$(database)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.docsIndex",
+        "category": "AI Firewall",
+        "title": "Docs Index",
+        "icon": "$(list-tree)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.docsReIndex",
+        "category": "AI Firewall",
+        "title": "Docs Force Re-Index",
+        "icon": "$(refresh)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.focusContinueInput",
+        "category": "AI Firewall",
+        "title": "Focus AI Firewall Chat",
+        "icon": "$(comment-discussion)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.enterEnterpriseLicenseKey",
+        "category": "AI Firewall",
+        "title": "Enter Enterprise License Key",
+        "icon": "$(key)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.toggleNextEditEnabled",
+        "title": "AI Firewall: Toggle Next Edit",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "aiFirewall.nextEditWindow.hideNextEditSuggestion",
+        "category": "AI Firewall",
+        "title": "Hide Next Edit Suggestion",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "aiFirewall.nextEditWindow.acceptNextEditSuggestion",
+        "category": "AI Firewall",
+        "title": "Accept Next Edit Suggestion",
+        "icon": "$(check)"
+      },
+      {
+        "command": "aiFirewall.forceNextEdit",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Force Next Edit",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "aiFirewall.toggleScanning",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Toggle Security Scanning"
+      },
+      {
+        "command": "aiFirewall.showRiskScore",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Show Risk Score"
+      },
+      {
+        "command": "aiFirewall.viewDashboard",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Open Security Dashboard"
+      },
+      {
+        "command": "aiFirewall.viewExternalLogs",
+        "category": "AI Firewall",
+        "title": "AI Firewall: View Audit Logs"
+      },
+      {
+        "command": "aiFirewall.scanExtensions",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Scan Installed Extensions for Risks"
+      },
+      {
+        "command": "aiFirewall.acceptJump",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Accept Jump Suggestion",
+        "icon": "$(check)"
+      },
+      {
+        "command": "aiFirewall.rejectJump",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Reject Jump Suggestion",
+        "icon": "$(close)"
+      },
+      {
+        "command": "aiFirewall.generateRule",
+        "category": "AI Firewall",
+        "title": "Generate Rule",
+        "icon": "$(shield)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.openInNewWindow",
+        "category": "AI Firewall",
+        "title": "Open in new window",
+        "group": "AI Firewall"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "aiFirewall.focusContinueInput",
+        "mac": "cmd+l",
+        "key": "ctrl+l"
+      },
+      {
+        "command": "aiFirewall.focusContinueInputWithoutClear",
+        "mac": "cmd+shift+l",
+        "key": "ctrl+shift+l"
+      },
+      {
+        "command": "aiFirewall.acceptDiff",
+        "mac": "shift+cmd+enter",
+        "key": "shift+ctrl+enter",
+        "when": "aiFirewall.diffVisible"
+      },
+      {
+        "command": "aiFirewall.rejectDiff",
+        "mac": "shift+cmd+backspace",
+        "key": "shift+ctrl+backspace",
+        "when": "aiFirewall.diffVisible"
+      },
+      {
+        "command": "aiFirewall.rejectDiff",
+        "mac": "cmd+z",
+        "key": "ctrl+z",
+        "when": "aiFirewall.diffVisible"
+      },
+      {
+        "command": "aiFirewall.quickEditHistoryUp",
+        "mac": "up",
+        "key": "up",
+        "when": "false && aiFirewall.quickEditHistoryFocused"
+      },
+      {
+        "command": "aiFirewall.quickEditHistoryDown",
+        "mac": "down",
+        "key": "down",
+        "when": "false && aiFirewall.quickEditHistoryFocused"
+      },
+      {
+        "command": "aiFirewall.acceptVerticalDiffBlock",
+        "mac": "alt+cmd+y",
+        "key": "alt+ctrl+y"
+      },
+      {
+        "command": "aiFirewall.rejectVerticalDiffBlock",
+        "mac": "alt+cmd+n",
+        "key": "alt+ctrl+n"
+      },
+      {
+        "command": "aiFirewall.focusEdit",
+        "title": "Edit code with natural language",
+        "mac": "cmd+i",
+        "key": "ctrl+i"
+      },
+      {
+        "command": "aiFirewall.exitEditMode",
+        "mac": "escape",
+        "key": "escape",
+        "when": "aiFirewall.inEditMode && editorFocus"
+      },
+      {
+        "command": "aiFirewall.debugTerminal",
+        "mac": "cmd+shift+r",
+        "key": "ctrl+shift+r"
+      },
+      {
+        "command": "aiFirewall.openInNewWindow",
+        "mac": "cmd+k cmd+m",
+        "key": "ctrl+k ctrl+m",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "aiFirewall.toggleTabAutocompleteEnabled",
+        "mac": "cmd+k cmd+a",
+        "key": "ctrl+k ctrl+a",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "aiFirewall.forceAutocomplete",
+        "key": "ctrl+alt+space",
+        "mac": "cmd+alt+space",
+        "when": "editorTextFocus && !editorHasSelection && !editorReadOnly && !inSnippetMode"
+      },
+      {
+        "command": "aiFirewall.applyCodeFromChat",
+        "mac": "alt+a",
+        "key": "alt+a"
+      },
+      {
+        "command": "aiFirewall.toggleNextEditEnabled",
+        "key": "ctrl+k ctrl+n",
+        "mac": "cmd+k cmd+n",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "aiFirewall.nextEditWindow.hideNextEditSuggestion",
+        "key": "escape",
+        "when": "editorTextFocus && nextEditWindowActive && !aiFirewall.jumpDecorationVisible"
+      },
+      {
+        "command": "aiFirewall.nextEditWindow.acceptNextEditSuggestion",
+        "key": "tab",
+        "when": "editorTextFocus && nextEditWindowActive && !aiFirewall.jumpDecorationVisible"
+      },
+      {
+        "command": "aiFirewall.acceptJump",
+        "key": "tab",
+        "when": "editorTextFocus && aiFirewall.jumpDecorationVisible"
+      },
+      {
+        "command": "aiFirewall.rejectJump",
+        "key": "escape",
+        "when": "editorTextFocus && aiFirewall.jumpDecorationVisible"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "aiFirewall.aiFirewallSubMenu",
+        "label": "AI Firewall"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "aiFirewall.focusContinueInput"
+        },
+        {
+          "command": "aiFirewall.focusContinueInputWithoutClear"
+        },
+        {
+          "command": "aiFirewall.debugTerminal"
+        },
+        {
+          "command": "aiFirewall.newSession"
+        },
+        {
+          "command": "aiFirewall.enterEnterpriseLicenseKey"
+        },
+        {
+          "command": "aiFirewall.generateRule"
+        },
+        {
+          "command": "aiFirewall.openInNewWindow"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "aiFirewall.aiFirewallSubMenu",
+          "group": "0_acontinue"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "aiFirewall.rejectDiff",
+          "group": "AI Firewall",
+          "when": "aiFirewall.streamingDiff"
+        }
+      ],
+      "aiFirewall.aiFirewallSubMenu": [
+        {
+          "command": "aiFirewall.focusContinueInputWithoutClear",
+          "group": "AI Firewall"
+        },
+        {
+          "command": "aiFirewall.focusEdit",
+          "group": "AI Firewall",
+          "when": "!editorReadonly"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "aiFirewall.selectFilesAsContext",
+          "group": "1_debug@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "aiFirewall.newSession",
+          "group": "navigation@1",
+          "when": "view == aiFirewall.aiFirewallGUIView"
+        },
+        {
+          "command": "aiFirewall.viewHistory",
+          "group": "navigation@2",
+          "when": "view == aiFirewall.aiFirewallGUIView"
+        },
+        {
+          "command": "aiFirewall.openConfigPage",
+          "group": "navigation@4",
+          "when": "view == aiFirewall.aiFirewallGUIView"
+        },
+        {
+          "command": "aiFirewall.clearConsole",
+          "group": "navigation@1",
+          "when": "view == aiFirewall.aiFirewallConsoleView"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "aiFirewall.newSession",
+          "group": "navigation@1",
+          "when": "activeWebviewPanelId == aiFirewall.aiFirewallGUIView"
+        },
+        {
+          "command": "aiFirewall.viewHistory",
+          "group": "navigation@2",
+          "when": "activeWebviewPanelId == aiFirewall.aiFirewallGUIView"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "aiFirewall.debugTerminal",
+          "group": "navigation@top"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiFirewall",
+          "title": "AI Firewall",
+          "icon": "media/sidebar-icon.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "aiFirewallConsole",
+          "title": "AI Firewall Console",
+          "icon": "$(window)"
+        }
+      ]
+    },
+    "views": {
+      "aiFirewall": [
+        {
+          "type": "webview",
+          "id": "aiFirewall.aiFirewallGUIView",
+          "name": "AI Firewall",
+          "icon": "media/sidebar-icon.svg",
+          "visibility": "visible"
+        }
+      ],
+      "aiFirewallConsole": [
+        {
+          "type": "webview",
+          "id": "aiFirewall.aiFirewallConsoleView",
+          "name": "AI Firewall Console",
+          "icon": "$(window)",
+          "visibility": "visible",
+          "when": "config.aiFirewall.enableConsole"
+        }
+      ]
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "**/.continue*/config.json",
+        "url": "./config_schema.json"
+      },
+      {
+        "fileMatch": ".ai-firewallrc.json",
+        "url": "./continue_rc_schema.json"
+      },
+      {
+        "fileMatch": "**/config.yaml",
+        "url": "./config-yaml-schema.json"
+      }
+    ]
+  },
+  "scripts": {
+    "esbuild-base": "node scripts/esbuild.js",
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "esbuild-notify": "npm run esbuild-base -- --sourcemap --notify",
+    "esbuild:visualize": "esbuild-visualizer --metadata ./build/meta.json --filename ./build/stats.html --open",
+    "tsc": "tsc -p ./",
+    "tsc:check": "tsc -p ./ --noEmit",
+    "tsc-watch": "tsc -watch -p ./",
+    "rebuild": "electron-rebuild -v 19.1.8 node-pty",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint . --ext ts --fix",
+    "test": "vitest run",
+    "vitest": "vitest run",
+    "write-build-timestamp": "node scripts/write-build-timestamp.js",
+    "prepackage": "node scripts/prepackage.js",
+    "package": "node scripts/package.js",
+    "package-all": "node scripts/package-all.js",
+    "package:pre-release": "node scripts/package.js --pre-release",
+    "build:rust": "cargo-cp-artifact -ac sync sync.node -- cargo build --manifest-path ../../sync/Cargo.toml --message-format=json-render-diagnostics",
+    "build-debug:rust": "npm run build:rust --",
+    "build-release:rust": "npm run build:rust -- --release",
+    "e2e:compile": "tsc -p ./tsconfig.e2e.json",
+    "e2e:build": "npm --prefix ../../gui run build && npm run package",
+    "e2e:create-storage": "mkdir -p ./e2e/storage",
+    "e2e:get-chromedriver": "extest get-chromedriver --storage ./e2e/storage --code_version 1.95.0",
+    "e2e:get-vscode": "extest get-vscode --storage ./e2e/storage --code_version 1.95.0",
+    "e2e:sign-vscode": "codesign --entitlements entitlements.plist --deep --force -s - './e2e/storage/Visual Studio Code.app'",
+    "e2e:copy-vsix": "chmod +x ./e2e/get-latest-vsix.sh && bash ./e2e/get-latest-vsix.sh",
+    "e2e:install-vsix": "extest install-vsix -f ./e2e/vsix/continue.vsix --extensions_dir ./e2e/.test-extensions --storage ./e2e/storage",
+    "e2e:install-extensions": "extest install-from-marketplace ms-vscode-remote.remote-ssh --extensions_dir ./e2e/.test-extensions --storage ./e2e/storage && extest install-from-marketplace ms-vscode-remote.remote-containers --extensions_dir ./e2e/.test-extensions --storage ./e2e/storage && extest install-from-marketplace ms-vscode-remote.remote-wsl --extensions_dir ./e2e/.test-extensions --storage ./e2e/storage",
+    "e2e:test": "NODE_ENV=e2e extest run-tests ${TEST_FILE:-'./e2e/_output/tests/*.test.js'} --code_settings settings.json --extensions_dir ./e2e/.test-extensions --storage ./e2e/storage",
+    "e2e:clean": "rm -rf ./e2e/_output ./e2e/storage",
+    "e2e:all": "npm run e2e:build && npm run e2e:compile && npm run e2e:create-storage && npm run e2e:get-chromedriver && npm run e2e:get-vscode && npm run e2e:sign-vscode && npm run e2e:copy-vsix && npm run e2e:install-vsix && npm run e2e:install-extensions && AI_FIREWALL_GLOBAL_DIR=e2e/test-continue npm run e2e:test && npm run e2e:clean",
+    "e2e:all-non-mac": "npm run e2e:build && npm run e2e:compile && npm run e2e:create-storage && npm run e2e:get-chromedriver && npm run e2e:get-vscode && npm run e2e:copy-vsix && npm run e2e:install-vsix && npm run e2e:install-extensions && AI_FIREWALL_GLOBAL_DIR=e2e/test-continue npm run e2e:test && npm run e2e:clean",
+    "e2e:recompile-extension": "npm run package && npm run e2e:compile && npm run e2e:copy-vsix && npm run e2e:install-vsix && npm run e2e:install-extensions && AI_FIREWALL_GLOBAL_DIR=e2e/test-continue npm run e2e:test && npm run e2e:clean",
+    "e2e:rebuild-gui": "rm -rf gui && cp -r ../../gui/dist gui && npm run package && npm run e2e:copy-vsix && npm run e2e:install-vsix && npm run e2e:install-extensions && AI_FIREWALL_GLOBAL_DIR=e2e/test-continue npm run e2e:test && npm run e2e:clean",
+    "e2e:quick": "npm run e2e:compile && AI_FIREWALL_GLOBAL_DIR=e2e/test-continue npm run e2e:test && npm run e2e:clean",
+    "e2e:ci:download": "npm run e2e:create-storage && npm run e2e:get-chromedriver && npm run e2e:get-vscode",
+    "e2e:ci:run": "npm run e2e:compile && npm run e2e:copy-vsix && npm run e2e:install-vsix && npm run e2e:install-extensions && AI_FIREWALL_GLOBAL_DIR=e2e/test-continue npm run e2e:test",
+    "e2e:ci:run-yaml": "npm run e2e:compile && npm run e2e:copy-vsix && npm run e2e:install-vsix && npm run e2e:install-extensions && AI_FIREWALL_GLOBAL_DIR=e2e/test-continue-yaml npm run e2e:test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.6.4",
+    "@nestjs/common": "^11.0.16",
+    "@openapitools/openapi-generator-cli": "^2.23.1",
+    "@types/chai": "^5.0.1",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/follow-redirects": "^1.14.4",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "16.x",
+    "@types/node-fetch": "^2.6.12",
+    "@types/react-dom": "^18.2.4",
+    "@types/request": "^2.48.8",
+    "@types/uuid": "^10.0.0",
+    "@types/vscode": "1.70",
+    "@types/ws": "^8.5.4",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@vscode/vsce": "^2.22.0",
+    "cargo-cp-artifact": "^0.1",
+    "chai": "^4.5.0",
+    "esbuild": "0.17.19",
+    "esbuild-visualizer": "^0.6.0",
+    "eslint": "^8.28.0",
+    "json-schema-to-typescript": "^12.0.0",
+    "ovsx": "^0.8.3",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.6.3",
+    "vite": "^4.5.14",
+    "vscode-extension-tester": "^8.14.1"
+  },
+  "dependencies": {
+    "@ai-firewall/config-types": "file:../../packages/config-types",
+    "@ai-firewall/fetch": "file:../../packages/fetch",
+    "@electron/rebuild": "^4.0.3",
+    "@reduxjs/toolkit": "^1.9.3",
+    "@vscode/ripgrep": "^1.15.9",
+    "axios": "^1.13.1",
+    "core": "file:../../core",
+    "cors": "^2.8.5",
+    "dbinfoz": "^0.14.0",
+    "diff": "^7.0.0",
+    "downshift": "^7.6.0",
+    "express": "^4.18.2",
+    "fkill": "^8.1.0",
+    "follow-redirects": "^1.15.4",
+    "handlebars": "^4.7.8",
+    "highlight.js": "^11.7.0",
+    "highlightable": "^1.3.0-beta.0",
+    "http-proxy": "^1.18.1",
+    "http-proxy-agent": "^7.0.0",
+    "http-proxy-middleware": "^2.0.9",
+    "https-proxy-agent": "^7.0.2",
+    "ignore": "^5.3.0",
+    "jsdom": "^24.0.0",
+    "lru-cache": "^11.2.4",
+    "minisearch": "^7.0.0",
+    "mocha": "^11.7.5",
+    "monaco-editor": "^0.55.1",
+    "monaco-vscode-textmate-theme-converter": "^0.1.7",
+    "ncp": "^2.0.0",
+    "node-fetch": "^3.3.2",
+    "node-machine-id": "^1.1.12",
+    "posthog-node": "^3.6.3",
+    "react-markdown": "^8.0.7",
+    "react-redux": "^8.0.5",
+    "read-last-lines": "^1.8.0",
+    "request": "^2.88.2",
+    "socket.io-client": "^4.7.2",
+    "strip-ansi": "^7.1.0",
+    "svg-builder": "^2.0.0",
+    "systeminformation": "^5.30.8",
+    "tailwindcss": "^3.3.2",
+    "undici": "^6.24.0",
+    "uuid": "^9.0.1",
+    "uuidv4": "^6.2.13",
+    "vectordb": "0.4.20",
+    "vitest": "^3.1.4",
+    "vscode-languageclient": "^8.0.2",
+    "ws": "^8.19.0",
+    "yarn": "^1.22.21"
+  },
+  "overrides": {
+    "vitest": {
+      "@types/node": "^16.18.119"
+    }
+  }
+}

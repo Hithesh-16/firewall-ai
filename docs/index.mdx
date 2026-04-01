@@ -1,0 +1,102 @@
+---
+title: "AI Firewall"
+description: "The security layer between your AI tools and the outside world. Scans every LLM request for secrets, PII, and prompt injection before data ever leaves your machine."
+---
+
+AI Firewall is a **local-first security proxy** that sits between your developer tools (VS Code, CLI, JetBrains) and AI providers (OpenAI, Anthropic, Gemini, Ollama). It intercepts every AI-bound request, scans for secrets and PII, then blocks, redacts, or forwards the cleaned prompt — all before data ever leaves your machine.
+
+<CardGroup cols={3}>
+  <Card title="75% Token Savings" icon="chart-line">
+    Context reduction strips comments, blanks, and irrelevant code before sending to the LLM
+  </Card>
+  <Card title="6 Security Scanners" icon="shield-halved">
+    Secrets, PII, entropy, prompt injection, context-aware severity, plugin analysis
+  </Card>
+  <Card title="60+ LLM Providers" icon="brain">
+    OpenAI, Anthropic, Gemini, Ollama, and 56 more — switch without code changes
+  </Card>
+</CardGroup>
+
+## Quickstart
+
+<Steps>
+<Step title="Install">
+```bash
+npm install
+cd packages/scanner && npm run build
+cd proxy && npm run build && npm start
+```
+The proxy starts on `http://localhost:8080`.
+</Step>
+
+<Step title="Configure your AI tool">
+Point your VS Code extension, CLI, or any OpenAI-compatible client to the proxy:
+```
+API Base URL: http://localhost:8080/v1
+```
+Every request now passes through the security scanner pipeline.
+</Step>
+
+<Step title="Verify it works">
+```bash
+curl -X POST http://localhost:8080/api/estimate \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4","messages":[{"role":"user","content":"My AWS key is AKIAIOSFODNN7EXAMPLE"}]}'
+```
+Response shows: `secretsFound: 1`, `action: "BLOCK"`, `riskScore: 100`.
+</Step>
+</Steps>
+
+## How it works
+
+```
+Your IDE / CLI / Browser
+    ↓
+AI Firewall Proxy (localhost:8080)
+    ↓
+┌─────────────────────────────────┐
+│  1. Token Counting (tiktoken)   │
+│  2. Secret Scanner (12 patterns)│
+│  3. PII Scanner (7 patterns)    │
+│  4. Entropy Scanner (Shannon)   │
+│  5. Prompt Injection (13 types) │
+│  6. Policy Engine (BLOCK/REDACT)│
+│  7. Context Window Advisory     │
+│  8. Cost-Aware Routing          │
+└─────────────────────────────────┘
+    ↓
+AI Provider (OpenAI / Anthropic / Gemini / Ollama)
+```
+
+Every request is scanned. Every tool call is audited. No secrets reach the LLM.
+
+## What makes AI Firewall different
+
+<CardGroup cols={2}>
+  <Card title="Scan Before Send" icon="magnifying-glass">
+    Every byte is scanned BEFORE it reaches any LLM. Cursor, Copilot, and Claude Code send your code directly — we intercept first.
+  </Card>
+  <Card title="Token Intelligence" icon="coins">
+    Real token counting via tiktoken, advisory context window warnings, cost-aware routing. Know exactly what you're spending.
+  </Card>
+  <Card title="MCP Security Gateway" icon="plug">
+    Every MCP tool call (filesystem, GitHub, Slack, Gmail) passes through the scanner. No competitor scans tool I/O.
+  </Card>
+  <Card title="Human-in-the-Loop" icon="user-check">
+    High-risk actions trigger approval requests pushed to your phone. Default-deny on timeout. OWASP-compliant.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Architecture" icon="diagram-project" href="/proxy/architecture">
+    Understand the system design
+  </Card>
+  <Card title="Scanner Reference" icon="radar" href="/security/scanners">
+    All 6 scanners explained
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Full endpoint documentation
+  </Card>
+</CardGroup>

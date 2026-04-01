@@ -1,0 +1,89 @@
+---
+title: "Policy Engine"
+description: "How the policy engine makes BLOCK/REDACT/ALLOW decisions and how to configure it"
+---
+
+## Overview
+
+The policy engine is the decision-maker. It takes scanner results and produces one of four actions:
+
+| Action | What happens | When |
+|--------|-------------|------|
+| **BLOCK** | Request rejected (HTTP 403) | Critical secrets, private keys, prompt injection |
+| **REDACT** | Sensitive data replaced with `[REDACTED_TYPE]` tokens, request forwarded | Emails, phone numbers, JWTs, API keys |
+| **ALLOW** | Request forwarded unchanged | No sensitive data detected |
+| **REQUIRE_APPROVAL** | Request held pending user approval (Phase 4) | Risk score above approval threshold |
+
+## Configuration
+
+All policy settings live in `proxy/policy.json`:
+
+```json
+{
+  "version": "1.2",
+  "rules": {
+    "block_private_keys": true,
+    "block_aws_keys": true,
+    "block_db_urls": true,
+    "block_github_tokens": true,
+    "redact_emails": true,
+    "redact_phone": true,
+    "redact_jwt": true,
+    "redact_generic_api_keys": true,
+    "allow_source_code": true,
+    "log_all_requests": true
+  },
+  "severity_threshold": "medium",
+  "file_scope": {
+    "mode": "blocklist",
+    "blocklist": [".env", "**/*.pem", "**/*.key", "**/secrets/**"],
+    "max_file_size_kb": 500
+  },
+  "smart_routing": {
+    "enabled": false,
+    "routes": [
+      { "condition": "risk_score >= 70", "target": "local_llm" },
+      { "condition": "risk_score >= 30", "target": "cloud_redacted" },
+      { "condition": "default", "target": "cloud_direct" }
+    ],
+    "cost_routing": { "enabled": false }
+  },
+  "prompt_injection": { "enabled": true, "threshold": 60 },
+  "approval": { "enabled": false, "riskThreshold": 50, "timeoutMs": 60000 }
+}
+```
+
+## Per-Model Policies
+
+Restrict which files each model can access:
+
+```json
+{
+  "model_policies": {
+    "gpt-4": {
+      "allowed_paths": ["src/frontend/**"],
+      "blocked_paths": ["src/auth/**", "src/payment/**"]
+    },
+    "default": {
+      "allowed_paths": ["**"],
+      "blocked_paths": []
+    }
+  }
+}
+```
+
+## Per-Project Overrides
+
+Place `.aifirewall.json` in your project root to override the global policy:
+
+```json
+{
+  "extends": "global",
+  "rules": { "block_db_urls": true },
+  "blocked_paths": ["/src/payments/", "/src/auth/secrets/"]
+}
+```
+
+<Tip>
+**Design principle:** The policy engine evaluates rules but never silently modifies your prompts. BLOCK returns a clear error. REDACT replaces values with visible `[REDACTED_EMAIL]` tokens so you can see what was changed.
+</Tip>

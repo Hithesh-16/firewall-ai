@@ -1,0 +1,119 @@
+---
+title: "Product Overview"
+description: "AI Firewall — local-first AI security gateway with token intelligence, MCP scanning, and multi-device control"
+---
+
+## Three Products, One Security Layer
+
+<CardGroup cols={3}>
+  <Card title="Security Proxy" icon="shield-halved" href="/proxy/quickstart">
+    Local Fastify server (port 8080) that intercepts every LLM request. 6 scanners, policy engine, token intelligence, cost-aware routing. Works with any OpenAI-compatible client.
+  </Card>
+  <Card title="IDE Extensions" icon="code" href="/ide-extensions/install">
+    VS Code extension + JetBrains plugin. Auto-starts proxy, shows scan results in-editor, inline completions, chat, agent mode. All requests go through the firewall.
+  </Card>
+  <Card title="Control Plane" icon="mobile" href="/proxy/architecture">
+    Approve/deny AI agent actions from your phone. WebSocket push notifications, Slack/email alerts, cross-device session tracking. PWA — no app install needed.
+  </Card>
+</CardGroup>
+
+## Feature Highlights
+
+<CardGroup cols={2}>
+  <Card title="75% Token Savings" icon="chart-line">
+    Context reduction strips comments and irrelevant code before sending to the LLM. Real tiktoken counting — not character heuristics.
+  </Card>
+  <Card title="6 Security Scanners" icon="radar">
+    Secrets (12 patterns), PII (7 patterns), entropy analysis, prompt injection (13 categories), context-aware severity, plugin analysis.
+  </Card>
+  <Card title="60+ LLM Providers" icon="brain">
+    OpenAI, Anthropic, Gemini, Ollama, and 56 more. Switch providers without code changes. BYOK with AES-256-GCM encrypted vault.
+  </Card>
+  <Card title="MCP Security Gateway" icon="plug">
+    Every MCP tool call (filesystem, GitHub, Slack, Gmail) scanned for secrets/PII. No competitor does this.
+  </Card>
+</CardGroup>
+
+## Competitive Position
+
+| Capability | AI Firewall | Cursor | GitHub Copilot | Claude Code |
+|-----------|:---:|:---:|:---:|:---:|
+| Pre-send security scanning | Yes | No | No | No |
+| Token optimization | 75% savings | — | — | — |
+| PII/Secret redaction | Yes | No | No | No |
+| Multi-provider (60+) | Yes | 3-4 | 1 | 1 |
+| Local-first / offline | Yes | No | No | No |
+| MCP tool I/O scanning | Yes | No | No | No |
+| Cost tracking + limits | Yes | No | No | No |
+| Open source | Yes | No | No | No |
+| Mobile approval | Yes | No | No | Partial |
+
+## Feature Matrix by Plan
+
+| Feature | Community (Free) | Team | Enterprise |
+|---------|:---:|:---:|:---:|
+| All 12+ scanner patterns | Yes | Yes | Yes |
+| Policy engine (BLOCK/REDACT/ALLOW) | Yes | Yes | Yes |
+| Token intelligence (tiktoken) | Yes | Yes | Yes |
+| Context reduction (75% savings) | Yes | Yes | Yes |
+| File scanning with cache | Yes | Yes | Yes |
+| MCP security gateway | Yes | Yes | Yes |
+| Multi-provider gateway | 2 | Unlimited | Unlimited |
+| Multi-user / RBAC | — | Yes | Yes |
+| SSO (SAML/OIDC) | — | — | Yes |
+| Compliance reporting | — | — | Yes |
+
+<Info>
+**Core scanning is always free.** Expired licenses degrade to community tier — scanning never stops.
+</Info>
+
+## CLI
+
+<CodeGroup>
+```bash npm
+cd extensions/cli && npm run build
+node dist/index.js
+```
+</CodeGroup>
+
+<CardGroup cols={2}>
+  <Card title="TUI Mode" icon="terminal" href="/cli/tui-mode">
+    Interactive terminal UI for development workflows with security scanning.
+  </Card>
+  <Card title="Headless Mode" icon="server" href="/cli/headless-mode">
+    Automated AI coding for CI/CD with every request scanned.
+  </Card>
+</CardGroup>
+
+## IDE Extensions
+
+<CardGroup cols={2}>
+  <Card title="VS Code" icon="code" href="/ide-extensions/install">
+    Auto-starts proxy, inline completions, chat, agent mode. All requests scanned.
+  </Card>
+  <Card title="JetBrains" icon="jet-fighter" href="/ide-extensions/install">
+    IntelliJ IDEA, WebStorm, PyCharm. Chat + completions with proxy integration.
+  </Card>
+</CardGroup>
+
+## Run the Benchmark
+
+See real token savings measured on your own codebase:
+
+```bash
+cd proxy && npx ts-node src/test/benchmark.ts
+```
+
+## Resources
+
+<CardGroup cols={3}>
+  <Card title="Architecture" icon="diagram-project" href="/proxy/architecture">
+    System design and request flow
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    All 35+ proxy endpoints
+  </Card>
+  <Card title="Scanner Reference" icon="shield" href="/security/scanners">
+    All 6 scanners explained
+  </Card>
+</CardGroup>

@@ -1,0 +1,104 @@
+---
+title: "API Reference"
+description: "Complete endpoint documentation for the AI Firewall proxy"
+---
+
+## Base URL
+
+```
+http://localhost:8080
+```
+
+## Authentication
+
+Requests can be authenticated via:
+- `Authorization: Bearer afw_xxxxx` — AI Firewall API token
+- `Authorization: Bearer sk-xxxxx` — Passthrough provider key (forwarded directly)
+
+## Core Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Chat Completions" icon="message" href="/api-reference/chat">
+    `POST /v1/chat/completions` — OpenAI-compatible proxy with security scanning
+  </Card>
+  <Card title="Pre-flight Estimate" icon="calculator" href="/api-reference/estimate">
+    `POST /api/estimate` — Token count, cost estimate, scan preview before sending
+  </Card>
+  <Card title="File Scanning" icon="file-shield" href="/api-reference/file-scan">
+    `POST /api/scan/file` — Scan files for secrets/PII with caching
+  </Card>
+  <Card title="Context Reduction" icon="compress" href="/api-reference/reduce">
+    `POST /api/reduce` — Reduce content to fit a token budget (grep+window+strip)
+  </Card>
+  <Card title="MCP Gateway" icon="plug" href="/api-reference/mcp-gateway">
+    `POST /v1/mcp/tools/call` — Scan MCP tool inputs/outputs
+  </Card>
+  <Card title="Approvals" icon="user-check" href="/api-reference/approvals">
+    `GET /api/approvals/pending` — Human-in-the-loop approval workflow
+  </Card>
+</CardGroup>
+
+## All Endpoints
+
+### LLM Proxy
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/chat/completions` | OpenAI-compatible proxy with scanning |
+| POST | `/api/estimate` | Pre-flight token + cost + scan estimate |
+| GET | `/health` | Health check |
+
+### File Scanning
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/scan/file` | Scan single file (cached by SHA-256) |
+| POST | `/api/scan/batch` | Scan up to 50 files with summary |
+| DELETE | `/api/scan/cache` | Clear scan cache |
+| GET | `/api/scan/cache/stats` | Cache statistics |
+
+### Context Reduction
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/reduce` | Reduce content via grep+window+strip pipeline |
+
+### MCP Security Gateway
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/mcp/tools/call` | Scan tool inputs, forward, scan outputs |
+| POST | `/v1/mcp/scan` | Standalone text scan |
+| GET | `/v1/mcp/audit` | Query MCP audit log |
+| GET | `/v1/mcp/audit/stats` | Aggregate MCP stats |
+
+### Approvals & Sessions
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/approvals/pending` | List pending approvals |
+| POST | `/api/approvals/:id/resolve` | Respond (allow/deny) |
+| GET | `/api/approvals/history` | Past decisions |
+| GET | `/api/approvals/rules` | Remembered rules |
+| GET | `/api/sessions/active` | Active sessions across devices |
+
+### Notifications
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/notifications/channels` | List configured channels |
+| POST | `/api/notifications/channels` | Add channel (webhook/slack/email) |
+| POST | `/api/notifications/test` | Send test notification |
+
+### Auth & Org
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Create user |
+| POST | `/api/auth/login` | Login |
+| GET/PUT | `/api/policy` | Policy CRUD |
+| POST/GET | `/api/providers` | AI provider management |
+| POST/GET | `/api/credits` | Credit limits |
+| GET | `/api/usage/summary` | Usage analytics |
+| GET | `/api/logs` | Audit logs |
+| GET | `/api/stats` | Statistics |
+
+### License
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/license` | Activate license key |
+| GET | `/api/license` | Current plan + features |
+| DELETE | `/api/license` | Deactivate license |

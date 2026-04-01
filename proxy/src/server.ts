@@ -1,0 +1,186 @@
+import cors from "@fastify/cors";
+import Fastify from "fastify";
+import { env } from "./config";
+import path from "node:path";
+import fs from "node:fs";
+import fastifyStatic from "@fastify/static";
+import { registerAiRoute } from "./routes/ai.route";
+import { registerAuthRoutes } from "./routes/auth.route";
+import { registerBrowserScanRoute } from "./routes/browserScan.route";
+import { registerCreditRoutes } from "./routes/credit.route";
+import { registerEstimateRoute } from "./routes/estimate.route";
+import { registerExportRoutes } from "./routes/export.route";
+import { registerHealthRoute } from "./routes/health.route";
+import { registerPermissionRoute } from "./routes/permission.route";
+import { registerVaultRoutes } from "./routes/vault.route";
+import { registerLogsRoute } from "./routes/logs.route";
+import { registerOrgRoutes } from "./routes/org.route";
+import { registerPolicyRoutes } from "./routes/policy.route";
+import { registerProviderRoutes } from "./routes/provider.route";
+import { registerSimulatorRoute } from "./routes/simulator.route";
+import { registerStatsRoute } from "./routes/stats.route";
+import { registerUsageRoutes } from "./routes/usage.route";
+import { registerAuditRoutes } from "./routes/audit.route";
+import { registerPluginScanRoutes } from "./routes/pluginScan.route";
+import { registerSSORoutes } from "./routes/sso.route";
+import { registerWebhookRoutes } from "./routes/webhook.route";
+import { registerFileScanRoutes } from "./routes/fileScan.route";
+import { registerPreflightScanRoute } from "./routes/preflightScan.route";
+import { registerMcpGatewayRoutes } from "./routes/mcpGateway.route";
+import { registerApprovalRoutes } from "./routes/approval.route";
+import { registerSessionRoutes } from "./routes/sessions.route";
+import { registerNotificationRoutes } from "./routes/notification.route";
+import { registerChannel } from "./notifications/notificationService";
+import { webhookChannel } from "./notifications/channels/webhook";
+import { slackChannel } from "./notifications/channels/slack";
+import { emailChannel } from "./notifications/channels/email";
+import { registerLicenseRoutes } from "./routes/license.route";
+import { registerTeamRoutes } from "./routes/team.route";
+import { registerScimRoutes } from "./routes/scim.route";
+import { registerRbacRoutes } from "./routes/rbac.route";
+import { registerReduceRoute } from "./routes/reduce.route";
+import { startWebhookPoller } from "./services/webhookQueue";
+import { startScheduledReports } from "./export/scheduledReports";
+import { logConfigSecurityWarnings } from "./middleware/configSecurityCheck";
+
+async function bootstrap(): Promise<void> {
+  const app = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL ?? "info",
+      transport: process.env.NODE_ENV === "development"
+        ? { target: "pino-pretty" }
+        : undefined,
+      // NEVER log request bodies — they contain the secrets we're scanning for
+      serializers: {
+        req: (req: { method: string; url: string }) => ({ method: req.method, url: req.url }),
+      },
+    },
+  });
+
+  // SECURITY: Only allow known origins — never use { origin: true } in production
+  const ALLOWED_ORIGINS = [
+    "http://localhost:3000",   // GUI dev server
+    "http://localhost:5173",   // Vite dev server
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    ...(env.CORS_ORIGINS ? env.CORS_ORIGINS.split(",").map((o: string) => o.trim()) : []),
+  ];
+
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      // Allow requests with no origin (same-origin, curl, server-to-server)
+      if (!origin) return cb(null, true);
+      // Allow VS Code webview origins (vscode-webview:// scheme)
+      if (origin.startsWith("vscode-webview://")) return cb(null, true);
+      // Allow configured origins
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      cb(new Error(`Origin ${origin} not allowed by CORS`), false);
+    },
+    credentials: true,
+  });
+
+  // Serve dashboard static files when available (air-gapped single-container mode)
+  try {
+    const dashboardDist = path.resolve(__dirname, "../../dashboard/dist");
+    if (fs.existsSync(dashboardDist)) {
+      await app.register(fastifyStatic, {
+        root: dashboardDist,
+        prefix: "/"
+      });
+      app.log.info(`Serving dashboard from ${dashboardDist}`);
+    }
+  } catch (e) {
+    app.log.warn({ err: e }, "Dashboard static serve not available");
+  }
+
+  // Public routes
+  await registerHealthRoute(app);
+
+  // Auth routes (register/login are public, token mgmt is authenticated)
+  await registerAuthRoutes(app);
+
+  // Authenticated / role-gated routes
+  await registerLogsRoute(app);
+  await registerPolicyRoutes(app);
+  await registerStatsRoute(app);
+  await registerSimulatorRoute(app);
+  await registerOrgRoutes(app);
+  await registerTeamRoutes(app);
+  await registerRbacRoutes(app);
+  await registerScimRoutes(app);
+  await registerExportRoutes(app);
+
+  // Phase 4: Gateway routes
+  await registerProviderRoutes(app);
+  await registerCreditRoutes(app);
+  await registerUsageRoutes(app);
+
+  // Browser extension scan endpoint
+  await registerBrowserScanRoute(app);
+
+  // Pre-flight scan (called by core/llm/firewallScan.ts before every LLM request)
+  await registerPreflightScanRoute(app);
+
+  // File scanning (Phase 2)
+  await registerFileScanRoutes(app);
+
+  // MCP Security Gateway (Phase 3)
+  await registerMcpGatewayRoutes(app);
+
+  // Control Plane (Phase 4)
+  await registerApprovalRoutes(app);
+  await registerSessionRoutes(app);
+  await registerNotificationRoutes(app);
+
+  // Register notification channels (OCP: add new channels here)
+  registerChannel(webhookChannel);
+  registerChannel(slackChannel);
+  registerChannel(emailChannel);
+
+  // Context reduction (opt-in token optimization)
+  await registerReduceRoute(app);
+
+  // License management (Phase 5)
+  await registerLicenseRoutes(app);
+
+  // Permission prompt (interactive mode)
+  await registerPermissionRoute(app);
+
+  // Reversible token vault
+  await registerVaultRoutes(app);
+
+  // Pre-flight estimation
+  await registerEstimateRoute(app);
+
+  // Privacy audit (opt-in, Phase X)
+  await registerAuditRoutes(app);
+  registerPluginScanRoutes(app);
+
+  // SSO authentication
+  await registerSSORoutes(app);
+
+  // Webhook notifications
+  await registerWebhookRoutes(app);
+
+  // Core proxy route (auth via API key header or .env)
+  await registerAiRoute(app);
+
+  try {
+    await app.listen({ port: env.PORT, host: "0.0.0.0" });
+    app.log.info(`AI Firewall Gateway running on http://localhost:${env.PORT}`);
+
+    // Check for plaintext API keys in config files (warn only, no modification)
+    logConfigSecurityWarnings();
+
+    // Start scheduled compliance reports
+    startScheduledReports();
+
+    // Start webhook delivery queue poller (Phase 5)
+    startWebhookPoller();
+  } catch (error) {
+    app.log.error(error);
+    process.exit(1);
+  }
+}
+
+void bootstrap();

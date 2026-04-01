@@ -15,6 +15,7 @@ import {
   scanPII,
   scanEntropy,
   scanPromptInjection,
+  normalizeUnicode,
   type SecretScanResult,
   type PiiScanResult,
   type SecretMatch,
@@ -108,10 +109,14 @@ export function scanMcpContent(
 ): McpScanResult {
   const startTime = Date.now();
 
-  // Run all scanners
-  const secretResult = scanSecrets(text);
-  const piiResult = scanPII(text);
-  const entropyMatches = scanEntropy(text);
+  // Unicode normalization: strip confusables before scanning (ASI04 defense)
+  const normResult = normalizeUnicode(text);
+  const normalizedText = normResult.normalizedText;
+
+  // Run all scanners on normalized text
+  const secretResult = scanSecrets(normalizedText);
+  const piiResult = scanPII(normalizedText);
+  const entropyMatches = scanEntropy(normalizedText);
 
   // Merge entropy into secrets (same as ai.route.ts pattern)
   if (entropyMatches.length > 0) {
@@ -121,7 +126,7 @@ export function scanMcpContent(
 
   // Prompt injection (primarily for inputs, but also check outputs for indirect injection)
   const piResult = scanPromptInjection(
-    text,
+    normalizedText,
     options.injectionThreshold ?? 60
   );
 
@@ -150,6 +155,9 @@ export function scanMcpContent(
   }
   if (piResult.isInjection) {
     reasons.push(`Prompt injection (score: ${piResult.score})`);
+  }
+  if (normResult.hasAnomalies) {
+    reasons.push(`Unicode anomalies: ${normResult.findings.length} findings`);
   }
 
   // Optional redaction

@@ -27,6 +27,18 @@ const INJECTION_PATTERNS: InjectionPattern[] = [
   { name: "context_confusion", regex: /(forget\s+(everything|all|what)|disregard\s+(all|any|the)\s+(previous|above|prior))/gi, weight: 25 },
   { name: "chain_of_thought_leak", regex: /(show\s+(me\s+)?your\s+(reasoning|chain\s+of\s+thought|internal)|reveal\s+(your|the)\s+(system|hidden))/gi, weight: 20 },
   { name: "indirect_injection", regex: /(when\s+you\s+see\s+this|if\s+you\s+read\s+this|hidden\s+instruction)/gi, weight: 20 },
+
+  // ── Enhanced indirect injection patterns (ASI01/ASI04 hardening) ──
+  { name: "file_embedded_instruction", regex: /instructions?\s+for\s+(?:the\s+)?(?:AI|assistant|model|LLM|agent|copilot)/gi, weight: 25 },
+  { name: "ai_directive_injection", regex: /(?:^|\n)\s*(?:AI|assistant|system|model)\s*:\s*(?:please|you\s+must|do\s+the\s+following|ignore|override)/gi, weight: 25 },
+  { name: "system_override", regex: /(?:SYSTEM|ADMIN|ROOT)\s*:\s*(?:override|change|update|replace)\s+(?:previous|prior|all)/gi, weight: 30 },
+  { name: "hidden_text_instruction", regex: /<!--[\s\S]*?(?:instruction|ignore|system|override|inject)[\s\S]*?-->/gi, weight: 20 },
+  { name: "tool_call_manipulation", regex: /(?:call|invoke|execute|run|trigger)\s+(?:the\s+)?(?:function|tool|api|command)\s+(?:with|using)\s+/gi, weight: 20 },
+  { name: "role_boundary_confusion", regex: /(?:\[(?:system|user|assistant)\]|<(?:system|user|assistant)>)\s*(?:ignore|override|forget|new\s+instruction)/gi, weight: 30 },
+  { name: "markdown_injection", regex: /```(?:system|instructions?|rules?|config)\s*\n[\s\S]*?```/gi, weight: 20 },
+  { name: "invisible_instruction", regex: /this\s+(?:text|message|content|file)\s+(?:is\s+)?(?:hidden|invisible|not\s+visible|for\s+the\s+AI)/gi, weight: 15 },
+  { name: "data_smuggling", regex: /(?:encode|decode|convert)\s+(?:this|the\s+following)\s+(?:as|to|from|into)\s+(?:base64|hex|binary|rot13|unicode)/gi, weight: 20 },
+  { name: "exfil_via_tool", regex: /use\s+(?:the\s+)?(?:web|http|fetch|curl|request|browser)\s+(?:tool|function|api)\s+to\s+(?:send|post|upload|transmit|exfiltrate)/gi, weight: 30 },
 ];
 
 export function scanPromptInjection(text: string, threshold = 60): PromptInjectionResult {

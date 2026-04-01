@@ -1,0 +1,93 @@
+---
+title: "SCIM Provisioning"
+description: "Automated user and group provisioning from Okta, Azure AD, and other identity providers"
+---
+
+## What Is SCIM?
+
+SCIM (System for Cross-domain Identity Management) lets your identity provider (IdP) automatically create, update, and deactivate users in AI Firewall. When someone joins or leaves your company in Okta or Azure AD, AI Firewall syncs automatically.
+
+## Supported IdPs
+
+Any SCIM 2.0-compatible provider:
+- **Okta**
+- **Azure Active Directory**
+- **OneLogin**
+- **JumpCloud**
+- **Google Workspace** (via third-party SCIM bridge)
+
+## Setup
+
+### 1. Generate a SCIM Token
+
+Set the `SCIM_TOKEN` environment variable on your proxy:
+
+```bash
+# .env
+SCIM_TOKEN=your-secure-random-token-here
+```
+
+Use a strong random value (e.g., `openssl rand -hex 32`).
+
+### 2. Configure Your IdP
+
+Point your IdP's SCIM integration to:
+
+| Setting | Value |
+|---------|-------|
+| **SCIM Base URL** | `https://your-proxy:8080/scim/v2` |
+| **Auth Method** | Bearer Token |
+| **Bearer Token** | Your `SCIM_TOKEN` value |
+
+### 3. Map Attributes
+
+| SCIM Attribute | AI Firewall Field |
+|---------------|-------------------|
+| `userName` | `email` |
+| `name.formatted` | `name` |
+| `emails[0].value` | `email` (fallback) |
+| `active` | When set to `false`, user role changes to `auditor` (read-only) |
+
+## How Provisioning Works
+
+### User Creation
+When the IdP sends `POST /scim/v2/Users`:
+- A new user is created with the `developer` role
+- A random password is generated (users login via SSO, not password)
+- If the enterprise extension includes an org ID, the user is auto-assigned
+
+### User Deactivation
+When the IdP sends `PATCH` with `active: false` or `DELETE`:
+- `PATCH active=false`: User's role changes to `auditor` (can view but not use tools)
+- `DELETE`: User is fully removed from the system
+
+### Group → Team Mapping
+SCIM Groups map directly to AI Firewall teams:
+
+| SCIM Operation | AI Firewall Action |
+|---------------|-------------------|
+| Create Group | Creates a team in the default org |
+| Add member to Group | Adds user as team member |
+| Remove member from Group | Removes user from team |
+| Delete Group | Deletes the team |
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/scim/v2/Users` | List users (paginated, filterable) |
+| POST | `/scim/v2/Users` | Provision user |
+| GET | `/scim/v2/Users/:id` | Get user |
+| PATCH | `/scim/v2/Users/:id` | Update user |
+| DELETE | `/scim/v2/Users/:id` | Deprovision user |
+| GET | `/scim/v2/Groups` | List groups |
+| POST | `/scim/v2/Groups` | Create group |
+| PATCH | `/scim/v2/Groups/:id` | Update group membership |
+| DELETE | `/scim/v2/Groups/:id` | Delete group |
+
+## Filtering
+
+List users with a filter:
+```
+GET /scim/v2/Users?filter=userName eq "jane@example.com"
+```

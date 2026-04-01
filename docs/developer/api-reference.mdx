@@ -1,0 +1,362 @@
+---
+title: "API Reference — New Endpoints"
+description: "Complete reference for Teams, RBAC, File Restrictions, Policy Chain, SCIM, and Export APIs"
+---
+
+## Authentication
+
+All endpoints require `Authorization: Bearer afw_...` unless noted otherwise.
+SCIM endpoints use a separate `SCIM_TOKEN` bearer token.
+
+---
+
+## Teams
+
+### List teams in org
+```http
+GET /api/teams
+```
+Returns all teams in the caller's organization.
+
+### List my teams
+```http
+GET /api/teams/mine
+```
+Returns teams the current user belongs to.
+
+### Get team detail
+```http
+GET /api/teams/:id
+```
+Returns team info + member list. Verifies caller is in the same org.
+
+### Create team
+```http
+POST /api/teams
+Auth: admin or security_lead
+Body: { "name": "Frontend", "slug": "frontend" }
+```
+Auto-adds creator as team lead. Returns 201.
+
+### Update team
+```http
+PATCH /api/teams/:id
+Auth: admin or security_lead
+Body: { "name": "New Name" }
+```
+
+### Delete team
+```http
+DELETE /api/teams/:id
+Auth: admin
+```
+Cascades: removes all team_members.
+
+### Add team member
+```http
+POST /api/teams/:id/members
+Auth: admin or security_lead
+Body: { "userId": 5, "role": "member" }
+```
+Role options: `lead` or `member`.
+
+### Remove team member
+```http
+DELETE /api/teams/:id/members/:userId
+Auth: admin or security_lead
+```
+
+---
+
+## RBAC — Roles & Permissions
+
+### List roles
+```http
+GET /api/roles
+```
+Returns built-in (4) + custom roles with their capability lists.
+
+### List capabilities
+```http
+GET /api/capabilities
+```
+Returns all 36 capability atoms grouped by category.
+
+### Create custom role
+```http
+POST /api/roles
+Auth: role:manage capability
+Body: { "name": "team-lead", "displayName": "Team Lead", "description": "...", "capabilities": ["team:read", "team:write", "agent:use"] }
+```
+
+### Update role capabilities
+```http
+PUT /api/roles/:id
+Auth: role:manage capability
+Body: { "capabilities": ["team:read", "agent:use"] }
+```
+Cannot modify built-in system roles.
+
+### Delete custom role
+```http
+DELETE /api/roles/:id
+Auth: role:manage capability
+```
+Cannot delete built-in system roles.
+
+### Assign org-level role
+```http
+POST /api/users/:userId/role
+Auth: role:assign capability
+Body: { "roleId": 5 }
+```
+
+### Assign team-level role
+```http
+POST /api/users/:userId/team-role/:teamId
+Auth: role:assign capability
+Body: { "roleId": 3 }
+```
+
+### Add capability override
+```http
+POST /api/users/:userId/overrides
+Auth: role:manage capability
+Body: { "capabilityName": "policy:write", "granted": true, "reason": "Temp access for audit", "expiresAt": 1719792000000 }
+```
+
+### List user overrides
+```http
+GET /api/users/:userId/overrides
+Auth: user:read capability
+```
+
+### Remove override
+```http
+DELETE /api/users/:userId/overrides/:capName
+Auth: role:manage capability
+```
+
+### Check permission
+```http
+GET /api/permissions/check?capability=policy:write
+```
+Returns `{ allowed: true/false, reason, source }` for the authenticated user.
+
+---
+
+## File Restrictions
+
+### Get effective policy (merged)
+```http
+GET /api/file-restrictions
+```
+Returns the fully merged file policy for the current user (global + org + team + user).
+
+### List all restrictions (admin)
+```http
+GET /api/file-restrictions/all
+Auth: file_restrictions:manage capability
+```
+
+### Set org-level restriction
+```http
+PUT /api/file-restrictions/org
+Auth: file_restrictions:manage capability
+Body: { "mode": "blocklist", "patterns": ["*.env", "*.key", "secrets/**"] }
+```
+
+### Set team-level restriction
+```http
+PUT /api/file-restrictions/team/:teamId
+Auth: file_restrictions:manage capability
+Body: { "mode": "blocklist", "patterns": ["*.pem", "*.p12"] }
+```
+
+### Set user-level restriction
+```http
+PUT /api/file-restrictions/user/:userId
+Auth: file_restrictions:manage capability
+Body: { "mode": "allowlist", "patterns": ["src/frontend/**"] }
+```
+
+### Delete restriction
+```http
+DELETE /api/file-restrictions/:id
+Auth: file_restrictions:manage capability
+```
+
+---
+
+## Policy Chain
+
+### Get effective policy (fully resolved)
+```http
+GET /api/policies/effective?projectRoot=/path/to/project
+```
+Returns the merged policy (global + org + team + project).
+
+### List scoped policies
+```http
+GET /api/policies/scoped
+Auth: policy:read capability
+```
+Returns all org + team policy overrides.
+
+### Set org policy override
+```http
+PUT /api/policies/org
+Auth: policy:write capability
+Body: { "rules": { "block_db_urls": true }, "severity_threshold": "medium" }
+```
+
+### Set team policy override
+```http
+PUT /api/policies/team/:teamId
+Auth: policy:write capability
+Body: { "file_scope": { "blocklist": ["team-secrets/**"] } }
+```
+
+### Delete org policy override
+```http
+DELETE /api/policies/org
+Auth: policy:write capability
+```
+
+### Delete team policy override
+```http
+DELETE /api/policies/team/:teamId
+Auth: policy:write capability
+```
+
+---
+
+## SCIM 2.0
+
+Auth: `Authorization: Bearer {SCIM_TOKEN}` (set via env var).
+
+### List users
+```http
+GET /scim/v2/Users?startIndex=1&count=100
+GET /scim/v2/Users?filter=userName eq "user@example.com"
+```
+
+### Get user
+```http
+GET /scim/v2/Users/:id
+```
+
+### Provision user
+```http
+POST /scim/v2/Users
+Body: { "userName": "user@example.com", "name": { "formatted": "Jane Doe" } }
+```
+Creates user with `developer` role and random password (SSO login expected).
+
+### Update user
+```http
+PATCH /scim/v2/Users/:id
+Body: { "Operations": [{ "op": "replace", "path": "active", "value": false }] }
+```
+
+### Deprovision user
+```http
+DELETE /scim/v2/Users/:id
+```
+
+### List groups
+```http
+GET /scim/v2/Groups
+```
+Groups map to teams.
+
+### Create group
+```http
+POST /scim/v2/Groups
+Body: { "displayName": "Engineering", "members": [{ "value": "5" }] }
+```
+
+### Update group membership
+```http
+PATCH /scim/v2/Groups/:id
+Body: { "Operations": [{ "op": "add", "path": "members", "value": [{ "value": "7" }] }] }
+```
+
+### Delete group
+```http
+DELETE /scim/v2/Groups/:id
+```
+
+---
+
+## Export
+
+### PDF compliance report
+```http
+GET /api/export/pdf?startDate=1704067200000&endDate=1706745600000
+Auth: admin, security_lead, or auditor
+```
+Returns an HTML document with "Print to PDF" button. Contains security summary, compliance checks, usage-by-model table, and daily trends.
+
+Query params: `startDate`, `endDate` (epoch ms), `action` (BLOCK/REDACT/ALLOW), `minRiskScore`.
+
+---
+
+## Rule File Scanning
+
+### Scan rule file content
+```http
+POST /api/scan/rules
+Auth: any authenticated user
+Body:
+{
+  "files": [
+    {
+      "path": ".cursorrules",
+      "content": "Use TypeScript for all new files.",
+      "source": ".cursorrules"
+    }
+  ],
+  "injection_threshold": 40
+}
+```
+
+Returns per-file scan results with action (ALLOW/WARN/BLOCK), risk score, injection score, secrets found, unicode anomalies, and reasons.
+
+**Source options:** `.continuerules`, `.cursorrules`, `.windsurfrules`, `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, `.aifirewall.md`, `custom`
+
+### Scan workspace directory
+```http
+POST /api/scan/rules/directory
+Auth: any authenticated user
+Body:
+{
+  "directory": "/path/to/workspace",
+  "injection_threshold": 40
+}
+```
+
+Scans all known rule files found in the given directory. Returns array of results plus a summary with counts of blocked/warned/allowed files.
+
+---
+
+## MCP Output Scanning
+
+### Scan tool call with output
+```http
+POST /v1/mcp/tools/call
+Auth: any authenticated user
+Body:
+{
+  "server_id": "filesystem",
+  "tool_name": "read_file",
+  "arguments": { "path": "/etc/hosts" },
+  "output": "127.0.0.1 localhost\nAKIAIOSFODNN7EXAMPLE"
+}
+```
+
+The `output` field is optional. When provided, the tool output is scanned through the same pipeline as inputs. If the output scan returns BLOCK, a 403 is returned with `code: "MCP_OUTPUT_BLOCKED"`. If REDACT, a `sanitizedOutput` field is returned.
+
+**Additional response headers:**
+- `X-AF-MCP-Output-Action`: ALLOW/BLOCK/REDACT
+- `X-AF-MCP-Output-Risk-Score`: 0-100

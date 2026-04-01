@@ -1,0 +1,82 @@
+---
+title: "Policy Inheritance"
+description: "How security policies merge across org, team, and project levels"
+---
+
+## How It Works
+
+AI Firewall supports multi-level policy overrides. Each level can tighten security but cannot loosen it.
+
+```
+Global policy.json (baseline for everyone)
+  → Org-level override (tighter for your org)
+    → Team-level override (tighter for a specific team)
+      → Project-level .aifirewall.json (tighter for a specific codebase)
+```
+
+## The "Strictest Wins" Principle
+
+| Setting Type | Merge Rule | Example |
+|-------------|-----------|---------|
+| Boolean rules (e.g., `block_private_keys`) | OR — if any level enables it, it's enabled | Org enables `block_db_urls` → team cannot disable it |
+| Severity threshold | Use the strictest (medium catches more than critical) | Org: `high`, team: `medium` → effective: `medium` |
+| File blocklists | Union all patterns | Org blocks `*.env`, team blocks `*.key` → both blocked |
+| File allowlists | Intersection | Org allows `src/**`, team allows `src/frontend/**` → only `src/frontend/**` |
+
+## Setting Org-Level Overrides
+
+Org-level overrides apply to all teams and users in the org.
+
+```
+PUT /api/policies/org
+{
+  "rules": { "block_db_urls": true },
+  "file_scope": { "blocklist": ["org-secrets/**"] },
+  "severity_threshold": "medium"
+}
+```
+
+Only include fields you want to override. Omitted fields inherit from the global policy.
+
+## Setting Team-Level Overrides
+
+Team overrides stack on top of org overrides.
+
+```
+PUT /api/policies/team/3
+{
+  "file_scope": { "blocklist": ["team-internal/**"] }
+}
+```
+
+## Project-Level Overrides
+
+Create a `.aifirewall.json` file in your project root:
+
+```json
+{
+  "extends": "global",
+  "rules": { "redact_emails": true },
+  "file_scope": {
+    "blocklist": ["fixtures/**", "test-data/**"]
+  },
+  "severity_threshold": "high"
+}
+```
+
+## Viewing Effective Policy
+
+See the fully resolved policy for your context:
+```
+GET /api/policies/effective?projectRoot=/path/to/project
+```
+
+## Removing Overrides
+
+To revert to the parent level's policy:
+```
+DELETE /api/policies/org
+DELETE /api/policies/team/3
+```
+
+Requires `policy:write` capability (Admin or Security Lead).

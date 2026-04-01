@@ -27,6 +27,9 @@ export type {
   PromptInjectionResult,
   ContextAdjustment,
   ScanPipelineResult,
+  UnicodeAnomalyType,
+  UnicodeAnomaly,
+  UnicodeNormalizerResult,
 } from "./types";
 
 // Patterns (for consumers that need to inspect or extend)
@@ -39,3 +42,4 @@ export { scanPII } from "./piiScanner";
 export { scanEntropy } from "./entropyScanner";
 export { scanPromptInjection } from "./promptInjectionScanner";
 export { adjustSeverity } from "./contextScanner";
+export { normalizeUnicode } from "./unicodeNormalizer";

@@ -38,6 +38,14 @@ import * as teamsTests from "./teams.test";
 // Phase 7: Policy Chain tests
 import * as policyChainTests from "./policyChain.test";
 
+// Auth endpoint tests
+import * as authTests from "./auth.test";
+
+// Phase 6: Security Gap Closure tests
+import * as unicodeNormalizerTests from "./unicodeNormalizer.test";
+import * as ruleFileScanTests from "./ruleFileScan.test";
+import * as responseScannerTests from "./responseScanner.test";
+
 function makePolicy(): PolicyConfig {
   return {
     version: "1.2",
@@ -393,6 +401,79 @@ async function run() {
     ["policyChain:strictestThreshold", policyChainTests.testStrictestThresholdWins],
     ["policyChain:deleteReverts", policyChainTests.testDeleteScopedPolicyReverts],
     ["policyChain:childCantRelax", policyChainTests.testChildCannotRelaxParentBlock],
+    // Auth tests
+    ["auth:createUser", authTests.testCreateUserReturnsUser],
+    ["auth:createUserCustomRole", authTests.testCreateUserWithCustomRole],
+    ["auth:createUserWithOrg", authTests.testCreateUserWithOrg],
+    ["auth:duplicateEmailThrows", authTests.testCreateUserDuplicateEmailThrows],
+    ["auth:loginSuccess", authTests.testAuthenticateUserSuccess],
+    ["auth:loginWrongPassword", authTests.testAuthenticateUserWrongPassword],
+    ["auth:loginNonExistent", authTests.testAuthenticateUserNonExistent],
+    ["auth:getUserById", authTests.testGetUserById],
+    ["auth:getUserByIdNotFound", authTests.testGetUserByIdNotFound],
+    ["auth:getUsersByOrg", authTests.testGetUsersByOrg],
+    ["auth:updateUserRole", authTests.testUpdateUserRole],
+    ["auth:deleteUser", authTests.testDeleteUser],
+    ["auth:createTokenReturnsRecord", authTests.testCreateApiTokenReturnsTokenAndRecord],
+    ["auth:createTokenWithScopes", authTests.testCreateApiTokenWithScopes],
+    ["auth:createTokenWithExpiry", authTests.testCreateApiTokenWithExpiry],
+    ["auth:createTokenWithOrgAndTeam", authTests.testCreateApiTokenWithOrgAndTeam],
+    ["auth:validateTokenSuccess", authTests.testValidateApiTokenSuccess],
+    ["auth:validateTokenUpdatesLastUsed", authTests.testValidateApiTokenUpdatesLastUsed],
+    ["auth:validateTokenInvalid", authTests.testValidateApiTokenInvalid],
+    ["auth:validateTokenExpired", authTests.testValidateApiTokenExpired],
+    ["auth:scopeNullAllowsAll", authTests.testTokenHasScopeNullScopesAllowsAll],
+    ["auth:scopeWildcard", authTests.testTokenHasScopeWildcard],
+    ["auth:scopeSpecificMatch", authTests.testTokenHasScopeSpecificMatch],
+    ["auth:listTokens", authTests.testListApiTokens],
+    ["auth:listTokensEmpty", authTests.testListApiTokensEmpty],
+    ["auth:revokeToken", authTests.testRevokeApiToken],
+    ["auth:revokeTokenWrongUser", authTests.testRevokeApiTokenWrongUser],
+    ["auth:revokeTokenNonExistent", authTests.testRevokeApiTokenNonExistent],
+    ["auth:rotateToken", authTests.testRotateApiToken],
+    ["auth:rotatePreservesOrgTeam", authTests.testRotateApiTokenPreservesOrgAndTeam],
+    ["auth:rotateWrongUser", authTests.testRotateApiTokenWrongUser],
+    ["auth:rotateNonExistent", authTests.testRotateApiTokenNonExistent],
+    ["auth:rotateCustomExpiry", authTests.testRotateApiTokenCustomExpiry],
+    ["auth:registerAndLoginFlow", authTests.testRegisterAndLoginFlow],
+    ["auth:deleteUserCascadesTokens", authTests.testDeleteUserCascadesTokens],
+    ["auth:differentPasswordsDifferentHashes", authTests.testDifferentPasswordsProduceDifferentHashes],
+    // Unicode Normalizer tests
+    ["unicode:stripsZeroWidth", unicodeNormalizerTests.testStripsZeroWidthChars],
+    ["unicode:stripsMultipleZeroWidth", unicodeNormalizerTests.testStripsMultipleZeroWidth],
+    ["unicode:stripsSoftHyphen", unicodeNormalizerTests.testStripsSoftHyphen],
+    ["unicode:mapsCyrillicToLatin", unicodeNormalizerTests.testMapsCyrillicToLatin],
+    ["unicode:mapsGreekToLatin", unicodeNormalizerTests.testMapsGreekToLatin],
+    ["unicode:mapsCyrillicUppercase", unicodeNormalizerTests.testMapsCyrillicUppercase],
+    ["unicode:detectsConfusableInAwsKey", unicodeNormalizerTests.testDetectsConfusableInAwsKey],
+    ["unicode:stripsBidiOverrides", unicodeNormalizerTests.testStripsBidiOverrides],
+    ["unicode:stripsDirectionalIsolates", unicodeNormalizerTests.testStripsDirectionalIsolates],
+    ["unicode:passesThroughAscii", unicodeNormalizerTests.testPassesThroughAscii],
+    ["unicode:preservesNewlines", unicodeNormalizerTests.testPreservesNewlinesAndTabs],
+    ["unicode:preservesCJK", unicodeNormalizerTests.testPreservesCJK],
+    ["unicode:preservesEmoji", unicodeNormalizerTests.testPreservesEmoji],
+    ["unicode:emptyString", unicodeNormalizerTests.testEmptyString],
+    ["unicode:onlyZeroWidthChars", unicodeNormalizerTests.testOnlyZeroWidthChars],
+    ["unicode:combinedAttack", unicodeNormalizerTests.testCombinedAttack],
+    // Rule File Scan tests
+    ["ruleFile:cleanAllowed", ruleFileScanTests.testCleanRuleFileAllowed],
+    ["ruleFile:injectionBlocked", ruleFileScanTests.testRuleFileWithInjectionBlocked],
+    ["ruleFile:subtleInjection", ruleFileScanTests.testRuleFileWithSubtleInjection],
+    ["ruleFile:secretBlocked", ruleFileScanTests.testRuleFileWithSecretBlocked],
+    ["ruleFile:unicodeAnomalies", ruleFileScanTests.testRuleFileWithUnicodeAnomalies],
+    ["ruleFile:batchScan", ruleFileScanTests.testBatchScanMultipleFiles],
+    ["ruleFile:emptyContent", ruleFileScanTests.testEmptyRuleFileAllowed],
+    // Response Scanner tests
+    ["responseScanner:allowsClean", responseScannerTests.testResponseScanAllowsCleanText],
+    ["responseScanner:warnsOnSecret", responseScannerTests.testResponseScanWarnsOnSecret],
+    ["responseScanner:redactsOnSecret", responseScannerTests.testResponseScanRedactsOnSecret],
+    ["responseScanner:detectsPII", responseScannerTests.testResponseScanDetectsPII],
+    ["responseScanner:skipsWhenDisabled", responseScannerTests.testResponseScanSkipsWhenDisabled],
+    ["responseScanner:handlesEmpty", responseScannerTests.testResponseScanHandlesEmptyText],
+    ["responseScanner:extractCompletion", responseScannerTests.testExtractCompletionFromOpenAIFormat],
+    ["responseScanner:extractEmpty", responseScannerTests.testExtractCompletionFromEmptyResponse],
+    ["responseScanner:extractNoChoices", responseScannerTests.testExtractCompletionFromNoChoices],
+    ["responseScanner:replaceCompletion", responseScannerTests.testReplaceCompletionText],
   ];
 
   const totalCount = syncTests.length + asyncTests.length;

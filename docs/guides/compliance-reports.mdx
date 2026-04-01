@@ -1,0 +1,87 @@
+---
+title: "Compliance Reports"
+description: "Export audit data as JSON, CSV, or PDF for SOC 2, ISO 27001, and internal reviews"
+---
+
+## Export Formats
+
+| Format | Endpoint | Content-Type | Use Case |
+|--------|----------|-------------|----------|
+| **JSON** | `GET /api/export/json` | application/json | Programmatic analysis, import into SIEM |
+| **CSV** | `GET /api/export/csv` | text/csv | Spreadsheets, Excel, data processing |
+| **PDF** | `GET /api/export/pdf` | text/html | SOC 2 auditors, management reports, print |
+| **Summary** | `GET /api/export/compliance` | application/json | Quick compliance status check |
+
+All export endpoints require `admin`, `security_lead`, or `auditor` role.
+
+## PDF Compliance Report
+
+The PDF export generates a rich, printable HTML report containing:
+
+- **Security Summary** — total requests, blocked, redacted, allowed counts
+- **Compliance Checks** — no raw secrets stored, all requests logged, file scope enforced
+- **Usage by Model** — requests, tokens, and cost per model
+- **Daily Trend** — last 30 days of activity
+
+Click the **"Download PDF"** button in the report to use your browser's Print to PDF.
+
+## Filtering
+
+All export endpoints accept these query parameters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `startDate` | epoch ms | Filter from this date |
+| `endDate` | epoch ms | Filter to this date |
+| `action` | BLOCK/REDACT/ALLOW | Filter by decision |
+| `minRiskScore` | 0-100 | Only include entries above this risk |
+
+Example:
+```
+GET /api/export/pdf?startDate=1704067200000&endDate=1706745600000&action=BLOCK
+```
+
+## Scheduled Reports
+
+AI Firewall automatically generates weekly compliance summaries and sends them via webhook. Configure the interval:
+
+```bash
+# .env — default is 168 hours (1 week)
+REPORT_INTERVAL_HOURS=168
+```
+
+Set to `0` to disable. Reports are sent to all configured webhook notification channels.
+
+## Audit Log Integrity
+
+Every log entry includes a `prevHash` field — a SHA-256 hash of the previous entry. This creates a tamper-evident chain:
+
+- First entry has `prevHash = "GENESIS"`
+- Each subsequent entry hashes: `id + timestamp + action + riskScore + prevHash`
+- Any deletion or modification breaks the chain
+
+This meets SOC 2 Type II requirements for append-only audit logs.
+
+## For SOC 2 / ISO 27001 Auditors
+
+The compliance summary (`GET /api/export/compliance`) returns:
+
+```json
+{
+  "summary": {
+    "totalRequests": 15420,
+    "blocked": 312,
+    "redacted": 1847,
+    "allowed": 13261,
+    "blockRate": "2.02%",
+    "averageRiskScore": 12,
+    "totalSecretsDetected": 487,
+    "totalPiiDetected": 1203
+  },
+  "compliance": {
+    "noRawSecretsStored": true,
+    "allRequestsLogged": true,
+    "fileScopeEnforced": true
+  }
+}
+```

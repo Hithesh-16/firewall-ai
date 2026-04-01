@@ -92,10 +92,13 @@ cd extensions/cli && npm run build
 - **Zod** for input validation — centralized in `proxy/src/schemas/chatSchemas.ts` with strict role enum (`system|user|assistant|tool`) + multimodal content support
 - **SQLite** via better-sqlite3 — WAL mode, parameterized queries, 15+ tables
 - **Provider adapters** normalize OpenAI <-> Anthropic <-> Gemini <-> Ollama formats
-- **Scanner pipeline** order: secret -> PII -> entropy -> context adjustment -> prompt injection -> policy decision
+- **Scanner pipeline** order: unicode normalization -> secret -> PII -> entropy -> context adjustment -> prompt injection -> policy decision
 - **Token Intelligence** — real token counting via `js-tiktoken` in `proxy/src/gateway/tokenCounter.ts`, advisory context window checks (never truncates), cost-aware routing (opt-in via `policy.json`)
 - **File Scanning** — `proxy/src/scanner/fileScanService.ts` runs full pipeline on files, `fileScanCache.ts` provides content-addressed caching (SHA-256 hash key)
 - **MCP Security Gateway** — `proxy/src/mcp/mcpScanPipeline.ts` scans all MCP tool inputs/outputs, `mcpAuditLogger.ts` logs audit trail. No competitor scans MCP tool calls.
+- **Unicode Normalization** — `packages/scanner/src/unicodeNormalizer.ts` strips zero-width chars, maps Cyrillic/Greek confusables to Latin, removes bidi overrides. Runs BEFORE all scanners (ASI04 defense).
+- **Rules File Scanning** — `proxy/src/scanner/ruleFileScanService.ts` scans .cursorrules, .continuerules, CLAUDE.md for injection/secrets/unicode anomalies. Route: `POST /api/scan/rules`.
+- **Response Scanning** — `proxy/src/middleware/responseScanner.ts` scans LLM responses for leaked secrets/PII (LLM05 defense). Opt-in via `response_scanning.enabled` in policy.json. Supports streaming via Transform.
 - **Shared Scanner Package** — `@ai-firewall/scanner` (`packages/scanner/`) contains all pure-function scanners. Proxy re-exports for backward compatibility. MCP servers and future services import directly.
 - **X-AF-*** response headers carry scan metadata + token intelligence from proxy to extension
 - **AES-256-GCM** encryption for all stored API keys in token vault
@@ -107,31 +110,35 @@ cd extensions/cli && npm run build
 ## Testing
 
 ```bash
-cd proxy && npm test        # 75 tests (policy, scanners, token, file scan, MCP, control plane, enterprise)
-cd core && npm test         # Core agent engine tests
-cd gui && npm test          # GUI component tests
+cd proxy && npm run test:unit  # 221 tests (policy, scanners, token, file scan, MCP, control plane, enterprise, security gaps)
+cd core && npm test            # Core agent engine tests
+cd gui && npm test             # GUI component tests
 ```
 
-Test breakdown (62 proxy tests):
+Test breakdown (221 proxy tests):
 - **14** — Original (policy engine, prompt injection, STRICT_LOCAL, model policy, BlindMI)
 - **20** — Phase 1: Token Intelligence (tokenCounter, contextWindow, costEstimator)
 - **9** — Phase 2: File Scanning (fileScanService, fileScanCache)
 - **9** — Phase 3: MCP Gateway (mcpScanPipeline, mcpAuditLogger)
 - **10** — Phase 4: Control Plane (approvals, sessions, notifications, WebSocket)
 - **13** — Phase 5: Enterprise (cache, license, webhook queue)
+- **16** — Unicode Normalizer (zero-width, confusable, bidi, CJK/emoji safe)
+- **7** — Rule File Scanning (injection, secrets, unicode in rule files)
+- **10** — Response Scanner (secrets/PII in LLM output, extract/replace)
 
 ## Request Flow (Token-Optimized)
 
 ```
 Extension/CLI -> localhost:8080/v1/chat/completions
-  1. Token Estimation (js-tiktoken, fallback to length/4)
-  2. Scanner Pipeline (secrets, PII, entropy, prompt injection)
-  3. Policy Engine (BLOCK/REDACT/ALLOW)
-  4. Context Window Check (ADVISORY — sets X-AF-Context-Overflow, never truncates)
-  5. Cost Estimation (real tokens x model pricing)
-  6. Cost-Aware Routing (opt-in, disabled by default — falls through to risk-based)
-  7. Redactor (if REDACT)
-  8. Gateway Router (resolve provider + model)
+  1. Unicode Normalization (strip zero-width, map confusables, remove bidi)
+  2. Token Estimation (js-tiktoken, fallback to length/4)
+  3. Scanner Pipeline (secrets, PII, entropy, prompt injection — 23 categories)
+  4. Policy Engine (BLOCK/REDACT/ALLOW)
+  5. Context Window Check (ADVISORY — sets X-AF-Context-Overflow, never truncates)
+  6. Cost Estimation (real tokens x model pricing)
+  7. Cost-Aware Routing (opt-in, disabled by default — falls through to risk-based)
+  8. Redactor (if REDACT)
+  9. Gateway Router (resolve provider + model)
   9. Provider Adapter (format conversion)
   10. AI Provider (OpenAI/Anthropic/Gemini/Ollama)
   11. Audit Logger (SQLite)
@@ -234,6 +241,13 @@ Agent triggers high-risk action (risk >= approval threshold in policy.json)
 | DELETE | `/api/scan/cache` | Clear scan cache (optional `filePath` query filter) |
 | GET | `/api/scan/cache/stats` | Cache statistics (total entries, total size) |
 
+### Rule File Scanning (Phase 6)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/scan/rules` | Scan provided rule file content (injection + secrets + unicode) |
+| POST | `/api/scan/rules/directory` | Scan all known rule files in a workspace directory |
+
 ### MCP Security Gateway (Phase 3)
 
 | Method | Endpoint | Description |
@@ -319,12 +333,13 @@ Agent triggers high-risk action (risk >= approval threshold in policy.json)
 Pure-function security scanners extracted for reuse across proxy, MCP servers, CLI tools, and tests.
 
 **Exports:**
+- `normalizeUnicode(text)` — Strip zero-width chars, map confusable Cyrillic/Greek to Latin, remove bidi overrides (ASI04 defense)
 - `scanSecrets(text)` — 12 secret patterns (AWS, private key, JWT, DB URL, GitHub token, etc.)
 - `scanPII(text)` — 7 PII patterns (email, phone, SSN, Aadhaar, PAN, credit card, IP)
 - `scanEntropy(text)` — Shannon entropy analysis with context keyword detection
-- `scanPromptInjection(text, threshold?)` — 13 injection/jailbreak pattern categories
+- `scanPromptInjection(text, threshold?)` — 23 injection/jailbreak pattern categories (13 original + 10 indirect injection)
 - `adjustSeverity(value, type, severity, filePaths?)` — Path-aware severity adjustment
-- Types: `Severity`, `SecretMatch`, `PiiMatch`, `SecretScanResult`, `PiiScanResult`, `PromptInjectionResult`, `ScanPipelineResult`
+- Types: `Severity`, `SecretMatch`, `PiiMatch`, `SecretScanResult`, `PiiScanResult`, `PromptInjectionResult`, `ScanPipelineResult`, `UnicodeNormalizerResult`, `UnicodeAnomaly`
 
 **Usage:**
 ```typescript
@@ -345,6 +360,9 @@ All proxy scanner files (`proxy/src/scanner/*.ts`) re-export from this package f
 | `contextWindow.ts` | Checks if messages fit context window (advisory only) | `proxy/src/gateway/` |
 | `costEstimator.ts` | Estimates request cost from tokens + model pricing | `proxy/src/gateway/` |
 | `chatSchemas.ts` | Validates chat input via Zod (strict roles, multimodal) | `proxy/src/schemas/` |
+| `unicodeNormalizer.ts` | Strip zero-width chars, confusable mapping, bidi removal (ASI04) | `packages/scanner/src/` |
+| `ruleFileScanService.ts` | Scans IDE rule files for injection/secrets/unicode anomalies | `proxy/src/scanner/` |
+| `responseScanner.ts` | Scans LLM responses for leaked secrets/PII (LLM05) | `proxy/src/middleware/` |
 | `fileScanService.ts` | Orchestrates scanner pipeline for files | `proxy/src/scanner/` |
 | `fileScanCache.ts` | Cache read/write/invalidate for file scans | `proxy/src/scanner/` |
 | `mcpScanPipeline.ts` | Scans MCP tool I/O text through scanner pipeline | `proxy/src/mcp/` |

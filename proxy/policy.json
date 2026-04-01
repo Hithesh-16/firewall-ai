@@ -83,9 +83,25 @@
       "blocked_paths": []
     }
   },
+  "unicode_normalization": {
+    "enabled": true,
+    "block_on_anomaly": false
+  },
+  "rules_file_scanning": {
+    "enabled": true,
+    "injection_threshold": 40,
+    "auto_scan_on_startup": true
+  },
   "prompt_injection": {
     "enabled": true,
     "threshold": 60
+  },
+  "response_scanning": {
+    "enabled": false,
+    "scan_secrets": true,
+    "scan_pii": true,
+    "redact_on_detection": false,
+    "stream_buffer_size": 500
   },
   "approval": {
     "enabled": false,

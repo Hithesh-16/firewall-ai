@@ -1,0 +1,81 @@
+---
+title: "Policy Inheritance Chain"
+description: "How policies merge across org, team, and project levels — strictest wins"
+---
+
+## Chain Order
+
+```
+global policy.json  →  org DB override  →  team DB override  →  project .aifirewall.json
+  (baseline)           (extends global)    (extends org)        (extends team)
+```
+
+Each level can only ADD restrictions. No child scope can relax a parent-level block.
+
+## Merge Semantics (Strictest Wins)
+
+| Setting | Merge Rule | Example |
+|---------|-----------|---------|
+| Boolean rules (`block_private_keys`, etc.) | OR — if ANY level says `true`, result is `true` | Org enables `block_db_urls` → team can't disable it |
+| Severity threshold | MIN — use the strictest (medium < high < critical) | Org sets `high`, team sets `medium` → effective is `medium` |
+| Blocklists | UNION — combine all patterns | Org blocks `*.env`, team blocks `*.key` → both blocked |
+| Allowlists | INTERSECTION — file must be in ALL allowlists | Org allows `src/**`, team allows `src/frontend/**` → only `src/frontend/**` |
+| Prompt injection threshold | MIN — lower threshold is stricter | Global: 60, org: 40 → effective: 40 |
+
+## Database Table
+
+```sql
+CREATE TABLE policies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  scope_type TEXT CHECK('global','org','team','project'),
+  scope_id INTEGER,           -- org_id, team_id, or NULL for global
+  policy_json TEXT NOT NULL,   -- partial PolicyConfig JSON
+  created_at INTEGER,
+  updated_at INTEGER,
+  UNIQUE(scope_type, scope_id)
+);
+```
+
+## Core Function
+
+```typescript
+// proxy/src/policy/policyChain.ts
+function resolveEffectivePolicy(
+  orgId?: number | null,
+  teamId?: number | null,
+  projectRoot?: string
+): PolicyConfig
+```
+
+Called by `policyEnforcer.ts` middleware on every request. Uses the authenticated user's `orgId` from `request.authContext`.
+
+## API Routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/policies/effective` | requireAuth | Resolved policy for current user |
+| GET | `/api/policies/scoped` | `policy:read` | All scoped overrides for org |
+| PUT | `/api/policies/org` | `policy:write` | Set org-level override |
+| PUT | `/api/policies/team/:teamId` | `policy:write` | Set team-level override |
+| DELETE | `/api/policies/org` | `policy:write` | Remove org override (revert to global) |
+| DELETE | `/api/policies/team/:teamId` | `policy:write` | Remove team override |
+
+## Example: Override Request Body
+
+```json
+{
+  "rules": { "block_db_urls": true },
+  "file_scope": { "blocklist": ["secrets/**", "*.key"] },
+  "severity_threshold": "medium"
+}
+```
+
+Only include fields you want to override. Omitted fields inherit from the parent level.
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `proxy/src/policy/policyChain.ts` | resolveEffectivePolicy, merge logic, DB operations |
+| `proxy/src/policy/projectPolicy.ts` | .aifirewall.json file-based overrides |
+| `proxy/src/middleware/policyEnforcer.ts` | Calls resolveEffectivePolicy on every request |

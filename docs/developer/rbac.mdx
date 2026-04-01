@@ -1,0 +1,121 @@
+---
+title: "RBAC — Roles & Permissions"
+description: "Capability-based access control: roles, permissions, overrides, and custom role creation"
+---
+
+## Overview
+
+AI Firewall uses **capability-based RBAC**. Instead of checking "is user an admin?", routes check "does this user have the `policy:write` capability?". This enables custom roles, per-user overrides, and team-scoped permissions.
+
+## Permission Resolution Order
+
+```
+1. user_capability_overrides (highest priority)
+   → explicit DENY → blocked
+   → explicit GRANT → allowed
+   → expired → fall through
+
+2. user_team_roles (if team context)
+   → team role has capability → use it
+   → team role lacks it → fall through
+
+3. user_org_roles (default)
+   → role has capability (granted=1) → ALLOWED
+   → role has capability (granted=0) → DENIED
+   → role lacks capability → DENIED (no_capability)
+   → no role assigned → DENIED (no_role)
+```
+
+## Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `roles` | 4 built-in + custom org-defined roles |
+| `capabilities` | 36 granular `resource:action` permission atoms |
+| `role_capabilities` | Maps roles → capabilities with scope (`org`/`team`/`own`) |
+| `user_org_roles` | Assigns one role per user per org |
+| `user_team_roles` | Per-team role overrides |
+| `user_capability_overrides` | Per-user grant/deny exceptions (with reason + expiry) |
+| `permission_audit_log` | Append-only hash-chained audit trail |
+
+## 36 Capabilities
+
+### Organisation
+`org:read` `org:write` `billing:read` `billing:write` `credit:read` `stats:read`
+
+### Teams
+`team:create` `team:read` `team:write` `team:delete`
+
+### Identity
+`user:invite` `user:remove` `user:read` `role:assign` `role:manage` `token:create` `token:revoke` `token:read`
+
+### Security
+`policy:read` `policy:write` `scanner:configure` `scanner:read` `file_restrictions:manage` `approval:resolve` `approval:read`
+
+### Vault
+`provider:manage` `provider:read`
+
+### Audit
+`log:read_all` `log:read_own` `log:export` `audit:read`
+
+### Developer
+`agent:use` `terminal:execute` `subagent:spawn` `mcp:use` `web_search:use` `autocomplete:use`
+
+## Built-in Roles
+
+| Capability | Admin | Security Lead | Developer | Auditor |
+|-----------|:-----:|:-----:|:-----:|:-----:|
+| All org/billing write | Y | - | - | - |
+| Policy/scanner write | Y | Y | - | - |
+| File restrictions manage | Y | Y | - | - |
+| Role assign/manage | Y | - | - | - |
+| Agent/terminal/MCP use | Y | Y | Y | - |
+| Log read all + export | Y | Y | - | Y |
+| Log read own | Y | Y | Y | Y |
+| Stats read | Y | Y | Y | Y |
+
+## Middleware Usage
+
+```typescript
+// New routes — capability-based (preferred)
+app.put("/api/file-restrictions/org", {
+  preHandler: [requireAuth, requireCapability("file_restrictions:manage")]
+}, handler);
+
+// Legacy routes — role-based (still works)
+app.get("/api/orgs", {
+  preHandler: requireRole("admin", "security_lead")
+}, handler);
+```
+
+## API Routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/roles` | requireAuth | List built-in + custom roles |
+| POST | `/api/roles` | `role:manage` | Create custom role |
+| PUT | `/api/roles/:id` | `role:manage` | Update role capabilities |
+| DELETE | `/api/roles/:id` | `role:manage` | Delete custom role |
+| GET | `/api/capabilities` | requireAuth | List all 36 capabilities |
+| POST | `/api/users/:id/role` | `role:assign` | Assign org-level role |
+| POST | `/api/users/:id/team-role/:teamId` | `role:assign` | Assign team-level role |
+| POST | `/api/users/:id/overrides` | `role:manage` | Add capability override |
+| GET | `/api/users/:id/overrides` | `user:read` | List user's overrides |
+| DELETE | `/api/users/:id/overrides/:cap` | `role:manage` | Remove override |
+| GET | `/api/permissions/check?capability=X` | requireAuth | Test permission |
+
+## Adding New Capabilities
+
+1. Add seed entry in `proxy/src/db/database.ts` caps array
+2. Assign to roles in the seeding section
+3. Use `requireCapability("new:cap")` on routes
+4. Automatically appears in RBAC UI for custom role creation
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `proxy/src/auth/rbacService.ts` | checkPermission, role CRUD, overrides, audit logging |
+| `proxy/src/auth/authMiddleware.ts` | requireCapability() + requireRole() shim |
+| `proxy/src/routes/rbac.route.ts` | All RBAC API endpoints |
+| `gui/src/pages/rbac/index.tsx` | Role editor UI |

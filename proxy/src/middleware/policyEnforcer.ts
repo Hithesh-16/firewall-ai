@@ -20,6 +20,7 @@ import { scanPII } from "../scanner/piiScanner";
 import { scanEntropy } from "../scanner/entropyScanner";
 import { adjustSeverity } from "../scanner/contextScanner";
 import { scanPromptInjection } from "../scanner/promptInjectionScanner";
+import { normalizeUnicode } from "../scanner/unicodeNormalizer";
 import { validateFilePaths } from "../scope/fileScope";
 import { getEffectiveFilePolicy } from "../policy/fileRestrictionService";
 import { mergeMessagesToText } from "../schemas/chatSchemas";
@@ -133,6 +134,23 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
       // ── Scanner pipeline ─────────────────────────────────────
       const rawText = mergeMessagesToText(body.messages);
 
+      // Unicode normalization: MUST run before all scanners (ASI04 defense)
+      // Strips zero-width chars, maps confusable Cyrillic/Greek to Latin,
+      // removes bidi overrides. Original rawText preserved for audit hash.
+      const unicodeConfig = (policy as Record<string, unknown>).unicode_normalization as
+        { enabled?: boolean; block_on_anomaly?: boolean } | undefined;
+      let scanText = rawText;
+      const unicodeReasons: string[] = [];
+      if (unicodeConfig?.enabled !== false) {
+        const normResult = normalizeUnicode(rawText);
+        scanText = normResult.normalizedText;
+        if (normResult.hasAnomalies) {
+          unicodeReasons.push(
+            `Unicode anomalies detected: ${normResult.findings.length} (${[...new Set(normResult.findings.map((f) => f.type))].join(", ")})`
+          );
+        }
+      }
+
       // Merge explicit filePaths from metadata with paths extracted from content
       const explicitPaths = body.metadata?.filePaths ?? [];
       const extractedPaths = extractFilePathsFromMessages(body.messages);
@@ -155,11 +173,11 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
         effectiveFileScope
       );
 
-      const secretResult = scanSecrets(rawText);
-      const piiResult = scanPII(rawText);
+      const secretResult = scanSecrets(scanText);
+      const piiResult = scanPII(scanText);
 
       // Entropy detection: merge into secretResult
-      const entropyMatches = scanEntropy(rawText);
+      const entropyMatches = scanEntropy(scanText);
       const entropyCount = entropyMatches.length;
       if (entropyCount > 0) {
         secretResult.secrets.push(...entropyMatches);
@@ -200,10 +218,20 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
         decision.reasons = [...new Set([...decision.reasons, ...contextReasons])];
       }
 
+      // Merge unicode findings into reasons
+      if (unicodeReasons.length > 0) {
+        decision.reasons = [...decision.reasons, ...unicodeReasons];
+        // Optional: block on any unicode anomaly if configured
+        if (unicodeConfig?.block_on_anomaly) {
+          decision.action = "BLOCK";
+          decision.riskScore = Math.max(decision.riskScore, 80);
+        }
+      }
+
       // Prompt injection detection
       const piConfig = policy.prompt_injection;
       if (piConfig?.enabled !== false) {
-        const piResult = scanPromptInjection(rawText, piConfig?.threshold ?? 60);
+        const piResult = scanPromptInjection(scanText, piConfig?.threshold ?? 60);
         if (piResult.isInjection) {
           decision.action = "BLOCK";
           decision.riskScore = Math.max(decision.riskScore, piResult.score);

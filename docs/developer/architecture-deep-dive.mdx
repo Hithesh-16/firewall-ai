@@ -32,15 +32,29 @@ Every module has a **single responsibility**. Here's what each does and where to
 | Window Reducer | `reducer/windowReducer.ts` | Expand matches to N-line context windows |
 | Comment Stripper | `reducer/commentStripper.ts` | Remove comments, blanks, duplicate lines |
 | Hybrid Reducer | `reducer/hybridReducer.ts` | Orchestrate: grep → window → strip → budget |
+| **Response Scanner** | `middleware/responseScanner.ts` | Scans LLM responses for leaked secrets/PII (LLM05 defense) |
+| **Rule File Scanner** | `scanner/ruleFileScanService.ts` | Scans IDE rule files for injection/secrets/unicode (ASI04 defense) |
+| **Policy Enforcer** | `middleware/policyEnforcer.ts` | Full scanner pipeline + BLOCK/REDACT/ALLOW enforcement (wired to ai.route.ts) |
+| **Rate Limiter** | `middleware/rateLimiter.ts` | Per-user rate limiting via `rate_limits` table |
+| **File Restriction Service** | `policy/fileRestrictionService.ts` | Per-org/team/user file restrictions with merge logic |
+| **Policy Chain** | `policy/policyChain.ts` | Policy inheritance: global → org → team → project (strictest wins) |
+| **Team Service** | `services/teamService.ts` | Team CRUD within organizations |
+| **RBAC Service** | `auth/rbacService.ts` | Capability-based permission resolution, custom roles, overrides |
+| **Auth Middleware** | `auth/authMiddleware.ts` | `requireAuth`, `requireRole` (legacy), `requireCapability` (new) |
+| **PDF Export** | `export/pdfExport.ts` | HTML compliance report generation (printable PDF) |
+| **Slack Channel** | `notifications/channels/slack.ts` | Slack Incoming Webhook notifications (Block Kit) |
+| **Email Channel** | `notifications/channels/email.ts` | SMTP email notifications via nodemailer |
+| **PG Adapter** | `db/pgAdapter.ts` | PostgreSQL migration adapter (optional, keeps SQLite default) |
 
 ### Shared Package (`packages/scanner/`)
 
 | Module | SRP |
 |--------|-----|
+| `unicodeNormalizer.ts` | Strips zero-width chars, maps confusables, removes bidi overrides (runs first) |
 | `secretScanner.ts` | Detects 12 secret patterns via regex |
 | `piiScanner.ts` | Detects 7 PII patterns (with Luhn check for credit cards) |
 | `entropyScanner.ts` | Shannon entropy analysis for high-entropy tokens |
-| `promptInjectionScanner.ts` | 13 jailbreak/injection pattern categories |
+| `promptInjectionScanner.ts` | 23 jailbreak/injection/indirect injection pattern categories |
 | `contextScanner.ts` | Adjusts severity based on file paths |
 | `patterns.ts` | Centralized regex patterns (OCP: add here, scanners auto-detect) |
 
@@ -107,8 +121,21 @@ import { scanSecrets, type SecretScanResult } from "@ai-firewall/scanner";
 
 1. Edit `packages/scanner/src/patterns.ts` — add pattern to `secretPatterns` or `piiPatterns`
 2. Rebuild: `cd packages/scanner && npm run build`
-3. Run tests: `cd proxy && npm test` — existing tests verify the pipeline
+3. Run tests: `cd proxy && npm run test:unit` — existing tests verify the pipeline
 4. Done. No other files need changes (OCP).
+
+### New Prompt Injection Pattern
+
+1. Edit `packages/scanner/src/promptInjectionScanner.ts` — add to `INJECTION_PATTERNS` array
+2. Choose weight carefully: 15 (low confidence) to 35 (high confidence). Threshold is 60, so single pattern (max 35) never triggers alone.
+3. Add true positive + true negative tests
+4. Rebuild scanner package: `cd packages/scanner && npm run build`
+
+### New Unicode Confusable
+
+1. Edit `packages/scanner/src/unicodeNormalizer.ts` — add to `CONFUSABLE_MAP`
+2. Add test in `proxy/src/test/unicodeNormalizer.test.ts`
+3. Rebuild scanner package
 
 ### New Proxy Route
 
@@ -150,7 +177,7 @@ All tables use `INTEGER PRIMARY KEY AUTOINCREMENT` and `INTEGER` timestamps (ms 
 
 ## Test Architecture
 
-90 tests in `proxy/src/test/run-tests.ts`:
+221 tests in `proxy/src/test/run-tests.ts`:
 
 ```
 14 — Original (policy, injection, STRICT_LOCAL, model policy, BlindMI)
@@ -160,12 +187,21 @@ All tables use `INTEGER PRIMARY KEY AUTOINCREMENT` and `INTEGER` timestamps (ms 
 10 — Phase 4: Control Plane
 13 — Phase 5: Enterprise (cache, license, webhook)
 15 — Context Reducer (grep, window, strip, hybrid)
+11 — Security Pipeline integration
+21 — AI Route (schema, BLOCK, REDACT, ALLOW, headers, hash, model policy)
+11 — RBAC (roles, capabilities, overrides, custom roles)
+ 9 — Teams + File Restrictions
+ 7 — Policy Chain inheritance
+35 — Auth (CRUD, tokens, rotate, revoke, register/login)
+16 — Unicode Normalizer (zero-width, confusable, bidi, CJK/emoji safe)
+ 7 — Rule File Scanning (injection, secrets, unicode in rule files)
+10 — Response Scanner (secrets/PII in LLM output, extract/replace)
 ```
 
 Tests are split into sync (original) and async (Phase 1+) arrays. Run with:
 
 ```bash
-cd proxy && npm test  # or: npx ts-node src/test/run-tests.ts
+cd proxy && npm run test:unit  # or: npx ts-node src/test/run-tests.ts
 ```
 
 ## Design Decisions

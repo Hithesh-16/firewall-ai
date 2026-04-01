@@ -63,9 +63,13 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
+  scopes TEXT,
+  org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+  team_id INTEGER,
   last_used_at INTEGER,
   created_at INTEGER NOT NULL,
-  expires_at INTEGER
+  expires_at INTEGER,
+  rotated_from_id INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_tokens_hash ON api_tokens(token_hash);
@@ -317,6 +321,28 @@ CREATE TABLE IF NOT EXISTS file_scan_cache (
 CREATE INDEX IF NOT EXISTS idx_fsc_path ON file_scan_cache(file_path);
 CREATE INDEX IF NOT EXISTS idx_fsc_hash ON file_scan_cache(file_hash);
 `);
+
+// Migrations: add missing columns to api_tokens if they don't exist
+try {
+  db.prepare("SELECT scopes FROM api_tokens LIMIT 1").get();
+} catch {
+  db.exec("ALTER TABLE api_tokens ADD COLUMN scopes TEXT");
+}
+try {
+  db.prepare("SELECT org_id FROM api_tokens LIMIT 1").get();
+} catch {
+  db.exec("ALTER TABLE api_tokens ADD COLUMN org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE");
+}
+try {
+  db.prepare("SELECT team_id FROM api_tokens LIMIT 1").get();
+} catch {
+  db.exec("ALTER TABLE api_tokens ADD COLUMN team_id INTEGER");
+}
+try {
+  db.prepare("SELECT rotated_from_id FROM api_tokens LIMIT 1").get();
+} catch {
+  db.exec("ALTER TABLE api_tokens ADD COLUMN rotated_from_id INTEGER");
+}
 
 // Migration: add entropy_found column to logs if it doesn't exist
 try {

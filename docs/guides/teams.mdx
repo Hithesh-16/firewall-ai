@@ -1,0 +1,62 @@
+---
+title: "Teams"
+description: "Create teams, invite members, and manage team-level permissions"
+---
+
+## What Are Teams?
+
+Teams are groups within your organization. They map to real business units — "Frontend", "Backend", "Security", "Data Science", etc. Each team can have its own:
+- File restrictions (which files team members can access)
+- Policy overrides (stricter scanner rules)
+- Usage tracking (cost attribution per team)
+- Team-level roles
+
+## Creating a Team
+
+1. Go to the **Security Dashboard**
+2. Navigate to the **Team** page
+3. Click **Create Team**
+4. Enter a name and URL slug
+5. You're automatically added as the team **lead**
+
+Or via API:
+```
+POST /api/teams
+{ "name": "Frontend", "slug": "frontend" }
+```
+
+## Team Roles
+
+| Role | Can Do |
+|------|--------|
+| **Lead** | Manage team members, view team usage |
+| **Member** | Use AI tools within team context |
+
+Team roles are separate from org-level roles. A user can be an `admin` at the org level and a `member` in a specific team.
+
+## Inviting Members
+
+Members must already be registered in your organization.
+
+1. Go to Team detail page
+2. Click **Add Member**
+3. Select a user and assign a role (lead/member)
+
+## Removing Members
+
+1. Go to Team detail page
+2. Click the remove button next to the member
+3. The user stays in the org but is removed from the team
+
+## Deleting a Team
+
+Only org admins can delete teams. Deleting a team removes all memberships but does not delete the users.
+
+## Usage Tracking
+
+Every AI request by a team member is tracked with `teamId`. This enables:
+- **Per-team cost breakdown** — "Team Frontend spent $X this month"
+- **Per-team usage analytics** — requests, tokens, and cost by team
+- **Budget monitoring** — track which teams consume the most resources
+
+View team usage in the **Stats** page or via `GET /api/usage/summary`.

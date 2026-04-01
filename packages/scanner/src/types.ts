@@ -77,6 +77,28 @@ export type ContextAdjustment = {
   reason: string;
 };
 
+// ── Unicode Normalizer Types ──────────────────────────────────────────
+
+export type UnicodeAnomalyType =
+  | "ZERO_WIDTH_CHAR"
+  | "CONFUSABLE_CHAR"
+  | "BIDI_OVERRIDE"
+  | "INVISIBLE_CHAR";
+
+export type UnicodeAnomaly = {
+  type: UnicodeAnomalyType;
+  original: string;
+  position: number;
+  replacement: string;
+  description: string;
+};
+
+export type UnicodeNormalizerResult = {
+  normalizedText: string;
+  findings: UnicodeAnomaly[];
+  hasAnomalies: boolean;
+};
+
 /** Aggregate result from running the full scanner pipeline */
 export type ScanPipelineResult = {
   action: "ALLOW" | "BLOCK" | "REDACT";

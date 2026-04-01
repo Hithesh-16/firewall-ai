@@ -1,0 +1,67 @@
+---
+title: "Teams"
+description: "Team system — data model, service API, routes, and usage attribution"
+---
+
+## Data Model
+
+```
+Organization (top level)
+  └── Team (business unit within org)
+       └── Team Member (user + role within team)
+```
+
+A solo developer is an org with 1 member and 0 teams. Teams are additive — create them when needed.
+
+## Database Tables
+
+### `teams`
+```sql
+id INTEGER PRIMARY KEY, org_id FK → organizations, name TEXT, slug TEXT, created_at INTEGER
+UNIQUE(org_id, slug)
+```
+
+### `team_members`
+```sql
+id INTEGER PRIMARY KEY, team_id FK → teams, user_id FK → users,
+role TEXT CHECK('lead','member'), joined_at INTEGER
+UNIQUE(team_id, user_id)
+```
+
+## Service API (`proxy/src/services/teamService.ts`)
+
+| Function | Description |
+|----------|-------------|
+| `createTeam(orgId, name, slug)` | Create team, returns Team |
+| `getTeamById(id)` | Get single team |
+| `getTeamsByOrg(orgId)` | All teams in org |
+| `deleteTeam(id)` | Delete team (cascades members) |
+| `updateTeam(id, name)` | Rename team |
+| `addTeamMember(teamId, userId, role)` | Add member (lead/member) |
+| `removeTeamMember(teamId, userId)` | Remove member |
+| `getTeamMembers(teamId)` | List members with email/name |
+| `getTeamsForUser(userId)` | All teams user belongs to |
+| `getTeamWithMembers(teamId)` | Team + full member list |
+
+## HTTP Routes (`proxy/src/routes/team.route.ts`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/teams` | requireAuth | List teams in caller's org |
+| GET | `/api/teams/mine` | requireAuth | Teams current user belongs to |
+| GET | `/api/teams/:id` | requireAuth | Team detail + members |
+| POST | `/api/teams` | admin, security_lead | Create team (auto-adds creator as lead) |
+| PATCH | `/api/teams/:id` | admin, security_lead | Update team name |
+| DELETE | `/api/teams/:id` | admin | Delete team |
+| POST | `/api/teams/:id/members` | admin, security_lead | Add member |
+| DELETE | `/api/teams/:id/members/:userId` | admin, security_lead | Remove member |
+
+All routes verify the caller belongs to the same org as the team.
+
+## Usage Attribution
+
+`usageLogs` and `logs` tables have `team_id` FK columns. When a user makes a request through `/v1/chat/completions`, their `userId` is recorded. Team is resolvable via `team_members` join.
+
+Query functions in `proxy/src/gateway/usageService.ts`:
+- `getUsageSummaryByTeam(orgId, startDate?, endDate?)` — GROUP BY team_id
+- `getUsageSummaryByUser(orgId, startDate?, endDate?)` — GROUP BY user_id

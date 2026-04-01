@@ -1,0 +1,108 @@
+---
+title: "File Restrictions"
+description: "Control which files AI models can access — blocklists, allowlists, and multi-level restrictions"
+---
+
+## What Are File Restrictions?
+
+File restrictions prevent AI models from seeing sensitive files in your codebase. When a restricted file is included in a chat request, the proxy blocks the entire request with a 403 error and tells you exactly which file was blocked.
+
+## Security Perimeter Setup
+
+When you first use AI Firewall, the **First Look** page scans your workspace and detects sensitive file patterns:
+
+| Category | Examples |
+|----------|---------|
+| **Secrets & Keys** | `.env`, `.env.*`, `secrets/**`, `credentials/**` |
+| **Certificates** | `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*` |
+| **Configuration** | `config/production.*`, `docker-compose*.yml`, `serviceAccount*.json` |
+| **Internal** | `.git/**`, `.ssh/**`, `.aifirewall-vault/**` |
+| **Dependencies** | `node_modules/**` |
+| **Build Output** | `dist/**` |
+
+You choose which patterns to restrict. Recommended patterns are pre-selected.
+
+## Blocklist vs Allowlist
+
+| Mode | How It Works | Use When |
+|------|-------------|----------|
+| **Blocklist** | Block files matching any pattern. Everything else is allowed. | You want to block a few sensitive patterns |
+| **Allowlist** | Only allow files matching patterns. Everything else is blocked. | You want to restrict access to a specific folder (e.g., `src/frontend/**` only) |
+
+## Multi-Level Restrictions
+
+Restrictions can be set at four levels. They **stack** — each level can only ADD restrictions, never relax a parent-level block.
+
+### Level 1: Global (policy.json)
+Baseline restrictions for the entire proxy. Set via the Security Dashboard → Policy tab or First Look page.
+
+### Level 2: Organization
+Restrictions that apply to all users in the org. Set by admins.
+
+### Level 3: Team
+Additional restrictions for specific teams. A security team might need access to `.key` files, while the frontend team shouldn't.
+
+### Level 4: User
+Restrictions for individual users. Useful for contractors, interns, or temporary access.
+
+### How They Merge
+
+- **Blocklists are unioned** — if ANY level blocks a file, it's blocked
+  - Org blocks `*.env` + Team blocks `*.key` → both blocked
+- **Allowlists are intersected** — file must be in ALL allowlists
+  - Org allows `src/**` + User allows `src/frontend/**` → only `src/frontend/**`
+- **A team can add restrictions but CANNOT relax an org-level block**
+
+## What Happens When a File Is Blocked
+
+### In the IDE (VS Code)
+When you try to add a restricted file to AI context (via `@file`, drag-drop, or tool call), VS Code shows a warning:
+
+> "AI Firewall: File matches restricted pattern: *.env. This file will not be included in AI context."
+
+The file is never sent to the proxy.
+
+### At the Proxy
+If a restricted file gets through (e.g., client didn't check), the proxy returns:
+
+```json
+{
+  "error": "Request blocked by file scope policy",
+  "code": "FILE_SCOPE_BLOCKED",
+  "files_blocked": [".env", "config/production.json"],
+  "restricted_by": ["global", "org"],
+  "reasons": ["File matches org blocklist pattern: *.env"]
+}
+```
+
+### In the CLI
+The CLI filters restricted files before sending and shows a terminal warning.
+
+## Managing Restrictions
+
+### Via GUI
+1. **Security Dashboard** → **Policy** tab → file scope section
+2. **First Look** page (initial setup or Edit button on perimeter status)
+
+### Via API
+```
+PUT /api/file-restrictions/org
+{ "mode": "blocklist", "patterns": ["*.env", "*.key", "secrets/**"] }
+
+PUT /api/file-restrictions/team/3
+{ "mode": "blocklist", "patterns": ["*.pem", "infrastructure/**"] }
+
+PUT /api/file-restrictions/user/7
+{ "mode": "allowlist", "patterns": ["src/frontend/**", "docs/**"] }
+```
+
+Requires `file_restrictions:manage` capability (Admin or Security Lead by default).
+
+## Bypass Prevention
+
+Even if a client doesn't send `metadata.filePaths`, the proxy extracts file paths from message content by detecting:
+- `// File: /path/to/file` comments
+- Code fences with filenames (` ```ts src/index.ts`)
+- Diff format (`+++ b/src/file.ts`)
+
+This prevents bypass by omitting file paths from the request metadata.

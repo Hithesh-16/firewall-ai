@@ -36,6 +36,14 @@ import {
   mergeMessagesToText,
 } from "../schemas/chatSchemas";
 import { getTeamsForUser } from "../services/teamService";
+import {
+  scanResponseText,
+  extractCompletionText,
+  replaceCompletionText,
+  setResponseScanHeaders,
+  createScanningTransform,
+  type ResponseScanConfig,
+} from "../middleware/responseScanner";
 
 function hashText(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -208,6 +216,10 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
           (request.headers.accept as string | undefined)?.includes("text/event-stream") ||
           (request.body as any)?.stream === true;
 
+        // Response scanning config for streaming (loaded once)
+        const streamResponseConfig = (policy as Record<string, unknown>).response_scanning as
+          Partial<ResponseScanConfig> | undefined;
+
         if (gatewayRoute.isLocal) {
           requestPayload = formatOllamaPayload(
             gatewayRoute.model.modelName,
@@ -221,7 +233,12 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
               timeout: 0
             });
             reply.raw.writeHead(resp.status, resp.headers as any);
-            (resp.data as any).pipe(reply.raw);
+            if (streamResponseConfig?.enabled) {
+              const scanTransform = createScanningTransform(streamResponseConfig);
+              (resp.data as any).pipe(scanTransform).pipe(reply.raw);
+            } else {
+              (resp.data as any).pipe(reply.raw);
+            }
             return reply;
           } else {
             const resp = await axios.post(gatewayRoute.providerUrl, requestPayload, { headers, timeout: 120_000 });
@@ -242,7 +259,12 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
               timeout: 0
             });
             reply.raw.writeHead(resp.status, resp.headers as any);
-            (resp.data as any).pipe(reply.raw);
+            if (streamResponseConfig?.enabled) {
+              const scanTransform = createScanningTransform(streamResponseConfig);
+              (resp.data as any).pipe(scanTransform).pipe(reply.raw);
+            } else {
+              (resp.data as any).pipe(reply.raw);
+            }
             return reply;
           } else {
             const resp = await axios.post(gatewayRoute.providerUrl, requestPayload, { headers });
@@ -255,7 +277,12 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
           if (wantsStream) {
             const resp = await axios.post(url, requestPayload, { headers, responseType: "stream", timeout: 0 });
             reply.raw.writeHead(resp.status, resp.headers as any);
-            (resp.data as any).pipe(reply.raw);
+            if (streamResponseConfig?.enabled) {
+              const scanTransform = createScanningTransform(streamResponseConfig);
+              (resp.data as any).pipe(scanTransform).pipe(reply.raw);
+            } else {
+              (resp.data as any).pipe(reply.raw);
+            }
             return reply;
           } else {
             const resp = await axios.post(url, requestPayload, { headers });
@@ -271,7 +298,12 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
           if (wantsStream) {
             const resp = await axios.post(gatewayRoute.providerUrl, requestPayload, { headers, responseType: "stream", timeout: 0 });
             reply.raw.writeHead(resp.status, resp.headers as any);
-            (resp.data as any).pipe(reply.raw);
+            if (streamResponseConfig?.enabled) {
+              const scanTransform = createScanningTransform(streamResponseConfig);
+              (resp.data as any).pipe(scanTransform).pipe(reply.raw);
+            } else {
+              (resp.data as any).pipe(reply.raw);
+            }
             return reply;
           } else {
             const resp = await axios.post(gatewayRoute.providerUrl, requestPayload, { headers });
@@ -338,8 +370,23 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
         reply.header("X-AF-Tokens-Used", String(tokenUsage.totalTokens));
         reply.header("X-AF-Cost", String(Math.round(cost * 1_000_000) / 1_000_000));
 
+        // Response scanning (LLM05 defense) — scan LLM output for leaked secrets/PII
+        const responseScanConfig = (policy as Record<string, unknown>).response_scanning as
+          Partial<ResponseScanConfig> | undefined;
+        let responsePayload = normalizedData;
+        if (responseScanConfig?.enabled) {
+          const completionText = extractCompletionText(normalizedData);
+          if (completionText) {
+            const responseScan = scanResponseText(completionText, responseScanConfig);
+            setResponseScanHeaders(reply, responseScan);
+            if (responseScan.action === "REDACT" && responseScan.redactedText) {
+              responsePayload = replaceCompletionText(normalizedData, responseScan.redactedText) as Record<string, unknown>;
+            }
+          }
+        }
+
         return {
-          ...normalizedData,
+          ...responsePayload,
           _firewall: {
             action: gatewayAction,
             secrets_found: secretResult.secrets.length,

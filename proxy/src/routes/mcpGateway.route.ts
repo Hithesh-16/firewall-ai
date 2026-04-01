@@ -35,6 +35,8 @@ const toolCallSchema = z.object({
   server_id: z.string().min(1).max(256),
   tool_name: z.string().min(1).max(256),
   arguments: z.record(z.string(), z.unknown()).default({}),
+  /** Optional tool output to scan (for output scanning — ASI02 defense) */
+  output: z.string().optional(),
 });
 
 const textScanSchema = z.object({
@@ -112,7 +114,7 @@ export async function registerMcpGatewayRoutes(
         .send({ error: "Invalid payload", details: parsed.error.flatten() });
     }
 
-    const { server_id, tool_name, arguments: args } = parsed.data;
+    const { server_id, tool_name, arguments: args, output } = parsed.data;
 
     // 1. Serialize arguments to scannable text
     const argsText = serializeArguments(args);
@@ -147,10 +149,55 @@ export async function registerMcpGatewayRoutes(
       });
     }
 
-    // 6. Return scan result for the caller to proceed
-    // In full integration (Phase 3 Step 3), the caller routes through
-    // MCPManagerSingleton and we scan the output too.
-    // For MVP, we return the input scan result so the caller knows it's safe.
+    // 6. Scan output if provided (ASI02: tool misuse defense)
+    let outputScanResult: {
+      action: string;
+      riskScore: number;
+      secretsFound: number;
+      piiFound: number;
+      reasons: string[];
+      scanTimeMs: number;
+      redactedText?: string;
+    } | undefined;
+
+    if (output) {
+      const outputScan = scanMcpContent(output, {
+        direction: "output",
+        includeRedacted: true,
+      });
+      logMcpAudit(server_id, tool_name, outputScan);
+
+      reply.header("X-AF-MCP-Output-Action", outputScan.action);
+      reply.header("X-AF-MCP-Output-Risk-Score", String(outputScan.riskScore));
+
+      if (outputScan.action === "BLOCK") {
+        return reply.status(403).send({
+          error: "MCP tool output blocked by firewall",
+          code: "MCP_OUTPUT_BLOCKED",
+          server: server_id,
+          tool: tool_name,
+          scan: {
+            action: outputScan.action,
+            riskScore: outputScan.riskScore,
+            secretsFound: outputScan.secretsFound,
+            piiFound: outputScan.piiFound,
+            reasons: outputScan.reasons,
+          },
+        });
+      }
+
+      outputScanResult = {
+        action: outputScan.action,
+        riskScore: outputScan.riskScore,
+        secretsFound: outputScan.secretsFound,
+        piiFound: outputScan.piiFound,
+        reasons: outputScan.reasons,
+        scanTimeMs: outputScan.scanTimeMs,
+        redactedText: outputScan.action === "REDACT" ? outputScan.redactedText : undefined,
+      };
+    }
+
+    // 7. Return scan results
     return {
       allowed: true,
       server: server_id,
@@ -167,6 +214,13 @@ export async function registerMcpGatewayRoutes(
       sanitizedArguments: inputScan.action === "REDACT"
         ? parseSanitizedArgs(inputScan.redactedText, args)
         : args,
+      // Output scan results (if output was provided)
+      ...(outputScanResult ? {
+        outputScan: outputScanResult,
+        sanitizedOutput: outputScanResult.action === "REDACT"
+          ? outputScanResult.redactedText
+          : output,
+      } : {}),
     };
   });
 

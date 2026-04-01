@@ -1,0 +1,123 @@
+---
+title: "File Restrictions"
+description: "Per-org, per-team, and per-user file access restrictions — database-backed, enforced at proxy and client"
+---
+
+## Overview
+
+File restrictions control which files AI models can see. They are enforced at **three layers**:
+
+1. **Core (local)** — hardcoded patterns (`.env`, `.key`, `id_rsa`) blocked before file is read
+2. **Extension/CLI (local)** — proxy policy fetched on startup, files checked before sending
+3. **Proxy (server)** — final gate, always enforced even if client is buggy
+
+## Database Table
+
+```sql
+CREATE TABLE file_restrictions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES organizations(id),
+  team_id INTEGER REFERENCES teams(id),     -- NULL = org-wide
+  user_id INTEGER REFERENCES users(id),     -- NULL = team/org-wide
+  mode TEXT CHECK('blocklist','allowlist'),
+  patterns TEXT NOT NULL,                    -- JSON array of glob patterns
+  created_at INTEGER, updated_at INTEGER
+);
+```
+
+## Resolution Order
+
+```
+1. Global policy.json file_scope (baseline)
+2. Org-level file_restrictions (extends global)
+3. Team-level file_restrictions (extends org)
+4. User-level file_restrictions (extends team)
+```
+
+**Blocklists: UNION** — if ANY level blocks a file, it's blocked.
+**Allowlists: INTERSECTION** — file must be allowed at ALL levels.
+A team can add restrictions but CANNOT relax an org-level block.
+
+## Core Function
+
+```typescript
+// proxy/src/policy/fileRestrictionService.ts
+function getEffectiveFilePolicy(
+  orgId: number,
+  teamId?: number | null,
+  userId?: number | null
+): EffectiveFilePolicy
+
+// Returns:
+{
+  mode: "blocklist" | "allowlist",
+  blocklist: string[],     // union of all levels
+  allowlist: string[],     // intersection of all levels
+  sources: [{ level: "global" | "org" | "team" | "user", patterns: string[] }]
+}
+```
+
+## Integration in policyEnforcer
+
+The `policyEnforcer.ts` middleware calls `getEffectiveFilePolicy()` with the authenticated user's context, then passes the merged file scope to `validateFilePaths()`:
+
+```typescript
+const effective = getEffectiveFilePolicy(authCtx.user.orgId, null, authCtx.user.id);
+const effectiveFileScope = {
+  ...policy.file_scope,
+  blocklist: [...new Set([...policy.file_scope.blocklist, ...effective.blocklist])],
+  allowlist: effective.allowlist.length > 0 ? effective.allowlist : policy.file_scope.allowlist,
+};
+```
+
+## Bypass Prevention
+
+When `metadata.filePaths` is missing from the request, the middleware extracts file paths from message content:
+
+```typescript
+function extractFilePathsFromMessages(messages): string[]
+// Detects: // File: path, ```lang path, +++ b/path, diff --git a/path
+```
+
+Both explicit and extracted paths are unioned before validation.
+
+## Client-Side Enforcement
+
+### VS Code Extension
+`extensions/vscode/src/security/fileRestrictionChecker.ts`:
+- `refreshFileScope(proxyUrl)` — fetches `/api/file-scope` on startup
+- `isFileRestricted(filePath)` — checks cached policy
+- `warnIfRestricted(filePath)` — shows VS Code warning, blocks inclusion
+- Called from `addCode.ts` before adding files to context
+
+### CLI
+`extensions/cli/src/ui/hooks/useChat.helpers.ts`:
+- Filters `attachedFiles` through `isSecurityConcern()` before converting to context items
+
+## 403 Response Format
+
+```json
+{
+  "error": "Request blocked by file scope policy",
+  "code": "FILE_SCOPE_BLOCKED",
+  "files_blocked": [".env", "config/production.json"],
+  "restricted_by": ["global", "org"],
+  "reasons": ["File matches org blocklist pattern: *.env"]
+}
+```
+
+## API Routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/file-restrictions` | requireAuth | Effective merged policy for current user |
+| GET | `/api/file-restrictions/all` | `file_restrictions:manage` | All restrictions for org (admin view) |
+| PUT | `/api/file-restrictions/org` | `file_restrictions:manage` | Set org-level restriction |
+| PUT | `/api/file-restrictions/team/:teamId` | `file_restrictions:manage` | Set team-level restriction |
+| PUT | `/api/file-restrictions/user/:userId` | `file_restrictions:manage` | Set user-level restriction |
+| DELETE | `/api/file-restrictions/:id` | `file_restrictions:manage` | Remove a restriction |
+
+### Request Body (PUT routes)
+```json
+{ "mode": "blocklist", "patterns": ["*.env", "*.key", "secrets/**"] }
+```

@@ -1,0 +1,102 @@
+---
+title: "Notifications"
+description: "Configure webhook, Slack, and email notification channels for security events"
+---
+
+## Available Channels
+
+| Channel | Description | Setup |
+|---------|-------------|-------|
+| **Webhook** | POST to any HTTP endpoint (custom, Teams, Discord) | Provide a URL |
+| **Slack** | Rich Block Kit messages to a Slack channel | Incoming Webhook URL |
+| **Email** | HTML-formatted alerts via SMTP | SMTP server credentials |
+
+## Event Types
+
+Notifications can trigger on these events:
+
+| Event | Description |
+|-------|-------------|
+| `scan_blocked` | Content blocked by security policy |
+| `approval_needed` | Human approval required for high-risk action |
+| `approval_resolved` | Approval decision made |
+| `credit_exceeded` | Usage limit hit |
+| `session_started` | New device session began |
+| `session_ended` | Device session ended |
+| `policy_changed` | Security policy updated |
+
+## Setting Up Webhook
+
+```
+POST /api/notifications/channels
+{
+  "channelType": "webhook",
+  "config": {
+    "url": "https://your-server.com/webhook",
+    "headers": { "X-Custom-Header": "value" }
+  }
+}
+```
+
+## Setting Up Slack
+
+1. Create a **Slack Incoming Webhook** at https://api.slack.com/messaging/webhooks
+2. Copy the webhook URL
+3. Configure:
+
+```
+POST /api/notifications/channels
+{
+  "channelType": "slack",
+  "config": {
+    "webhookUrl": "https://hooks.slack.com/services/T.../B.../xxx",
+    "channel": "#security-alerts"
+  }
+}
+```
+
+Slack messages use Block Kit formatting with event-specific icons and structured fields.
+
+## Setting Up Email
+
+Requires an SMTP server (Gmail, SendGrid, AWS SES, etc.):
+
+```
+POST /api/notifications/channels
+{
+  "channelType": "email",
+  "config": {
+    "smtpHost": "smtp.gmail.com",
+    "smtpPort": 587,
+    "smtpUser": "alerts@yourcompany.com",
+    "smtpPass": "app-specific-password",
+    "fromAddress": "AI Firewall <alerts@yourcompany.com>",
+    "toAddress": "security-team@yourcompany.com"
+  }
+}
+```
+
+Email uses HTML templates with formatted tables and color-coded sections.
+
+**Note:** Requires `nodemailer` package. Install with `npm install nodemailer` if not already present.
+
+## Testing Notifications
+
+Send a test notification to all configured channels:
+
+```
+POST /api/notifications/test
+```
+
+## Managing Channels
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/notifications/channels` | List configured channels |
+| POST | `/api/notifications/channels` | Add a channel |
+| DELETE | `/api/notifications/channels/:id` | Remove a channel |
+| POST | `/api/notifications/test` | Send test notification |
+
+## Enabling/Disabling
+
+Each channel can be toggled without deleting it. Use the channel toggle in the GUI or the API to disable a channel temporarily.

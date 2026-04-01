@@ -1,0 +1,101 @@
+---
+title: "Roles & Permissions"
+description: "Manage who can do what — built-in roles, custom roles, and per-user overrides"
+---
+
+## Built-in Roles
+
+| Role | What They Can Do |
+|------|-----------------|
+| **Admin** | Everything — manage org, billing, providers, roles, policies, and use all tools |
+| **Security Lead** | Configure policies, scanners, approvals, file restrictions. Use all developer tools. Cannot manage billing or roles. |
+| **Developer** | Use AI chat, terminal, MCP, autocomplete, web search. View own logs and usage. Cannot change policies or manage users. |
+| **Auditor** | View all logs, usage, and audit trails. Export data. Cannot use AI tools or change any settings. |
+
+## Custom Roles
+
+Admins can create custom roles from the **Roles** page (accessible from the Security Dashboard → "Roles" button).
+
+### Creating a Custom Role
+
+1. Open **Security Dashboard** → click **Roles**
+2. Click **Create custom role**
+3. Enter a name (e.g., "team-lead") and display name
+4. Toggle capabilities on/off by category
+5. Click **Create Role**
+
+### Editing a Custom Role
+
+1. Select the role from the left sidebar
+2. Toggle capabilities on/off
+3. Click **Save Changes**
+
+Built-in system roles cannot be modified.
+
+## Capabilities
+
+Permissions are granular "capabilities" in `resource:action` format. There are 36 capabilities grouped into 7 categories:
+
+### By Category
+
+| Category | Examples |
+|----------|---------|
+| **Organisation** | `org:read`, `org:write`, `billing:read`, `billing:write` |
+| **Teams** | `team:create`, `team:read`, `team:write`, `team:delete` |
+| **Identity** | `user:invite`, `user:remove`, `role:assign`, `role:manage` |
+| **Security** | `policy:write`, `scanner:configure`, `file_restrictions:manage` |
+| **Vault** | `provider:manage`, `provider:read` |
+| **Audit** | `log:read_all`, `log:read_own`, `log:export`, `audit:read` |
+| **Developer** | `agent:use`, `terminal:execute`, `mcp:use`, `subagent:spawn` |
+
+### Risk Levels
+
+Each capability has a risk level shown in the role editor:
+- **Low** (green) — read-only, safe
+- **Medium** (yellow) — some data access
+- **High** (orange) — can modify data or execute commands
+- **Critical** (red) — org-wide impact, use sparingly
+
+## Assigning Roles
+
+### Org-Level Role
+Every user has one role at the org level. Assign via the **Organization** page or API:
+```
+POST /api/users/5/role
+{ "roleId": 3 }
+```
+
+### Team-Level Role
+Users can have a different role per team. A developer at the org level can be a "team-lead" (custom role) within a specific team:
+```
+POST /api/users/5/team-role/2
+{ "roleId": 7 }
+```
+
+## Per-User Overrides
+
+Sometimes you need to grant or revoke a single capability without changing someone's role:
+
+- **Grant**: "Give this developer temporary `policy:write` access for the audit"
+- **Revoke**: "Block this user from `terminal:execute` while we investigate"
+
+Overrides require a **reason** and can have an **expiry date**. They take priority over role permissions.
+
+### Adding an Override
+```
+POST /api/users/5/overrides
+{ "capabilityName": "policy:write", "granted": true, "reason": "Audit review access", "expiresAt": 1719792000000 }
+```
+
+### Removing an Override
+```
+DELETE /api/users/5/overrides/policy:write
+```
+
+## How Permission Checks Work
+
+When a user makes a request, the system checks in this order:
+1. **Override** — if a per-user override exists, it wins (grant or deny)
+2. **Team role** — if the request is in a team context, the team role is checked
+3. **Org role** — the user's org-level role capabilities are checked
+4. **No role** — if no role is assigned, the request is denied

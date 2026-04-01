@@ -201,3 +201,5 @@ docs/AUDIT_REPORT.md
 # Binary ML models (consider Git LFS)
 *.onnx
 
+claude-code/
+

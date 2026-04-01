@@ -59,6 +59,27 @@ export function isJetBrains() {
   return getLocalStorage("ide") === "jetbrains";
 }
 
+export function isVscode() {
+  return getLocalStorage("ide") === "vscode";
+}
+
+/**
+ * Returns true when running inside any IDE (VS Code or JetBrains).
+ * Admin pages (RBAC, Org, Team, Security) should be hidden in IDE mode.
+ */
+export function isInIde(): boolean {
+  const ide = getLocalStorage("ide");
+  return ide === "vscode" || ide === "jetbrains";
+}
+
+/**
+ * Returns true when running as a standalone web dashboard (not inside an IDE).
+ * All pages are available in standalone mode.
+ */
+export function isStandaloneWeb(): boolean {
+  return !isInIde();
+}
+
 export const isShareSessionSupported = () => !isJetBrains();
 
 export function isWebEnvironment(): boolean {

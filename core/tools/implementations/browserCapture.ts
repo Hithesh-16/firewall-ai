@@ -25,8 +25,11 @@ export async function browserCaptureImpl(
   args: BrowserCaptureArgs,
 ): Promise<ContextItem[]> {
   try {
+    // @ts-ignore — @ai-firewall/browser-surface is a future package (not yet published)
     const { acquire, release } = await import("@ai-firewall/browser-surface/browserPool");
+    // @ts-ignore — @ai-firewall/browser-surface is a future package (not yet published)
     const { installSsrfGuard } = await import("@ai-firewall/browser-surface/ssrfGuard");
+    // @ts-ignore — @ai-firewall/browser-surface is a future package (not yet published)
     const { captureScreenshot } = await import("@ai-firewall/browser-surface/screenshotService");
 
     const { instanceId, browser } = await acquire();
@@ -36,7 +39,7 @@ export async function browserCaptureImpl(
       const page = await context.newPage();
 
       // Install SSRF protection on all requests
-      await installSsrfGuard(page, (url, reason) => {
+      await installSsrfGuard(page, (url: string, reason: string) => {
         // Log blocked SSRF attempts
         console.warn(`[browser-capture] ${reason}: ${url}`);
       });

@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { requireRole } from "../auth/authMiddleware";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import {
   exportAsCsv,
   exportAsJson,
@@ -19,7 +19,7 @@ function parseFilter(query: Record<string, string | undefined>): ExportFilter {
 export async function registerExportRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/api/export/json",
-    { preHandler: requireRole("admin", "security_lead", "auditor") },
+    { preHandler: [requireAuth, requireCapability("log:export")] },
     async (request, reply) => {
       const filter = parseFilter(request.query as Record<string, string | undefined>);
       const data = exportAsJson(filter);
@@ -33,7 +33,7 @@ export async function registerExportRoutes(app: FastifyInstance): Promise<void> 
 
   app.get(
     "/api/export/csv",
-    { preHandler: requireRole("admin", "security_lead", "auditor") },
+    { preHandler: [requireAuth, requireCapability("log:export")] },
     async (request, reply) => {
       const filter = parseFilter(request.query as Record<string, string | undefined>);
       const data = exportAsCsv(filter);
@@ -47,7 +47,7 @@ export async function registerExportRoutes(app: FastifyInstance): Promise<void> 
 
   app.get(
     "/api/export/compliance",
-    { preHandler: requireRole("admin", "security_lead", "auditor") },
+    { preHandler: [requireAuth, requireCapability("log:export")] },
     async (request) => {
       const filter = parseFilter(request.query as Record<string, string | undefined>);
       return generateComplianceSummary(filter);
@@ -60,7 +60,7 @@ export async function registerExportRoutes(app: FastifyInstance): Promise<void> 
    */
   app.get(
     "/api/export/pdf",
-    { preHandler: requireRole("admin", "security_lead", "auditor") },
+    { preHandler: [requireAuth, requireCapability("log:export")] },
     async (request, reply) => {
       const { generateComplianceReportHtml } = await import("../export/pdfExport");
       const filter = parseFilter(request.query as Record<string, string | undefined>);

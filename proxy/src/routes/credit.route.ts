@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { requireAuth, requireRole } from "../auth/authMiddleware";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import {
   deleteCreditLimit,
   getCreditById,
@@ -28,7 +28,7 @@ const updateCreditSchema = z.object({
 export async function registerCreditRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     "/api/credits",
-    { preHandler: [requireAuth, requireRole("admin", "security_lead")] },
+    { preHandler: [requireAuth, requireCapability("billing:write")] },
     async (request, reply) => {
       const parsed = createCreditSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -48,7 +48,7 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
 
   app.get(
     "/api/credits",
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireCapability("credit:read")] },
     async (request) => {
       const { providerId } = request.query as { providerId?: string };
       return listCredits(providerId ? Number(providerId) : undefined);
@@ -57,7 +57,7 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
 
   app.get(
     "/api/credits/:id",
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireCapability("credit:read")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const credit = getCreditById(Number(id));
@@ -70,7 +70,7 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
 
   app.get(
     "/api/credits/status/:providerId",
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireCapability("credit:read")] },
     async (request) => {
       const { providerId } = request.params as { providerId: string };
       const result = checkCredit(Number(providerId));
@@ -93,7 +93,7 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
 
   app.patch(
     "/api/credits/:id",
-    { preHandler: [requireAuth, requireRole("admin", "security_lead")] },
+    { preHandler: [requireAuth, requireCapability("billing:write")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const parsed = updateCreditSchema.safeParse(request.body);
@@ -110,7 +110,7 @@ export async function registerCreditRoutes(app: FastifyInstance): Promise<void> 
 
   app.delete(
     "/api/credits/:id",
-    { preHandler: [requireAuth, requireRole("admin")] },
+    { preHandler: [requireAuth, requireCapability("billing:write")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const deleted = deleteCreditLimit(Number(id));

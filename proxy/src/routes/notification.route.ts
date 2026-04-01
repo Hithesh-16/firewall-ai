@@ -9,6 +9,7 @@
 
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { requireAuth } from "../auth/authMiddleware";
 import {
   addChannel,
   getChannels,
@@ -24,7 +25,7 @@ const channelSchema = z.object({
 
 export async function registerNotificationRoutes(app: FastifyInstance): Promise<void> {
   /** GET /api/notifications/channels — list configured channels */
-  app.get("/api/notifications/channels", async (request) => {
+  app.get("/api/notifications/channels", { preHandler: requireAuth }, async (request) => {
     const userId = (request.query as Record<string, string>).userId
       ? Number((request.query as Record<string, string>).userId)
       : 1;
@@ -33,7 +34,7 @@ export async function registerNotificationRoutes(app: FastifyInstance): Promise<
   });
 
   /** POST /api/notifications/channels — configure a new channel */
-  app.post("/api/notifications/channels", async (request, reply) => {
+  app.post("/api/notifications/channels", { preHandler: requireAuth }, async (request, reply) => {
     const parsed = channelSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
@@ -46,7 +47,7 @@ export async function registerNotificationRoutes(app: FastifyInstance): Promise<
   });
 
   /** DELETE /api/notifications/channels/:id — remove a channel */
-  app.delete("/api/notifications/channels/:id", async (request, reply) => {
+  app.delete("/api/notifications/channels/:id", { preHandler: requireAuth }, async (request, reply) => {
     const id = Number((request.params as Record<string, string>).id);
     if (isNaN(id)) {
       return reply.status(400).send({ error: "Invalid channel ID" });
@@ -61,7 +62,7 @@ export async function registerNotificationRoutes(app: FastifyInstance): Promise<
   });
 
   /** POST /api/notifications/test — send a test notification */
-  app.post("/api/notifications/test", async (request) => {
+  app.post("/api/notifications/test", { preHandler: requireAuth }, async (request) => {
     const userId = ((request.body as Record<string, unknown>).userId as number) ?? 1;
 
     const testEvent: WsEvent = {

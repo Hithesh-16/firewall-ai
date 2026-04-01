@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { requireAuth } from "../auth/authMiddleware";
 import { loadPolicyConfig } from "../config";
 import { evaluatePolicy } from "../policy/policyEngine";
 import { redact } from "../redactor/redactor";
@@ -19,6 +20,7 @@ export async function registerBrowserScanRoute(
 ): Promise<void> {
   app.post<{ Body: BrowserScanBody }>(
     "/api/browser-scan",
+    { preHandler: requireAuth },
     async (request, reply) => {
       const { text, source, url } = request.body ?? {};
 

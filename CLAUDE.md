@@ -47,8 +47,10 @@ continue-main/
 │   ├── indexing/             — LanceDB vector + full-text codebase search
 │   ├── autocomplete/         — Tab completion engine
 │   └── commands/             — Slash commands (/commit, /review, /cmd)
-├── gui/                      — React + Vite + Tailwind webview UI
-│   └── src/pages/            — Chat, Security, Organization, Config, History, Usage
+├── gui/                      — React + Vite + Tailwind webview UI (environment-aware)
+│   ├── src/pages/            — Chat, Security, Organization, Config, History, Usage
+│   ├── src/components/ui/    — Reusable: StatCard, RoleBadge, ConfirmDialog, LoadingSpinner, ErrorBanner
+│   └── src/components/WebNavSidebar.tsx — Standalone web navigation (hidden in IDE mode)
 ├── extensions/
 │   ├── vscode/               — VS Code extension (spawns proxy, hosts webview)
 │   ├── intellij/             — JetBrains plugin (Kotlin/Gradle)

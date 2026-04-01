@@ -13,8 +13,9 @@ import { setCodeToEdit } from "../redux/slices/editState";
 import { setDialogMessage, setShowDialog } from "../redux/slices/uiSlice";
 import { enterEdit, exitEdit } from "../redux/thunks/edit";
 import { saveCurrentSession } from "../redux/thunks/session";
-import { fontSize, isMetaEquivalentKeyPressed } from "../util";
+import { fontSize, isMetaEquivalentKeyPressed, isStandaloneWeb } from "../util";
 import { ROUTES } from "../util/navigation";
+import WebNavSidebar from "./WebNavSidebar";
 import { FatalErrorIndicator } from "./config/FatalErrorNotice";
 import TextDialog from "./dialogs";
 import { GenerateRuleDialog } from "./GenerateRuleDialog";
@@ -242,49 +243,62 @@ const Layout = () => {
     }
   }, [isHome]);
 
+  const standaloneWeb = isStandaloneWeb();
+
+  const mainContent = (
+    <LayoutTopDiv className={standaloneWeb ? "flex-1 min-w-0" : ""}>
+      {showStagingIndicator && (
+        <span
+          title="Staging environment"
+          className="absolute right-0 mx-1.5 h-1.5 w-1.5 rounded-full"
+          style={{
+            backgroundColor: "var(--vscode-list-warningForeground)",
+          }}
+        />
+      )}
+      <OSRContextMenu />
+      <div
+        style={{
+          scrollbarGutter: "stable both-edges",
+          minHeight: "100%",
+          display: "grid",
+          gridTemplateRows: "1fr auto",
+        }}
+      >
+        <TextDialog
+          showDialog={showDialog}
+          onEnter={() => {
+            dispatch(setShowDialog(false));
+          }}
+          onClose={() => {
+            dispatch(setShowDialog(false));
+          }}
+          message={dialogMessage}
+        />
+
+        <GridDiv>
+          <PostHogPageView />
+          <Outlet />
+          {/* The fatal error for chat is shown below input */}
+          {!isHome && <FatalErrorIndicator />}
+        </GridDiv>
+      </div>
+      <div style={{ fontSize: fontSize(-4) }} id="tooltip-portal-div" />
+    </LayoutTopDiv>
+  );
+
   return (
     <LocalStorageProvider>
       <AuthProvider>
         <TelemetryProviders>
-          <LayoutTopDiv>
-            {showStagingIndicator && (
-              <span
-                title="Staging environment"
-                className="absolute right-0 mx-1.5 h-1.5 w-1.5 rounded-full"
-                style={{
-                  backgroundColor: "var(--vscode-list-warningForeground)",
-                }}
-              />
-            )}
-            <OSRContextMenu />
-            <div
-              style={{
-                scrollbarGutter: "stable both-edges",
-                minHeight: "100%",
-                display: "grid",
-                gridTemplateRows: "1fr auto",
-              }}
-            >
-              <TextDialog
-                showDialog={showDialog}
-                onEnter={() => {
-                  dispatch(setShowDialog(false));
-                }}
-                onClose={() => {
-                  dispatch(setShowDialog(false));
-                }}
-                message={dialogMessage}
-              />
-
-              <GridDiv>
-                <PostHogPageView />
-                <Outlet />
-                {/* The fatal error for chat is shown below input */}
-                {!isHome && <FatalErrorIndicator />}
-              </GridDiv>
+          {standaloneWeb ? (
+            <div className="flex h-screen overflow-hidden">
+              <WebNavSidebar />
+              {mainContent}
             </div>
-            <div style={{ fontSize: fontSize(-4) }} id="tooltip-portal-div" />
-          </LayoutTopDiv>
+          ) : (
+            mainContent
+          )}
         </TelemetryProviders>
       </AuthProvider>
     </LocalStorageProvider>

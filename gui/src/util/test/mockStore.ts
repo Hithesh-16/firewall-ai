@@ -19,6 +19,7 @@ import sessionReducer, {
   INITIAL_SESSION_STATE,
 } from "../../redux/slices/sessionSlice";
 import tabsReducer, { INITIAL_TABS_STATE } from "../../redux/slices/tabsSlice";
+import agentReducer from "../../redux/slices/agentSlice";
 import securityReducer from "../../redux/slices/securitySlice";
 import uiReducer, { DEFAULT_UI_SLICE } from "../../redux/slices/uiSlice";
 import { RootState } from "../../redux/store";
@@ -49,6 +50,11 @@ export const getEmptyRootState: () => RootState = () => {
       preflightPending: false,
       firewallActivity: null,
       activityLog: [],
+    },
+    agent: {
+      activeAgents: [],
+      pendingApprovals: [],
+      approvalHistory: [],
     },
   };
   const { streamAborter, ...serializableSession } = INITIAL_SESSION_STATE;
@@ -89,6 +95,7 @@ export const createMockStore = (
       tabs: tabsReducer,
       profiles: profilesReducer,
       security: securityReducer,
+      agent: agentReducer,
     } as any,
     preloadedState: {
       ...getEmptyRootState(),

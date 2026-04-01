@@ -1,6 +1,7 @@
 import path from "node:path";
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import { loadPolicyConfig } from "../config";
 import { runLeakSimulation } from "../simulator/leakSimulator";
 
@@ -10,7 +11,7 @@ const simulateSchema = z.object({
 });
 
 export async function registerSimulatorRoute(app: FastifyInstance): Promise<void> {
-  app.post("/api/simulate", async (request, reply) => {
+  app.post("/api/simulate", { preHandler: [requireAuth, requireCapability("scanner:read")] }, async (request, reply) => {
     const parsed = simulateSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({

@@ -9,7 +9,9 @@ import {
   rotateApiToken,
   updateUserRole
 } from "../auth/authService";
-import { requireAuth, requireRole } from "../auth/authMiddleware";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
+import { assignOrgRole } from "../auth/rbacService";
+import rawDb from "../db/database";
 import { db } from "../db/index";
 import { users } from "../db/schema";
 import { asc } from "drizzle-orm";
@@ -60,6 +62,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         parsed.data.password,
         parsed.data.role ?? "developer"
       );
+
+      // Assign org role in user_org_roles (required for capability-based RBAC)
+      if (user.orgId) {
+        const roleName = user.role ?? "developer";
+        const systemRole = rawDb.prepare(
+          "SELECT id FROM roles WHERE name = ? AND is_system = 1"
+        ).get(roleName) as { id: number } | undefined;
+        if (systemRole) {
+          assignOrgRole(user.id, user.orgId, systemRole.id);
+        }
+      }
+
       const { token } = createApiToken(user.id, "default");
 
       return reply.status(201).send({
@@ -176,7 +190,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.get(
     "/api/admin/users",
-    { preHandler: requireRole("admin", "security_lead") },
+    { preHandler: [requireAuth, requireCapability("user:read")] },
     async () => {
       const rows = db.select({
         id: users.id,
@@ -193,7 +207,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.put(
     "/api/admin/users/:id/role",
-    { preHandler: requireRole("admin") },
+    { preHandler: [requireAuth, requireCapability("role:assign")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const body = request.body as { role?: string };

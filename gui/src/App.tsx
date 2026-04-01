@@ -1,4 +1,4 @@
-import { RouterProvider, createMemoryRouter } from "react-router-dom";
+import { RouterProvider, createMemoryRouter, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import { MainEditorProvider } from "./components/mainInput/TipTapEditor";
 import { SubmenuContextProvidersProvider } from "./context/SubmenuContextProviders";
@@ -20,6 +20,42 @@ import AgentManagerPage from "./pages/agents";
 import TeamDashboard from "./pages/team";
 import ThemePage from "./styles/ThemePage";
 import { ROUTES } from "./util/navigation";
+import { isInIde } from "./util";
+
+// ── Route definitions ──────────────────────────────────────────────────
+
+/** Routes available in ALL environments (IDE + standalone web) */
+const coreRoutes = [
+  { path: "/index.html", element: <Chat /> },
+  { path: ROUTES.HOME, element: <Chat /> },
+  { path: "/history", element: <History /> },
+  { path: ROUTES.STATS, element: <Stats /> },
+  { path: ROUTES.CONFIG, element: <ConfigPage /> },
+  { path: ROUTES.THEME, element: <ThemePage /> },
+  { path: "/onboarding", element: <OnboardingPage /> },
+];
+
+/** Routes only available in the standalone web dashboard (NOT in IDE webview) */
+const webOnlyRoutes = [
+  { path: ROUTES.SECURITY, element: <SecurityPage /> },
+  { path: ROUTES.FIRST_LOOK, element: <FirstLookPage /> },
+  { path: "/rbac", element: <RbacPage /> },
+  { path: ROUTES.ORG, element: <OrgSettingsPage /> },
+  { path: ROUTES.TEAM, element: <TeamDashboard /> },
+  { path: ROUTES.AGENTS, element: <AgentManagerPage /> },
+];
+
+/** Redirect for web-only routes when accessed inside IDE */
+const webOnlyRedirects = webOnlyRoutes.map((route) => ({
+  path: route.path,
+  element: <Navigate to={ROUTES.HOME} replace />,
+}));
+
+// Build routes based on environment
+const inIde = isInIde();
+const childRoutes = inIde
+  ? [...coreRoutes, ...webOnlyRedirects]
+  : [...coreRoutes, ...webOnlyRoutes];
 
 const router = createMemoryRouter([
   {
@@ -30,60 +66,7 @@ const router = createMemoryRouter([
     path: ROUTES.HOME,
     element: <Layout />,
     errorElement: <ErrorPage />,
-    children: [
-      {
-        path: "/index.html",
-        element: <Chat />,
-      },
-      {
-        path: ROUTES.HOME,
-        element: <Chat />,
-      },
-      {
-        path: "/history",
-        element: <History />,
-      },
-      {
-        path: ROUTES.STATS,
-        element: <Stats />,
-      },
-      {
-        path: ROUTES.CONFIG,
-        element: <ConfigPage />,
-      },
-      {
-        path: ROUTES.THEME,
-        element: <ThemePage />,
-      },
-      {
-        path: ROUTES.SECURITY,
-        element: <SecurityPage />,
-      },
-      {
-        path: ROUTES.FIRST_LOOK,
-        element: <FirstLookPage />,
-      },
-      {
-        path: "/onboarding",
-        element: <OnboardingPage />,
-      },
-      {
-        path: "/rbac",
-        element: <RbacPage />,
-      },
-      {
-        path: ROUTES.ORG,
-        element: <OrgSettingsPage />,
-      },
-      {
-        path: ROUTES.TEAM,
-        element: <TeamDashboard />,
-      },
-      {
-        path: ROUTES.AGENTS,
-        element: <AgentManagerPage />,
-      },
-    ],
+    children: childRoutes,
   },
 ]);
 

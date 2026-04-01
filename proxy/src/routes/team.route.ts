@@ -7,7 +7,7 @@
 
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { requireAuth, requireRole } from "../auth/authMiddleware";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import {
   createTeam,
   getTeamById,
@@ -34,7 +34,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   // List teams in the caller's org
   app.get(
     "/api/teams",
-    { preHandler: requireAuth },
+    { preHandler: [requireAuth, requireCapability("team:read")] },
     async (request, reply) => {
       const orgId = request.authContext?.user.orgId;
       if (!orgId) {
@@ -47,7 +47,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   // List teams the current user is a member of
   app.get(
     "/api/teams/mine",
-    { preHandler: requireAuth },
+    { preHandler: [requireAuth, requireCapability("team:read")] },
     async (request) => {
       const userId = request.authContext!.user.id;
       return { teams: getTeamsForUser(userId) };
@@ -57,7 +57,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   // Get team detail + members
   app.get(
     "/api/teams/:id",
-    { preHandler: requireAuth },
+    { preHandler: [requireAuth, requireCapability("team:read")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const team = getTeamById(Number(id));
@@ -75,7 +75,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   // Create team
   app.post(
     "/api/teams",
-    { preHandler: requireRole("admin", "security_lead") },
+    { preHandler: [requireAuth, requireCapability("team:create")] },
     async (request, reply) => {
       const orgId = request.authContext?.user.orgId;
       if (!orgId) {
@@ -105,7 +105,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   // Update team name
   app.patch(
     "/api/teams/:id",
-    { preHandler: requireRole("admin", "security_lead") },
+    { preHandler: [requireAuth, requireCapability("team:write")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const team = getTeamById(Number(id));
@@ -125,7 +125,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   // Delete team
   app.delete(
     "/api/teams/:id",
-    { preHandler: requireRole("admin") },
+    { preHandler: [requireAuth, requireCapability("team:delete")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const team = getTeamById(Number(id));
@@ -142,7 +142,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   // Add member to team
   app.post(
     "/api/teams/:id/members",
-    { preHandler: requireRole("admin", "security_lead") },
+    { preHandler: [requireAuth, requireCapability("team:write")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const team = getTeamById(Number(id));
@@ -172,7 +172,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
   // Remove member from team
   app.delete(
     "/api/teams/:id/members/:userId",
-    { preHandler: requireRole("admin", "security_lead") },
+    { preHandler: [requireAuth, requireCapability("team:write")] },
     async (request, reply) => {
       const { id, userId } = request.params as { id: string; userId: string };
       const team = getTeamById(Number(id));

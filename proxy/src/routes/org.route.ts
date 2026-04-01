@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
-import { requireRole } from "../auth/authMiddleware";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import { getUsersByOrg } from "../auth/authService";
 import {
   assignUserToOrg,
@@ -30,7 +30,7 @@ const createOrgSchema = z.object({
 export async function registerOrgRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     "/api/orgs",
-    { preHandler: requireRole("admin") },
+    { preHandler: [requireAuth, requireCapability("org:write")] },
     async (request, reply) => {
       const parsed = createOrgSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -52,13 +52,13 @@ export async function registerOrgRoutes(app: FastifyInstance): Promise<void> {
 
   app.get(
     "/api/orgs",
-    { preHandler: requireRole("admin", "security_lead") },
+    { preHandler: [requireAuth, requireCapability("org:read")] },
     async () => ({ organizations: listOrgs() })
   );
 
   app.get(
     "/api/orgs/:id",
-    { preHandler: requireRole("admin", "security_lead") },
+    { preHandler: [requireAuth, requireCapability("org:read")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (!verifyOrgMembership(request, reply, Number(id))) return;
@@ -79,7 +79,7 @@ export async function registerOrgRoutes(app: FastifyInstance): Promise<void> {
 
   app.post(
     "/api/orgs/:id/members",
-    { preHandler: requireRole("admin") },
+    { preHandler: [requireAuth, requireCapability("org:write")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (!verifyOrgMembership(request, reply, Number(id))) return;
@@ -100,7 +100,7 @@ export async function registerOrgRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete(
     "/api/orgs/:orgId/members/:userId",
-    { preHandler: requireRole("admin") },
+    { preHandler: [requireAuth, requireCapability("org:write")] },
     async (request, reply) => {
       const { orgId, userId } = request.params as { orgId: string; userId: string };
       if (!verifyOrgMembership(request, reply, Number(orgId))) return;
@@ -112,7 +112,7 @@ export async function registerOrgRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete(
     "/api/orgs/:id",
-    { preHandler: requireRole("admin") },
+    { preHandler: [requireAuth, requireCapability("org:write")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       if (!verifyOrgMembership(request, reply, Number(id))) return;

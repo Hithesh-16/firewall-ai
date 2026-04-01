@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { requireAuth, requireRole } from "../auth/authMiddleware";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import {
   createProvider,
   deleteProvider,
@@ -44,7 +44,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.post(
     "/api/providers",
-    { preHandler: [requireAuth, requireRole("admin", "security_lead")] },
+    { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
       const parsed = createProviderSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -73,7 +73,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.get(
     "/api/providers",
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireCapability("provider:read")] },
     async () => {
       const providers = listProviders();
       return providers.map((p) => ({
@@ -89,7 +89,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.get(
     "/api/providers/:id",
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireCapability("provider:read")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const provider = getProviderById(Number(id));
@@ -110,7 +110,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.patch(
     "/api/providers/:id",
-    { preHandler: [requireAuth, requireRole("admin", "security_lead")] },
+    { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const parsed = updateProviderSchema.safeParse(request.body);
@@ -134,7 +134,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.delete(
     "/api/providers/:id",
-    { preHandler: [requireAuth, requireRole("admin")] },
+    { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const deleted = deleteProvider(Number(id));
@@ -149,7 +149,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.post(
     "/api/providers/:providerId/models",
-    { preHandler: [requireAuth, requireRole("admin", "security_lead")] },
+    { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
       const { providerId } = request.params as { providerId: string };
       const provider = getProviderById(Number(providerId));
@@ -182,7 +182,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.get(
     "/api/providers/:providerId/models",
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireCapability("provider:read")] },
     async (request, reply) => {
       const { providerId } = request.params as { providerId: string };
       const provider = getProviderById(Number(providerId));
@@ -195,7 +195,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.get(
     "/api/models",
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireCapability("provider:read")] },
     async () => {
       return listModels();
     }
@@ -203,7 +203,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.patch(
     "/api/models/:id",
-    { preHandler: [requireAuth, requireRole("admin", "security_lead")] },
+    { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const parsed = updateModelSchema.safeParse(request.body);
@@ -220,7 +220,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
   app.delete(
     "/api/models/:id",
-    { preHandler: [requireAuth, requireRole("admin")] },
+    { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const deleted = deleteModel(Number(id));

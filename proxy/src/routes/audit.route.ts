@@ -1,13 +1,13 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db/index";
 import { auditQueue } from "../db/schema";
-import { requireRole } from "../auth/authMiddleware";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import { eq, desc } from "drizzle-orm";
 
 export async function registerAuditRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { snippet_masked: string; metadata?: Record<string, unknown>; blindmi_score?: number; github_hits?: number } }>(
     "/api/audit/queue",
-    { preHandler: requireRole("developer", "security_lead", "admin") },
+    { preHandler: [requireAuth, requireCapability("audit:read")] },
     async (request, reply) => {
       const { snippet_masked, metadata, blindmi_score = 0, github_hits = 0 } = request.body ?? {};
       if (!snippet_masked) return reply.status(400).send({ error: "snippet_masked required" });
@@ -27,14 +27,14 @@ export async function registerAuditRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  app.get("/api/audit/queue", { preHandler: requireRole("admin", "security_lead") }, async (request, reply) => {
+  app.get("/api/audit/queue", { preHandler: [requireAuth, requireCapability("audit:read")] }, async (request, reply) => {
     const rows = db.select().from(auditQueue).orderBy(desc(auditQueue.createdAt)).limit(200).all();
     return reply.send({ items: rows });
   });
 
   app.post<{ Body: { id: number; action: "approve" | "redact" | "block" | "false_positive"; notes?: string } }>(
     "/api/audit/action",
-    { preHandler: requireRole("admin", "security_lead") },
+    { preHandler: [requireAuth, requireCapability("audit:read")] },
     async (request, reply) => {
       const { id, action, notes } = request.body ?? {};
       if (!id || !action) return reply.status(400).send({ error: "id and action required" });

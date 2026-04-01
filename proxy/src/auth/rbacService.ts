@@ -105,6 +105,38 @@ export function checkPermission(
   } | undefined;
 
   if (!orgRole) {
+    // Fallback: check legacy users.role field for backward compatibility
+    // This handles users created before RBAC was wired into registration
+    const legacyUser = db.prepare(
+      "SELECT role FROM users WHERE id = ?"
+    ).get(userId) as { role: string } | undefined;
+
+    if (legacyUser?.role) {
+      // Find the system role matching the legacy role string
+      const systemRole = db.prepare(
+        "SELECT r.id, r.name, rc.granted FROM roles r LEFT JOIN role_capabilities rc ON rc.role_id = r.id AND rc.capability_name = ? WHERE r.name = ? AND r.is_system = 1"
+      ).get(capabilityName, legacyUser.role) as { id: number; name: string; granted: number | null } | undefined;
+
+      if (systemRole) {
+        // Auto-assign the org role for future checks (self-healing)
+        try {
+          db.prepare(
+            "INSERT OR IGNORE INTO user_org_roles (user_id, org_id, role_id, created_at) VALUES (?, ?, ?, ?)"
+          ).run(userId, orgId, systemRole.id, now);
+        } catch {
+          // Non-critical — assignment will happen on next request
+        }
+
+        if (systemRole.granted === 1) {
+          return { allowed: true, reason: `Legacy role: ${systemRole.name}`, source: "role", roleId: systemRole.id, roleName: systemRole.name };
+        }
+        if (systemRole.granted === 0) {
+          return { allowed: false, reason: `Denied by role: ${systemRole.name}`, source: "explicit_deny", roleId: systemRole.id };
+        }
+        return { allowed: false, reason: `Capability '${capabilityName}' not in role '${systemRole.name}'`, source: "no_capability", roleId: systemRole.id, roleName: systemRole.name };
+      }
+    }
+
     return { allowed: false, reason: "User has no role in this organization", source: "no_role" };
   }
 

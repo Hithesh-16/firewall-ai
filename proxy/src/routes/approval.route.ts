@@ -11,6 +11,7 @@
 
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import {
   getPendingApprovals,
   getApprovalHistory,
@@ -26,7 +27,7 @@ const resolveSchema = z.object({
 
 export async function registerApprovalRoutes(app: FastifyInstance): Promise<void> {
   /** GET /api/approvals/pending — list pending approvals for current user */
-  app.get("/api/approvals/pending", async (request) => {
+  app.get("/api/approvals/pending", { preHandler: [requireAuth, requireCapability("approval:read")] }, async (request) => {
     // In production, extract userId from auth context
     const userId = (request.query as Record<string, string>).userId
       ? Number((request.query as Record<string, string>).userId)
@@ -36,7 +37,7 @@ export async function registerApprovalRoutes(app: FastifyInstance): Promise<void
   });
 
   /** POST /api/approvals/:id/resolve — respond to an approval */
-  app.post("/api/approvals/:id/resolve", async (request, reply) => {
+  app.post("/api/approvals/:id/resolve", { preHandler: [requireAuth, requireCapability("approval:resolve")] }, async (request, reply) => {
     const id = Number((request.params as Record<string, string>).id);
     if (isNaN(id)) {
       return reply.status(400).send({ error: "Invalid approval ID" });
@@ -56,7 +57,7 @@ export async function registerApprovalRoutes(app: FastifyInstance): Promise<void
   });
 
   /** GET /api/approvals/history — past decisions for audit */
-  app.get("/api/approvals/history", async (request) => {
+  app.get("/api/approvals/history", { preHandler: [requireAuth, requireCapability("approval:read")] }, async (request) => {
     const query = request.query as Record<string, string>;
     const userId = query.userId ? Number(query.userId) : 1;
     const limit = query.limit ? Number(query.limit) : 50;
@@ -65,7 +66,7 @@ export async function registerApprovalRoutes(app: FastifyInstance): Promise<void
   });
 
   /** GET /api/approvals/rules — remembered "Allow Always" / "Deny Always" rules */
-  app.get("/api/approvals/rules", async (request) => {
+  app.get("/api/approvals/rules", { preHandler: [requireAuth, requireCapability("approval:read")] }, async (request) => {
     const userId = (request.query as Record<string, string>).userId
       ? Number((request.query as Record<string, string>).userId)
       : 1;
@@ -74,7 +75,7 @@ export async function registerApprovalRoutes(app: FastifyInstance): Promise<void
   });
 
   /** DELETE /api/approvals/rules/:id — revoke a remembered rule */
-  app.delete("/api/approvals/rules/:id", async (request, reply) => {
+  app.delete("/api/approvals/rules/:id", { preHandler: [requireAuth, requireCapability("approval:resolve")] }, async (request, reply) => {
     const id = Number((request.params as Record<string, string>).id);
     if (isNaN(id)) {
       return reply.status(400).send({ error: "Invalid rule ID" });

@@ -267,4 +267,7 @@ The scanner pipeline is enforced via the `policyEnforcer` middleware, which is w
 - **Per-org/team/user file restrictions** — DB-backed `file_restrictions` table with union (blocklists) and intersection (allowlists) merge semantics
 - **Policy inheritance chain** — `resolveEffectivePolicy()` merges global → org → team → project policies (strictest wins)
 - **Audit log hash chain** — every log entry includes `prevHash` (SHA-256 of previous entry) for tamper evidence
-- **Capability-based auth** — `requireCapability("policy:write")` replaces `requireRole("admin")` on new routes
+- **Capability-based auth** — `requireCapability("policy:write")` replaces `requireRole("admin")` on ALL routes
+- **All routes now require auth** — previously 10+ routes (approvals, sessions, notifications, simulator) had zero authentication
+- **User registration assigns org role** — `user_org_roles` entry created on registration so `checkPermission()` works immediately
+- **Legacy role fallback** — users created before RBAC was added are auto-assigned based on their `users.role` field (self-healing)

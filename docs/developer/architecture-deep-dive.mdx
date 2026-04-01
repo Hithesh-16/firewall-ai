@@ -204,6 +204,29 @@ Tests are split into sync (original) and async (Phase 1+) arrays. Run with:
 cd proxy && npm run test:unit  # or: npx ts-node src/test/run-tests.ts
 ```
 
+## Environment-Aware GUI
+
+The GUI detects whether it's running inside an IDE (VS Code/JetBrains) or as a standalone web dashboard:
+
+```typescript
+import { isInIde, isStandaloneWeb } from "../util";
+```
+
+**IDE mode** (VS Code webview): Only shows Chat, History, Config, Stats. Admin pages redirect to home.
+**Web mode** (standalone dashboard): Shows all pages + persistent sidebar navigation (Security, Roles, Org, Teams, Agents).
+
+Detection uses `localStorage.ide` — set to `"vscode"` or `"jetbrains"` by the extension, absent in standalone web.
+
+### Reusable UI Components (`gui/src/components/ui/`)
+
+| Component | Purpose |
+|-----------|---------|
+| `StatCard` | Metric display (label + value + optional color) |
+| `RoleBadge` | Color-coded role badge (admin=dark, security_lead=blue, developer=green, auditor=amber) |
+| `LoadingSpinner` | Consistent loading state with optional message |
+| `ErrorBanner` | Error display with optional retry button |
+| `ConfirmDialog` | Modal confirmation for destructive actions |
+
 ## Design Decisions
 
 | Decision | Why |

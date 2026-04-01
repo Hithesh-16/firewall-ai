@@ -8,6 +8,7 @@
  */
 
 import { FastifyInstance } from "fastify";
+import { requireAuth } from "../auth/authMiddleware";
 import {
   getActiveSessions,
   getSessionById,
@@ -15,7 +16,7 @@ import {
 
 export async function registerSessionRoutes(app: FastifyInstance): Promise<void> {
   /** GET /api/sessions/active — list active sessions across devices */
-  app.get("/api/sessions/active", async (request) => {
+  app.get("/api/sessions/active", { preHandler: requireAuth }, async (request) => {
     const userId = (request.query as Record<string, string>).userId
       ? Number((request.query as Record<string, string>).userId)
       : 1;
@@ -24,7 +25,7 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
   });
 
   /** GET /api/sessions/:id — get a specific session */
-  app.get("/api/sessions/:id", async (request, reply) => {
+  app.get("/api/sessions/:id", { preHandler: requireAuth }, async (request, reply) => {
     const id = (request.params as Record<string, string>).id;
     const session = getSessionById(id);
 

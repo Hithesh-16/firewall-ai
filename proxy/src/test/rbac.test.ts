@@ -90,8 +90,17 @@ export function testDeveloperLacksAdminCapabilities() {
 }
 
 export function testNoRoleDeniesEverything() {
-  const { orgId, userId } = setupTestOrg();
-  // Don't assign any role
+  // Create a user with NO legacy role string — tests the "truly no role" path
+  const u = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const orgResult = db.prepare(
+    "INSERT INTO organizations (name, slug, created_at) VALUES (?, ?, ?)"
+  ).run("No Role Org", `no-role-org-${u}`, Date.now());
+  const orgId = Number(orgResult.lastInsertRowid);
+
+  const userResult = db.prepare(
+    "INSERT INTO users (email, name, password_hash, role, org_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(`norole-${u}@test.com`, "No Role User", "hash", "", orgId, Date.now(), Date.now());
+  const userId = Number(userResult.lastInsertRowid);
 
   const check = checkPermission(userId, orgId, "agent:use");
   assert.ok(!check.allowed, "User without role should be denied");

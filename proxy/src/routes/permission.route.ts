@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { requireAuth } from "../auth/authMiddleware";
 import { loadPolicyConfig } from "../config";
 import { evaluatePolicy } from "../policy/policyEngine";
 import { scanPII } from "../scanner/piiScanner";
@@ -16,6 +17,7 @@ export async function registerPermissionRoute(
 ): Promise<void> {
   app.post<{ Body: PermissionBody }>(
     "/api/permission-check",
+    { preHandler: requireAuth },
     async (request, reply) => {
       const { messages, model, filePaths } = request.body ?? {};
 

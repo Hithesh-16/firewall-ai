@@ -25,9 +25,10 @@ export function RepoMemoryIndicator() {
       .request("history/repoSummary", { workspaceDirectory: workspaceDir })
       .then((result) => {
         if (result.status === "success" && result.content?.summary) {
+          const summary = (result.content.summary as { sessionCount?: number } | null) ?? {};
           setRepoInfo({
             name: workspaceDir.split("/").pop() ?? workspaceDir,
-            sessionCount: result.content.summary.sessionCount ?? 0,
+            sessionCount: (summary as { sessionCount?: number }).sessionCount ?? 0,
           });
         }
       })

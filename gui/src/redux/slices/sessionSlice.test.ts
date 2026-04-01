@@ -77,6 +77,7 @@ describe("sessionSlice streamUpdate", () => {
     isSessionMetadataLoading: false,
     compactionLoading: {},
     historySnapshot: null,
+    activePlan: null,
   });
 
   describe("Basic Chat Message", () => {

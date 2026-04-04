@@ -26,12 +26,37 @@
           {
             "group": "Security",
             "icon": "shield-halved",
-            "pages": ["security/scanners", "security/policy-engine"]
+            "pages": [
+              "security/scanning-overview",
+              "security/scanners",
+              "security/advanced-scanners",
+              "security/policy-engine",
+              "security/grounding",
+              "security/compliance",
+              "security/threat-intelligence",
+              "security/red-team"
+            ]
+          },
+          {
+            "group": "Features",
+            "icon": "star",
+            "pages": [
+              "proxy/slash-commands",
+              "proxy/plugins-skills",
+              "proxy/advanced-features",
+              "proxy/agent-wizard",
+              "proxy/integrations",
+              "proxy/privacy-settings"
+            ]
           },
           {
             "group": "API Reference",
             "icon": "code",
-            "pages": ["api-reference/overview"]
+            "pages": [
+              "api-reference/overview",
+              "developer/api-reference",
+              "api-reference/advanced-endpoints"
+            ]
           },
           {
             "group": "Developer Docs",
@@ -44,11 +69,14 @@
               "developer/tasks-memory",
               "developer/agent-system",
               "developer/commands-skills",
+              "developer/permissions",
               "developer/coordinator",
               "developer/cost-tracking",
+              "developer/feature-flags-cron",
               "developer/scheduling",
               "developer/onboarding",
               "developer/gui-components",
+              "developer/advanced-security",
               "CONTRIBUTING"
             ]
           }

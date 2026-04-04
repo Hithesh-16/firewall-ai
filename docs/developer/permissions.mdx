@@ -1,0 +1,117 @@
+---
+title: "Tool Permissions"
+description: "3-level permission system: config rules, auto-classifier, interactive dialogs"
+---
+
+## Overview
+
+Every tool call in AI Firewall passes through a 3-level permission check before execution. This prevents agents from performing destructive operations without user consent.
+
+## Permission Levels
+
+```
+Tool Call
+  → Level 1: Config Rules (deny/allow patterns from settings)
+  → Level 2: Auto-Classifier (dangerous file/command detection)
+  → Level 3: Interactive Dialog (ask user: allow-once/always/deny)
+```
+
+### Level 1: Config Rules
+
+Pattern-based rules from `policy.json` or project settings:
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Write(/etc/*)"
+    ],
+    "allow": [
+      "Read(**)",
+      "Glob(**)",
+      "Grep(**)"
+    ],
+    "ask": [
+      "Bash(*)",
+      "Write(*)",
+      "Edit(*)"
+    ]
+  }
+}
+```
+
+Patterns support globs. Rules are checked in order: deny first, then allow, then ask.
+
+### Level 2: Auto-Classifier
+
+Automatically classifies tool calls as safe or dangerous:
+
+**Dangerous files** (always ask):
+- `/etc/passwd`, `/etc/shadow`, SSH keys
+- `.env` files, credentials files
+- System configuration files
+- Files in `/root/`, `/var/`, `/sys/`
+
+**Dangerous commands** (always ask):
+- `rm -rf`, `sudo`, `chmod 777`
+- `curl | sh`, `eval`, `exec`
+- Database operations (`DROP`, `DELETE`)
+- Network operations (`nc`, `nmap`)
+
+**Safe by default:**
+- `Read`, `Glob`, `Grep`, `WebSearch`
+- `git status`, `git log`, `git diff`
+- `ls`, `pwd`, `echo`
+
+### Level 3: Interactive Dialog
+
+When neither config rules nor auto-classifier can decide, the user is prompted:
+
+**GUI:** `PermissionDialog.tsx` shows risk level, input preview, and three options:
+- **Allow Once** — permit this specific call
+- **Allow Always** — add permanent allow rule for this pattern
+- **Deny** — block this call
+
+**CLI:** Terminal prompt with the same three options.
+
+## Plan Mode
+
+In plan mode (entered via `/plan` or `EnterPlanMode` tool):
+- Only read-only tools are allowed (`Read`, `Glob`, `Grep`, `WebSearch`)
+- Write tools (`Edit`, `Write`, `Bash`) are blocked
+- The agent designs an approach before implementing
+
+## Implementation Files
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `toolPermissions.ts` | `core/tools/` | Permission rules, pattern matching, dangerous detection (382 lines) |
+| `toolPermissions.ts` | `proxy/src/permissions/` | Proxy-side enforcement (382 lines) |
+| `toolRegistry.ts` | `core/tools/` | Tool pool assembly with permission integration (223 lines) |
+| `PermissionDialog.tsx` | `gui/src/components/permissions/` | GUI permission dialog |
+| `permissionSlice.ts` | `gui/src/redux/slices/` | Permission queue and rules state |
+
+## API
+
+Check tool permissions programmatically:
+
+```bash
+curl -X POST http://localhost:8080/api/permission-check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool": "Bash",
+    "input": "rm -rf /tmp/build",
+    "userId": 1
+  }'
+```
+
+Response:
+```json
+{
+  "decision": "ask",
+  "reason": "Bash command matches dangerous pattern: rm -rf",
+  "riskLevel": "high"
+}
+```

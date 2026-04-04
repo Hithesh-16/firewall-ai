@@ -1,0 +1,197 @@
+---
+title: "Hallucination Grounding"
+description: "Cross-reference LLM outputs against source documents to detect unverifiable claims"
+---
+
+## Overview
+
+The grounding engine cross-references LLM outputs against provided source documents to detect hallucinated or unsupported claims. It extracts individual claims from text, scores each against the source material using four complementary similarity methods, and returns per-claim and overall grounding scores.
+
+This is essential for RAG applications where you need to verify that the model's output is faithful to the retrieved documents rather than fabricated.
+
+## How It Works
+
+<Steps>
+  <Step title="Claim extraction">
+    The LLM output is split into individual sentences using punctuation-based sentence boundary detection. Questions and very short sentences (fewer than 5 words) are filtered out, leaving only verifiable factual claims.
+  </Step>
+  <Step title="Term extraction">
+    Both claims and source documents are tokenized into terms. Stopwords (100+ common English words) are removed to focus on meaningful content words.
+  </Step>
+  <Step title="Per-claim scoring">
+    Each claim is scored against every source document. The highest-scoring source becomes the "best match" for that claim.
+  </Step>
+  <Step title="Overall scoring">
+    The overall grounding score is the weighted average of all individual claim scores. Claims with scores above the threshold (default 0.3) are marked as grounded.
+  </Step>
+</Steps>
+
+## Scoring Breakdown
+
+Each claim is scored using a weighted combination of four components:
+
+| Component | Weight | Method |
+|-----------|--------|--------|
+| **Term overlap (Jaccard)** | 40% | Jaccard similarity between claim terms and source terms after stopword removal |
+| **Bigram overlap** | 25% | Overlap ratio of consecutive word pairs between claim and source |
+| **Exact substring match** | 20% | Binary bonus (1.0 or 0.0) if the claim text appears as an exact substring in the source |
+| **Entity overlap** | 15% | Overlap ratio of extracted entities (capitalized multi-word phrases, numbers, quoted strings) |
+
+The final per-claim score ranges from 0.0 to 1.0.
+
+## Interpreting Scores
+
+| Score Range | Interpretation | Recommended Action |
+|-------------|---------------|-------------------|
+| **0.0 - 0.3** | Weak grounding | Claim is likely hallucinated or unsupported. Flag for review or discard. |
+| **0.3 - 0.6** | Moderate grounding | Claim has partial support. May be a paraphrase or inference from sources. |
+| **0.6 - 1.0** | Strong grounding | Claim is well-supported by source material. Safe to present to users. |
+
+<Info>
+The default grounding threshold is 0.3. Claims scoring below this are marked `isGrounded: false`. Adjust this threshold based on your risk tolerance -- medical or legal applications may require 0.6+.
+</Info>
+
+## API Endpoints
+
+### Check Grounding
+
+Score an LLM output against one or more source documents.
+
+```bash
+curl -X POST http://localhost:8080/api/grounding/check \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "output": "The company was founded in 2019 and has 500 employees. It operates in 12 countries and generated $50M in revenue last year.",
+    "sources": [
+      {
+        "id": "doc-1",
+        "content": "Founded in 2019, the company employs approximately 500 people across its offices.",
+        "title": "Company Overview"
+      },
+      {
+        "id": "doc-2",
+        "content": "The company has operations in 12 countries worldwide.",
+        "title": "Global Presence"
+      }
+    ]
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "overallScore": 0.72,
+  "claims": [
+    {
+      "claim": "The company was founded in 2019 and has 500 employees.",
+      "groundingScore": 0.89,
+      "isGrounded": true,
+      "bestSource": {
+        "id": "doc-1",
+        "similarity": 0.89,
+        "matchedTerms": ["founded", "2019", "500", "employees"]
+      },
+      "evidence": "Founded in 2019, the company employs approximately 500 people..."
+    },
+    {
+      "claim": "It operates in 12 countries and generated $50M in revenue last year.",
+      "groundingScore": 0.45,
+      "isGrounded": true,
+      "bestSource": {
+        "id": "doc-2",
+        "similarity": 0.45,
+        "matchedTerms": ["12", "countries"]
+      }
+    }
+  ],
+  "groundedCount": 2,
+  "ungroundedCount": 0,
+  "totalClaims": 2,
+  "sources": ["doc-1", "doc-2"]
+}
+```
+
+<Warning>
+The "$50M in revenue" portion of the second claim has no source support, but the claim still scores 0.45 due to the "12 countries" overlap. For high-stakes applications, check individual claim scores rather than relying solely on the overall score.
+</Warning>
+
+### Extract Claims
+
+Extract verifiable claims from text without scoring them. Useful for previewing what the grounding engine will evaluate.
+
+```bash
+curl -X POST http://localhost:8080/api/grounding/claims \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "text": "Python was created by Guido van Rossum. It was first released in 1991. Is it popular? Yes."
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "claims": [
+    "Python was created by Guido van Rossum.",
+    "It was first released in 1991."
+  ]
+}
+```
+
+Note that the question ("Is it popular?") and the short sentence ("Yes.") are filtered out.
+
+## Use Case: RAG Verification Pipeline
+
+A typical integration checks grounding after every RAG response:
+
+<Steps>
+  <Step title="User asks a question">
+    The question is sent to your RAG pipeline, which retrieves relevant document chunks.
+  </Step>
+  <Step title="LLM generates a response">
+    The model produces an answer grounded (hopefully) in the retrieved chunks.
+  </Step>
+  <Step title="Check grounding">
+    Send the LLM output and retrieved chunks to `POST /api/grounding/check`.
+  </Step>
+  <Step title="Act on results">
+    If `overallScore < 0.3`, warn the user that the response may contain unverifiable claims. If specific claims have `isGrounded: false`, highlight or remove them.
+  </Step>
+</Steps>
+
+```typescript
+// Example integration
+const groundingResult = await fetch("http://localhost:8080/api/grounding/check", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+  body: JSON.stringify({
+    output: llmResponse,
+    sources: retrievedChunks.map(chunk => ({
+      id: chunk.id,
+      content: chunk.text,
+      title: chunk.source,
+    })),
+  }),
+});
+
+const { overallScore, claims } = await groundingResult.json();
+const ungrounded = claims.filter(c => !c.isGrounded);
+
+if (ungrounded.length > 0) {
+  console.warn(`${ungrounded.length} claims lack source support`);
+}
+```
+
+<Tip>
+For best results, provide the exact document chunks that were retrieved, not the full documents. The grounding engine performs term-level comparison, so smaller, focused sources produce more accurate scores.
+</Tip>
+
+## Limitations
+
+- The engine uses lexical similarity, not semantic understanding. Paraphrased claims may score lower than expected.
+- Entity extraction is rule-based (capitalized phrases, numbers, quoted strings) and may miss domain-specific entities.
+- Maximum 100 source documents per request.
+- Very long outputs are split into claims at sentence boundaries, which may mishandle bullet lists or code blocks.

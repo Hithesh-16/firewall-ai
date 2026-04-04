@@ -1,0 +1,167 @@
+---
+title: "Plugins & Skills"
+description: "Extend AI Firewall with custom skills, plugins, and event hooks"
+---
+
+## Skills
+
+Skills are reusable prompt templates defined in `SKILL.md` files with YAML frontmatter. They extend the command system with domain-specific capabilities.
+
+### Creating a Skill
+
+Create a `SKILL.md` file in your project:
+
+```markdown
+---
+name: explain
+description: Explain code in simple terms
+tags: [code, education]
+---
+
+Explain the following code in simple, clear language. Focus on:
+1. What the code does at a high level
+2. Key algorithms or patterns used
+3. Any potential issues or improvements
+
+Be concise. Use analogies where helpful.
+```
+
+### Skill Sources
+
+Skills are discovered from multiple locations:
+
+| Source | Priority | Description |
+|--------|----------|-------------|
+| Bundled | 1 | Ships with AI Firewall (commit, explain) |
+| Project | 2 | `SKILL.md` files in your project root |
+| Workspace | 3 | `.ai-firewall/skills/` directory |
+| Plugin | 4 | Skills provided by installed plugins |
+
+### Using Skills
+
+```bash
+# Via slash command
+/explain
+
+# Via API
+curl -X POST http://localhost:8080/api/skills/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"name": "explain", "args": "the authentication middleware"}'
+```
+
+### Listing Skills
+
+```bash
+# API
+curl http://localhost:8080/api/skills
+
+# GUI
+# Navigate to /skills in the web dashboard
+```
+
+### Skills Browser (GUI)
+
+The web dashboard at `/skills` shows all available skills with:
+- Source filter (all / bundled / project)
+- Tags display
+- Skill descriptions
+
+## Plugins
+
+Plugins are npm-style packages that extend AI Firewall with custom scanners, commands, tools, and notification channels.
+
+### Plugin Manifest
+
+Every plugin needs a `plugin.json`:
+
+```json
+{
+  "name": "my-scanner-plugin",
+  "version": "1.0.0",
+  "description": "Custom scanner for company-specific patterns",
+  "main": "dist/index.js",
+  "provides": {
+    "scanners": ["company-secrets"],
+    "commands": ["/audit"],
+    "skills": ["security-review"]
+  }
+}
+```
+
+### Plugin Lifecycle
+
+```
+Discover → Load → Validate → Enable
+                              ↕
+                           Disable
+```
+
+### Managing Plugins
+
+```bash
+# List installed plugins
+curl http://localhost:8080/api/plugins
+
+# Enable/disable
+curl -X POST http://localhost:8080/api/plugins/:id/enable
+curl -X POST http://localhost:8080/api/plugins/:id/disable
+```
+
+### Plugin Manager (GUI)
+
+The web dashboard at `/plugins` provides:
+- List of installed plugins with version and status
+- Enable/disable toggles
+- Plugin details (description, capabilities)
+
+## Event Hooks
+
+Hooks execute shell commands in response to system events, configured in your settings:
+
+### Supported Events (13 types)
+
+| Event | Fires When |
+|-------|-----------|
+| `tool_call` | Before any tool execution |
+| `tool_result` | After tool returns result |
+| `scan_blocked` | Request blocked by scanner |
+| `scan_redacted` | Request redacted by scanner |
+| `task_created` | New task created |
+| `task_completed` | Task finishes successfully |
+| `agent_spawned` | Sub-agent launched |
+| `command_executed` | Slash command runs |
+| `approval_needed` | Human approval required |
+| `approval_resolved` | Approval decision made |
+| `memory_created` | New memory saved |
+| `session_started` | New conversation begins |
+| `policy_changed` | Policy configuration updated |
+
+### Configuring Hooks
+
+Add to your project's `.ai-firewall/hooks.json`:
+
+```json
+{
+  "hooks": [
+    {
+      "event": "scan_blocked",
+      "command": "notify-send 'AI Firewall' 'Request blocked: ${reason}'"
+    },
+    {
+      "event": "task_completed",
+      "command": "echo 'Task ${taskId} finished' >> /tmp/agent-log.txt"
+    }
+  ]
+}
+```
+
+### Variable Expansion
+
+Hook commands support variable expansion from the event payload:
+- `${reason}` — block/redact reason
+- `${taskId}` — task identifier
+- `${toolName}` — tool that was called
+- `${riskScore}` — computed risk score
+- `${action}` — BLOCK/REDACT/ALLOW
+
+All variables are sanitized to prevent command injection.

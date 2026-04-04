@@ -63,6 +63,12 @@ import * as cronAndFlagsTests from "./cronAndFlags.test";
 // Command System tests
 import * as commandTests from "./commands.test";
 
+// Advanced Scanners tests
+import * as advancedScannersTests from "./advancedScanners.test";
+
+// Advanced Features tests
+import * as advancedFeaturesTests from "./advancedFeatures.test";
+
 function makePolicy(): PolicyConfig {
   return {
     version: "1.2",
@@ -1497,6 +1503,443 @@ async function run() {
     ["hook:unregister", cronAndFlagsTests.testUnregisterHooks],
     ["hook:getRegistered", cronAndFlagsTests.testGetRegisteredHooks],
     ["hook:historyEmpty", cronAndFlagsTests.testGetHookHistoryEmpty],
+
+    // ── Advanced Scanners ──────────────────────────────────────────
+    // Multi-Turn Tracker
+    [
+      "multiTurn:singleTurn",
+      advancedScannersTests.testMultiTurnTracksSingleTurn,
+    ],
+    [
+      "multiTurn:escalation",
+      advancedScannersTests.testMultiTurnDetectsEscalation,
+    ],
+    [
+      "multiTurn:repetition",
+      advancedScannersTests.testMultiTurnDetectsRepetition,
+    ],
+    ["multiTurn:pivot", advancedScannersTests.testMultiTurnDetectsPivot],
+    [
+      "multiTurn:normalBenign",
+      advancedScannersTests.testMultiTurnNormalForBenignInput,
+    ],
+    [
+      "multiTurn:emptySession",
+      advancedScannersTests.testMultiTurnGetSessionRiskEmpty,
+    ],
+    [
+      "multiTurn:cleanExpired",
+      advancedScannersTests.testMultiTurnCleanExpiredSessions,
+    ],
+    [
+      "multiTurn:riskWeightsRecent",
+      advancedScannersTests.testMultiTurnSessionRiskWeightsRecent,
+    ],
+    // RAG Scanner
+    [
+      "rag:instructionOverride",
+      advancedScannersTests.testRagChunkDetectsInstructionOverride,
+    ],
+    ["rag:benignContent", advancedScannersTests.testRagChunkBenignContent],
+    ["rag:emptyInput", advancedScannersTests.testRagChunkEmptyInput],
+    [
+      "rag:delimiterInjection",
+      advancedScannersTests.testRagChunkDelimiterInjection,
+    ],
+    ["rag:customThreshold", advancedScannersTests.testRagChunkCustomThreshold],
+    [
+      "rag:documentAllChunks",
+      advancedScannersTests.testRagDocumentScansAllChunks,
+    ],
+    ["rag:documentBenign", advancedScannersTests.testRagDocumentBenignDocument],
+    [
+      "rag:documentSourcePreserved",
+      advancedScannersTests.testRagDocumentSourcePreserved,
+    ],
+    // Intent Clustering
+    [
+      "intent:singleIntent",
+      advancedScannersTests.testIntentRecordsSingleIntent,
+    ],
+    [
+      "intent:coordinated",
+      advancedScannersTests.testIntentDetectsCoordinatedAttack,
+    ],
+    [
+      "intent:notCoordSameUser",
+      advancedScannersTests.testIntentNotCoordinatedSameUser,
+    ],
+    [
+      "intent:diffTextNoClustered",
+      advancedScannersTests.testIntentDifferentTextNotClustered,
+    ],
+    [
+      "intent:activeClusters",
+      advancedScannersTests.testIntentGetActiveClusters,
+    ],
+    ["intent:cleanOld", advancedScannersTests.testIntentCleanOldEntries],
+    ["intent:clearAll", advancedScannersTests.testIntentClearAll],
+    // Behavior Fingerprinting
+    [
+      "behavior:firstSample",
+      advancedScannersTests.testBehaviorRecordsFirstSample,
+    ],
+    ["behavior:buildsProfile", advancedScannersTests.testBehaviorBuildsProfile],
+    [
+      "behavior:lengthAnomaly",
+      advancedScannersTests.testBehaviorDetectsLengthAnomaly,
+    ],
+    [
+      "behavior:notBeforeMin",
+      advancedScannersTests.testBehaviorNotAnomalousBeforeMinSamples,
+    ],
+    [
+      "behavior:profileUndefined",
+      advancedScannersTests.testBehaviorGetProfileUndefined,
+    ],
+    ["behavior:clearProfile", advancedScannersTests.testBehaviorClearProfile],
+    ["behavior:emptyInput", advancedScannersTests.testBehaviorEmptyInput],
+    // Prompt Confidentiality
+    [
+      "confidentiality:directReq",
+      advancedScannersTests.testConfidentialityDetectsDirectRequest,
+    ],
+    [
+      "confidentiality:repeatInstr",
+      advancedScannersTests.testConfidentialityDetectsRepeatInstruction,
+    ],
+    [
+      "confidentiality:benign",
+      advancedScannersTests.testConfidentialityBenignInput,
+    ],
+    [
+      "confidentiality:empty",
+      advancedScannersTests.testConfidentialityEmptyInput,
+    ],
+    [
+      "confidentiality:customThresh",
+      advancedScannersTests.testConfidentialityCustomThreshold,
+    ],
+    [
+      "confidentiality:rolePlay",
+      advancedScannersTests.testConfidentialityRolePlayAttack,
+    ],
+    [
+      "confidentiality:encodingBypass",
+      advancedScannersTests.testConfidentialityEncodingBypass,
+    ],
+    [
+      "confidentiality:threshField",
+      advancedScannersTests.testConfidentialityThresholdFieldReturned,
+    ],
+    // Cross-Model Correlation
+    [
+      "correlation:singleNotCorr",
+      advancedScannersTests.testCorrelationSingleEventNotCorrelated,
+    ],
+    [
+      "correlation:crossModel",
+      advancedScannersTests.testCorrelationDetectsCrossModelAttack,
+    ],
+    [
+      "correlation:sameModelNot",
+      advancedScannersTests.testCorrelationSameModelNotCorrelated,
+    ],
+    [
+      "correlation:activeIncidents",
+      advancedScannersTests.testCorrelationGetActiveIncidents,
+    ],
+    [
+      "correlation:severityMedium",
+      advancedScannersTests.testCorrelationSeverityMediumForTwoModels,
+    ],
+    ["correlation:clearAll", advancedScannersTests.testCorrelationClearAll],
+    // Multi-Modal Scanner
+    [
+      "multiModal:imageOcrInject",
+      advancedScannersTests.testImageTextDetectsOcrInjection,
+    ],
+    ["multiModal:imageBenign", advancedScannersTests.testImageTextBenignOcr],
+    ["multiModal:imageEmpty", advancedScannersTests.testImageTextEmptyInput],
+    [
+      "multiModal:imageSource",
+      advancedScannersTests.testImageTextSourcePreserved,
+    ],
+    [
+      "multiModal:audioRoleSwitch",
+      advancedScannersTests.testAudioTranscriptDetectsRoleSwitch,
+    ],
+    ["multiModal:audioBenign", advancedScannersTests.testAudioTranscriptBenign],
+    [
+      "multiModal:csvInjection",
+      advancedScannersTests.testStructuredFileDetectsCsvInjection,
+    ],
+    [
+      "multiModal:jsonProtoPoll",
+      advancedScannersTests.testStructuredFileDetectsJsonProtoPollution,
+    ],
+    [
+      "multiModal:htmlBenign",
+      advancedScannersTests.testStructuredFileBenignHtml,
+    ],
+    [
+      "multiModal:xxeAttack",
+      advancedScannersTests.testStructuredFileDetectsXxe,
+    ],
+    // Grounding Engine
+    [
+      "grounding:extractClaims",
+      advancedScannersTests.testExtractClaimsSplitsSentences,
+    ],
+    [
+      "grounding:filterQuestions",
+      advancedScannersTests.testExtractClaimsFiltersQuestions,
+    ],
+    ["grounding:emptyInput", advancedScannersTests.testExtractClaimsEmptyInput],
+    [
+      "grounding:filterShort",
+      advancedScannersTests.testExtractClaimsFiltersShortSentences,
+    ],
+    [
+      "grounding:matchingSource",
+      advancedScannersTests.testScoreClaimGroundingWithMatchingSource,
+    ],
+    ["grounding:noMatch", advancedScannersTests.testScoreClaimGroundingNoMatch],
+    [
+      "grounding:emptySource",
+      advancedScannersTests.testScoreClaimGroundingEmptySource,
+    ],
+    [
+      "grounding:overallScore",
+      advancedScannersTests.testComputeGroundingOverallScore,
+    ],
+    [
+      "grounding:emptyOutput",
+      advancedScannersTests.testComputeGroundingEmptyOutput,
+    ],
+    [
+      "grounding:noSources",
+      advancedScannersTests.testComputeGroundingNoSources,
+    ],
+    [
+      "grounding:sourceIds",
+      advancedScannersTests.testComputeGroundingSourceIdsPreserved,
+    ],
+    [
+      "grounding:customThreshold",
+      advancedScannersTests.testScoreClaimGroundingCustomThreshold,
+    ],
+
+    // ── Advanced Features ─────────────────────────────────────────────
+    // PII Vault
+    ["piiVault:createSession", advancedFeaturesTests.testPiiVaultCreateSession],
+    [
+      "piiVault:tokenizeDetokenize",
+      advancedFeaturesTests.testPiiVaultTokenizeAndDetokenize,
+    ],
+    [
+      "piiVault:deterministicTokens",
+      advancedFeaturesTests.testPiiVaultDeterministicTokens,
+    ],
+    [
+      "piiVault:emptyMatches",
+      advancedFeaturesTests.testPiiVaultEmptyMatchesPassthrough,
+    ],
+    [
+      "piiVault:destroySession",
+      advancedFeaturesTests.testPiiVaultDestroySession,
+    ],
+    [
+      "piiVault:activeCount",
+      advancedFeaturesTests.testPiiVaultActiveSessionCount,
+    ],
+    [
+      "piiVault:expiredSession",
+      advancedFeaturesTests.testPiiVaultExpiredSessionThrows,
+    ],
+    // Embedding Detector
+    [
+      "embedding:dimensions",
+      advancedFeaturesTests.testEmbeddingCreateEmbeddingDimensions,
+    ],
+    [
+      "embedding:detectsInjection",
+      advancedFeaturesTests.testEmbeddingDetectsInjection,
+    ],
+    [
+      "embedding:benignNotInjection",
+      advancedFeaturesTests.testEmbeddingBenignNotInjection,
+    ],
+    [
+      "embedding:customThreshold",
+      advancedFeaturesTests.testEmbeddingCustomThreshold,
+    ],
+    [
+      "embedding:trainOnExamples",
+      advancedFeaturesTests.testEmbeddingTrainOnExamples,
+    ],
+    ["embedding:clearModel", advancedFeaturesTests.testEmbeddingClearModel],
+    [
+      "embedding:nearestExamples",
+      advancedFeaturesTests.testEmbeddingNearestExamplesReturned,
+    ],
+    ["embedding:knnScore", advancedFeaturesTests.testEmbeddingKnnScore],
+    // Federated Intelligence
+    [
+      "federated:createSignature",
+      advancedFeaturesTests.testFederatedCreateSignature,
+    ],
+    [
+      "federated:publishAndQuery",
+      advancedFeaturesTests.testFederatedPublishAndQuery,
+    ],
+    [
+      "federated:noMatchUnrelated",
+      advancedFeaturesTests.testFederatedNoMatchForUnrelatedText,
+    ],
+    [
+      "federated:riskScoreClamp",
+      advancedFeaturesTests.testFederatedRiskScoreClamp,
+    ],
+    [
+      "federated:thresholdFilter",
+      advancedFeaturesTests.testFederatedThresholdFilter,
+    ],
+    ["federated:getStats", advancedFeaturesTests.testFederatedGetStats],
+    [
+      "federated:clearSignatures",
+      advancedFeaturesTests.testFederatedClearSignatures,
+    ],
+    // Supply Chain Integrity
+    [
+      "supplyChain:hashMatch",
+      advancedFeaturesTests.testSupplyChainVerifyHashMatch,
+    ],
+    [
+      "supplyChain:hashMismatch",
+      advancedFeaturesTests.testSupplyChainVerifyHashMismatch,
+    ],
+    [
+      "supplyChain:hashCaseInsensitive",
+      advancedFeaturesTests.testSupplyChainVerifyHashCaseInsensitive,
+    ],
+    [
+      "supplyChain:backdoorDetects",
+      advancedFeaturesTests.testSupplyChainScanBackdoorDetects,
+    ],
+    [
+      "supplyChain:backdoorClean",
+      advancedFeaturesTests.testSupplyChainScanBackdoorClean,
+    ],
+    [
+      "supplyChain:backdoorCustom",
+      advancedFeaturesTests.testSupplyChainScanBackdoorCustomTrigger,
+    ],
+    [
+      "supplyChain:provenanceLow",
+      advancedFeaturesTests.testSupplyChainAuditProvenanceLowRisk,
+    ],
+    [
+      "supplyChain:provenanceHigh",
+      advancedFeaturesTests.testSupplyChainAuditProvenanceHighRisk,
+    ],
+    [
+      "supplyChain:driftDetected",
+      advancedFeaturesTests.testSupplyChainBehaviorDriftDetected,
+    ],
+    [
+      "supplyChain:driftNone",
+      advancedFeaturesTests.testSupplyChainBehaviorDriftNone,
+    ],
+    [
+      "supplyChain:driftNoBaseline",
+      advancedFeaturesTests.testSupplyChainBehaviorDriftNoBaseline,
+    ],
+    // Compliance Mapper
+    ["compliance:mapPii", advancedFeaturesTests.testComplianceMapPiiEvent],
+    [
+      "compliance:lowSeverityFiltered",
+      advancedFeaturesTests.testComplianceMapLowSeverityFiltered,
+    ],
+    [
+      "compliance:directFirst",
+      advancedFeaturesTests.testComplianceMapDirectFirst,
+    ],
+    [
+      "compliance:evidencePackage",
+      advancedFeaturesTests.testComplianceGenerateEvidencePackage,
+    ],
+    [
+      "compliance:emptyRange",
+      advancedFeaturesTests.testComplianceEvidencePackageEmptyRange,
+    ],
+    [
+      "compliance:supportedRegs",
+      advancedFeaturesTests.testComplianceGetSupportedRegulations,
+    ],
+    // Business Logic DSL
+    ["dsl:parseSimple", advancedFeaturesTests.testDslParseSimpleRule],
+    [
+      "dsl:parseAndConditions",
+      advancedFeaturesTests.testDslParseMultipleConditionsAnd,
+    ],
+    ["dsl:parseInvalidAction", advancedFeaturesTests.testDslParseInvalidAction],
+    ["dsl:parseMissingWhen", advancedFeaturesTests.testDslParseMissingWhen],
+    ["dsl:evaluateBlock", advancedFeaturesTests.testDslEvaluateTriggersBlock],
+    [
+      "dsl:evaluateAllow",
+      advancedFeaturesTests.testDslEvaluateAllowWhenNoMatch,
+    ],
+    ["dsl:evaluateOr", advancedFeaturesTests.testDslEvaluateOrConditions],
+    [
+      "dsl:validateMissingName",
+      advancedFeaturesTests.testDslValidateRuleMissingName,
+    ],
+    // Red Team Agent
+    [
+      "redTeam:defaultConfig",
+      advancedFeaturesTests.testRedTeamCreateDefaultConfig,
+    ],
+    [
+      "redTeam:customConfig",
+      advancedFeaturesTests.testRedTeamCreateCustomConfig,
+    ],
+    ["redTeam:generateProbes", advancedFeaturesTests.testRedTeamGenerateProbes],
+    [
+      "redTeam:vulnerableResponse",
+      advancedFeaturesTests.testRedTeamEvaluateVulnerableResponse,
+    ],
+    [
+      "redTeam:refusalResponse",
+      advancedFeaturesTests.testRedTeamEvaluateRefusalResponse,
+    ],
+    [
+      "redTeam:emptyResponse",
+      advancedFeaturesTests.testRedTeamEvaluateEmptyResponse,
+    ],
+    ["redTeam:runSuite", advancedFeaturesTests.testRedTeamRunSuite],
+    ["redTeam:probeLibrary", advancedFeaturesTests.testRedTeamGetProbeLibrary],
+    // Shadow AI Detector
+    ["shadowAi:detectsOpenAi", advancedFeaturesTests.testShadowAiDetectsOpenAi],
+    [
+      "shadowAi:approvedNotFlagged",
+      advancedFeaturesTests.testShadowAiApprovedEndpointNotFlagged,
+    ],
+    ["shadowAi:nonLlmHost", advancedFeaturesTests.testShadowAiNonLlmHost],
+    ["shadowAi:emptyHostname", advancedFeaturesTests.testShadowAiEmptyHostname],
+    [
+      "shadowAi:detectionStats",
+      advancedFeaturesTests.testShadowAiDetectionStats,
+    ],
+    ["shadowAi:clearStats", advancedFeaturesTests.testShadowAiClearStats],
+    [
+      "shadowAi:knownEndpoints",
+      advancedFeaturesTests.testShadowAiKnownEndpoints,
+    ],
+    [
+      "shadowAi:heuristicDetection",
+      advancedFeaturesTests.testShadowAiHeuristicDetection,
+    ],
   ];
 
   const totalCount = syncTests.length + asyncTests.length;

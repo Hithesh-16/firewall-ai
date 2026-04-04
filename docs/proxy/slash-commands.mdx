@@ -1,0 +1,178 @@
+---
+title: "Slash Commands"
+description: "Built-in slash commands for diagnostics, cost tracking, memory management, code review, and more"
+---
+
+## Overview
+
+AI Firewall includes 12 built-in slash commands accessible from the CLI, GUI chat, or via the API. Commands are loaded by the command registry and can be extended with skills and plugins.
+
+## Available Commands
+
+### /doctor
+
+Diagnostic health check for your environment.
+
+```
+/doctor
+```
+
+Checks:
+- Proxy reachable on `:8080`
+- Node.js version (18+ required)
+- SQLite database connection
+- `policy.json` validity
+- Memory directory existence
+
+Output: `[OK]`, `[WARN]`, or `[FAIL]` per check with a summary.
+
+### /compact
+
+Compress conversation context to save tokens.
+
+```
+/compact [maxTokens]
+```
+
+Applies 3 strategies in order:
+1. **Clear old tool results** — removes tool output from old messages
+2. **Summarize old messages** — compresses assistant responses to 1-line summaries
+3. **Budget trim** — drops oldest messages if still over budget
+
+Reports: original tokens, compacted tokens, savings percentage.
+
+### /cost
+
+Show session cost and token usage.
+
+```
+/cost
+```
+
+Displays cost tracking info from `X-AF-*` response headers. For detailed data, use the `/api/usage/summary` endpoint.
+
+### /stats
+
+Show firewall statistics.
+
+```
+/stats
+```
+
+Reports from the audit log:
+- Total requests scanned
+- Blocked / Redacted / Allowed counts
+- Average risk score
+
+### /memory
+
+Browse and manage persistent memories.
+
+```
+/memory              # List all memories
+/memory index        # Show MEMORY.md index
+/memory user         # Filter by type (user/feedback/project/reference)
+```
+
+### /tasks
+
+List active and recent tasks.
+
+```
+/tasks               # Show active tasks
+/tasks all           # Show all tasks (including completed)
+```
+
+### /review
+
+AI-powered code review on your current git diff.
+
+```
+/review              # Review staged changes
+/review all          # Review all changes
+```
+
+Sends a prompt to the LLM asking for security vulnerabilities, bugs, performance issues, and code quality concerns. Results include file, line number, severity, and suggested fix.
+
+### /diff
+
+Show git diff output.
+
+```
+/diff                # git diff HEAD (all changes)
+/diff staged         # git diff --staged
+/diff main..HEAD     # diff between refs
+/diff abc123         # diff against specific commit
+```
+
+Reports additions/deletions count.
+
+### /share
+
+Export the current session as a JSON snapshot.
+
+```
+/share               # Save to session-<timestamp>.json file
+/share json          # Same as above
+/share clipboard     # Output JSON for copy
+```
+
+The snapshot includes all messages, model info, and export timestamp.
+
+### /resume
+
+Resume a previous session from an exported snapshot.
+
+```
+/resume              # List available session-*.json files
+/resume session-1712345678.json   # Load specific session
+```
+
+### /help
+
+List all available commands.
+
+```
+/help
+```
+
+## API Usage
+
+Execute any command via the API:
+
+```bash
+curl -X POST http://localhost:8080/api/commands/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer afw_..." \
+  -d '{
+    "input": "/doctor",
+    "projectPath": "/path/to/project"
+  }'
+```
+
+For commands that need conversation context (like `/compact` and `/share`):
+
+```bash
+curl -X POST http://localhost:8080/api/commands/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "/compact 4000",
+    "extra": { "messages": [...] }
+  }'
+```
+
+## Extending with Custom Commands
+
+Add new commands to `proxy/src/commands/builtinCommands.ts` or create them as skills:
+
+```markdown
+---
+name: my-command
+description: Does something useful
+type: local
+---
+
+Your skill prompt here...
+```
+
+Save as `SKILL.md` in your project and it becomes available as `/my-command`.

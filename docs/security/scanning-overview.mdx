@@ -1,0 +1,160 @@
+---
+title: "Security Scanning Overview"
+description: "How AI Firewall scans every LLM request, file access, and MCP tool call for secrets, PII, and prompt injection"
+---
+
+## How Scanning Works
+
+Every piece of data that flows through AI Firewall passes through a multi-stage scanner pipeline **before** reaching any AI provider. This is the core differentiator: no other AI coding tool scans prompts before sending them to LLMs.
+
+### Pipeline Order
+
+```
+Input Text
+  1. Unicode Normalization (strip zero-width chars, map confusables, remove bidi)
+  2. Secret Scanning (12 patterns: AWS, private keys, JWT, GitHub tokens, etc.)
+  3. PII Scanning (7 patterns: email, phone, SSN, Aadhaar, PAN, credit card, IP)
+  4. Entropy Scanning (Shannon entropy for high-randomness strings)
+  5. Context Adjustment (path-aware severity tuning)
+  6. Prompt Injection Scanning (23 pattern categories)
+  7. Policy Decision (BLOCK / REDACT / ALLOW)
+```
+
+### What Gets Scanned
+
+| Data Flow | Scanner | Trigger |
+|-----------|---------|---------|
+| Chat messages | Full pipeline | Every `/v1/chat/completions` request |
+| LLM responses | Response scanner | Every response (opt-in via `policy.json`) |
+| File reads | File scan service | Every `readFile` tool call |
+| MCP tool I/O | MCP scan pipeline | Every `/v1/mcp/tools/call` |
+| Rule files | Rule file scanner | `.cursorrules`, `.continuerules`, `CLAUDE.md`, etc. |
+| Batch files | Batch scanner | `POST /api/scan/batch` (max 50 files) |
+
+### Scanner Package
+
+All scanners are pure functions in the shared `@ai-firewall/scanner` package:
+
+```typescript
+import {
+  scanSecrets,
+  scanPII,
+  scanPromptInjection,
+  scanEntropy,
+  normalizeUnicode,
+  adjustSeverity,
+} from "@ai-firewall/scanner";
+```
+
+This package is used by the proxy, MCP servers, and CLI tools — ensuring consistent scanning everywhere.
+
+## Secret Detection
+
+12 secret patterns with severity levels:
+
+| Pattern | Severity | Example |
+|---------|----------|---------|
+| AWS Access Key | Critical | `AKIAIOSFODNN7EXAMPLE` |
+| Private Key | Critical | `-----BEGIN RSA PRIVATE KEY-----` |
+| Database URL | Critical | `postgresql://user:pass@host/db` |
+| GitHub Token | High | `ghp_xxxxxxxxxxxxxxxxxxxx` |
+| JWT | High | `eyJhbGciOiJIUzI1NiIs...` |
+| Bearer Token | High | `Bearer sk-proj-...` |
+| Slack Token | High | `xoxb-...` |
+| Google API Key | High | `AIzaSy...` |
+| Azure Key | High | Base64 encoded |
+| Generic API Key | Medium | `api_key=...` |
+| Hardcoded Password | Medium | `password = "..."` |
+| Environment Variable | Medium | `export SECRET_KEY=...` |
+
+## PII Detection
+
+7 PII patterns:
+
+| Pattern | Example | Validation |
+|---------|---------|------------|
+| Email | `user@example.com` | RFC 5322 regex |
+| Phone | `+1-555-0100` | International format |
+| SSN | `123-45-6789` | US format |
+| Aadhaar | `1234 5678 9012` | Indian 12-digit |
+| PAN | `ABCDE1234F` | Indian format |
+| Credit Card | `4111-1111-1111-1111` | Luhn algorithm validated |
+| IP Address | `192.168.1.1` | IPv4 |
+
+## Prompt Injection Detection
+
+23 pattern categories detecting both direct and indirect attacks:
+
+**Direct (13 patterns):** instruction override, role play, jailbreak, encoding bypass, output formatting, context manipulation, system prompt extraction, multi-step, hypothetical framing, translation trick, payload split, authority claim, output constraints
+
+**Indirect (10 patterns):** hidden instructions in documents, data exfiltration, tool misuse, invisible text, delayed execution, context poisoning, goal hijacking, persona override, denial escalation, social engineering
+
+The injection scanner uses weighted scoring (15-35 points per match). Default threshold: 60 for chat, 40 for rule files (stricter).
+
+## Unicode Defense
+
+The unicode normalizer (ASI04 defense) runs **before** all other scanners:
+
+- **Zero-width chars** — strips `U+200B`, `U+200C`, `U+200D`, `U+FEFF`, etc.
+- **Confusable mapping** — normalizes Cyrillic `а` (U+0430) to Latin `a`, Greek `ο` to Latin `o`, etc.
+- **Bidi overrides** — removes `U+202A`-`U+202E`, `U+2066`-`U+2069`
+- **Control chars** — strips C0/C1 control characters
+
+This prevents attackers from hiding secrets or injection patterns using invisible or visually similar characters.
+
+## Response Headers
+
+Every scanned request returns `X-AF-*` headers:
+
+```
+X-AF-Action: ALLOW
+X-AF-Risk-Score: 15
+X-AF-Secrets-Count: 0
+X-AF-PII-Count: 1
+X-AF-Entropy-Count: 0
+X-AF-Input-Tokens: 342
+X-AF-Estimated-Cost: 0.0021
+X-AF-Token-Method: tiktoken
+```
+
+## File Scanning
+
+Files are scanned with content-addressed caching (SHA-256):
+
+```bash
+# Scan a single file
+curl -X POST http://localhost:8080/api/scan/file \
+  -H "Content-Type: application/json" \
+  -d '{"filePath": "/path/to/file.ts"}'
+
+# Scan multiple files
+curl -X POST http://localhost:8080/api/scan/batch \
+  -H "Content-Type: application/json" \
+  -d '{"filePaths": ["/path/a.ts", "/path/b.ts"]}'
+```
+
+Response includes `action`, `riskScore`, `secretsFound`, `piiFound`, and detailed findings.
+
+## Rule File Scanning
+
+IDE rule files (`.cursorrules`, `.continuerules`, `CLAUDE.md`) are scanned with a **stricter threshold** (40 vs 60) because they execute with elevated privileges:
+
+```bash
+# Scan all rule files in a workspace
+curl -X POST http://localhost:8080/api/scan/rules/directory \
+  -H "Content-Type: application/json" \
+  -d '{"directory": "/path/to/project"}'
+```
+
+## MCP Tool Scanning
+
+All MCP tool inputs and outputs are scanned through the MCP Security Gateway:
+
+```bash
+# Route MCP calls through the gateway
+curl -X POST http://localhost:8080/v1/mcp/tools/call \
+  -H "Content-Type: application/json" \
+  -d '{"server": "filesystem", "tool": "read_file", "arguments": {"path": "/etc/passwd"}}'
+```
+
+MCP scanning uses **stricter weights** (+40 for critical findings vs +20 for normal chat).

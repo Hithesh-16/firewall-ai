@@ -1,0 +1,105 @@
+---
+title: "Agent Creation Wizard"
+description: "Create and configure custom agents with the visual wizard or API"
+---
+
+## Overview
+
+The Agent Creation Wizard provides a step-by-step flow to configure and launch agents. Access it from the Agents page (`/agents`) by clicking **"+ Create Agent"**.
+
+## Wizard Steps
+
+### Step 1: Basic Info
+
+- **Description** (required) — what the agent should do
+- **Name** (optional) — identifier for the agent
+- **Execution Mode**:
+  - **Local** — synchronous, blocks until complete
+  - **Background** — async, notifies via WebSocket on completion
+  - **Coordinator** — orchestrates multiple worker agents in parallel
+
+### Step 2: Model & Timeout
+
+- **Model Override** — use a specific model (e.g., `claude-sonnet-4-6`, `gpt-4o`). Leave empty for default.
+- **Timeout** — 1 min, 2 min, 5 min (default), 10 min, or 30 min
+- **Isolation** — `None` or `Git Worktree` (agent works on isolated repo copy)
+- **System Prompt** — additional instructions for the agent
+
+### Step 3: Tools & Permissions
+
+Configure which tools the agent can use:
+
+**Common tools:** `read`, `edit`, `write`, `glob`, `grep`, `bash`, `web_search`, `web_fetch`, `notebook_edit`, `agent`, `plan`, `worktree`
+
+- **Allowed Tools** (green) — explicit allowlist (empty = all tools)
+- **Denied Tools** (red) — explicit blocklist
+
+### Step 4: Review & Launch
+
+Summary of all configuration, then launch with a single click. The agent appears in the Active Agents tab.
+
+## API Usage
+
+Skip the wizard and spawn agents directly via API:
+
+```bash
+curl -X POST http://localhost:8080/api/agents/spawn \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer afw_..." \
+  -d '{
+    "description": "Refactor auth module to use JWT",
+    "prompt": "Refactor the authentication module...",
+    "model": "claude-sonnet-4-6",
+    "background": true,
+    "isolation": "worktree"
+  }'
+```
+
+Response:
+```json
+{
+  "taskId": "a_abc123",
+  "agentId": "agent_def456",
+  "worktreePath": "/tmp/ai-firewall-worktree-abc123",
+  "worktreeBranch": "agent/a_abc123"
+}
+```
+
+## Agent Modes
+
+| Mode | Use Case | Blocks? | Notification |
+|------|----------|---------|-------------|
+| `local` | Quick tasks (< 2 min) | Yes | Inline result |
+| `background` | Long tasks (2-30 min) | No | WebSocket `task_completed` event |
+| `coordinator` | Complex multi-part tasks | No | Aggregated results from workers |
+
+## Built-in Agent Definitions
+
+| Name | Mode | Timeout | Allowed Tools | Denied Tools |
+|------|------|---------|--------------|-------------|
+| `general-purpose` | local | 5 min | All | None |
+| `explore` | local | 2 min | glob, grep, read, web_search, web_fetch | edit, write, bash, notebook_edit |
+| `plan` | local | 3 min | glob, grep, read, web_search | edit, write, bash, notebook_edit |
+| `background` | background | 10 min | All | None |
+
+## Worktree Isolation
+
+When `isolation: "worktree"` is set:
+
+1. A new git worktree is created from the current branch
+2. The agent operates on the isolated copy
+3. Changes are committed to a separate branch (`agent/<taskId>`)
+4. The worktree is cleaned up after completion (or preserved if changes were made)
+
+This prevents agents from interfering with your working directory.
+
+## Coordinator Mode
+
+Coordinator agents can spawn worker sub-agents:
+
+- Workers get a restricted tool set (no `agent`, `send_message`, `task_stop`)
+- Maximum 5 concurrent workers per coordinator
+- Workers auto-background after 2 minutes
+- Results are aggregated by the coordinator
+
+See [Multi-Agent Coordinator](/developer/coordinator) for details.

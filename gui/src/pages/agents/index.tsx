@@ -5,6 +5,7 @@ import { ROUTES } from "../../util/navigation";
 import { ActiveAgentCard } from "./ActiveAgentCard";
 import { ApprovalCard } from "./ApprovalCard";
 import { CoordinatorView } from "../../components/agents/CoordinatorView";
+import { AgentWizard } from "../../components/agents/AgentWizard";
 import { useState } from "react";
 
 const TABS = [
@@ -19,6 +20,7 @@ type TabId = (typeof TABS)[number]["id"];
 function AgentManagerPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("active");
+  const [showWizard, setShowWizard] = useState(false);
   const activeAgents = useAppSelector((s) => s.agent.activeAgents);
   const pendingApprovals = useAppSelector((s) => s.agent.pendingApprovals);
   const approvalHistory = useAppSelector((s) => s.agent.approvalHistory);
@@ -63,7 +65,7 @@ function AgentManagerPage() {
             <line x1="12" y1="17" x2="12" y2="21" />
           </svg>
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-foreground text-lg font-semibold">
             Agent Manager
           </h1>
@@ -71,7 +73,16 @@ function AgentManagerPage() {
             Active agents, approvals, and task history
           </p>
         </div>
+        <button
+          onClick={() => setShowWizard(true)}
+          className="bg-primary text-primary-foreground hover:bg-primary-hover rounded px-3 py-1.5 text-xs transition-colors"
+        >
+          + Create Agent
+        </button>
       </div>
+
+      {/* Agent Creation Wizard */}
+      {showWizard && <AgentWizard onClose={() => setShowWizard(false)} />}
 
       {/* Tabs */}
       <UnderlineTabs

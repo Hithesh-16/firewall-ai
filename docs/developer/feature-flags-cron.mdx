@@ -1,0 +1,112 @@
+---
+title: "Feature Flags & Cron Jobs"
+description: "Gradual rollouts with feature flags and scheduled agent triggers with cron service"
+---
+
+## Feature Flags
+
+Hash-based feature flag system for gradual rollouts, A/B testing, and user targeting.
+
+### Creating a Flag
+
+```bash
+curl -X POST http://localhost:8080/api/feature-flags \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "new-scanner-v2",
+    "description": "Enable the v2 prompt injection scanner",
+    "rolloutPercent": 25,
+    "includeUsers": [1, 2],
+    "excludeUsers": [99]
+  }'
+```
+
+### Evaluating a Flag
+
+```bash
+curl http://localhost:8080/api/feature-flags/new-scanner-v2/evaluate?userId=42
+# → { "enabled": true, "reason": "rollout" }
+```
+
+### How Rollout Works
+
+1. Hash the `flagName + userId` with a deterministic hash
+2. Map to 0-100 range
+3. If hash value < `rolloutPercent`, flag is enabled
+4. `includeUsers` always see the flag (bypass rollout)
+5. `excludeUsers` never see the flag (bypass rollout)
+
+This ensures consistent assignment — a user always gets the same result for the same flag.
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/feature-flags` | Create a flag |
+| `GET` | `/api/feature-flags` | List all flags |
+| `GET` | `/api/feature-flags/:name` | Get flag details |
+| `PUT` | `/api/feature-flags/:name` | Update flag |
+| `DELETE` | `/api/feature-flags/:name` | Delete flag |
+| `GET` | `/api/feature-flags/:name/evaluate` | Evaluate for user |
+
+### Implementation
+
+`proxy/src/services/featureFlagService.ts` — in-memory flag storage with CRUD operations and hash-based evaluation.
+
+## Cron Service
+
+Schedule agents to run on recurring intervals.
+
+### Schedule Format
+
+Simple interval strings:
+
+| Format | Meaning | Example |
+|--------|---------|---------|
+| `Nm` | Every N minutes | `5m` = every 5 minutes |
+| `Nh` | Every N hours | `1h` = every hour |
+| `Nd` | Every N days | `7d` = weekly |
+
+### Creating a Cron Job
+
+```bash
+curl -X POST http://localhost:8080/api/cron \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schedule": "24h",
+    "agentConfig": {
+      "description": "Daily security scan of workspace",
+      "prompt": "Scan all files in the workspace for security issues",
+      "model": "claude-sonnet-4-6"
+    }
+  }'
+```
+
+### Managing Jobs
+
+```bash
+# List all cron jobs
+curl http://localhost:8080/api/cron
+
+# Get job details
+curl http://localhost:8080/api/cron/:id
+
+# Enable/disable
+curl -X POST http://localhost:8080/api/cron/:id/enable
+curl -X POST http://localhost:8080/api/cron/:id/disable
+
+# Delete
+curl -X DELETE http://localhost:8080/api/cron/:id
+```
+
+### How It Works
+
+The cron service uses simple polling (60-second interval):
+1. Every 60 seconds, check all enabled jobs
+2. If `nextRunAt <= now`, execute the agent config
+3. Update `lastRunAt` and compute next `nextRunAt`
+4. Agent spawns via `agentService.spawnAgent()`
+
+### Implementation
+
+`proxy/src/services/cronService.ts` — in-memory job storage backed by database, 60-second polling loop.

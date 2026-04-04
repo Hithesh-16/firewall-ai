@@ -102,3 +102,20 @@ Requests can be authenticated via:
 | POST | `/api/license` | Activate license key |
 | GET | `/api/license` | Current plan + features |
 | DELETE | `/api/license` | Deactivate license |
+
+### Advanced Security (30+ endpoints)
+
+For full details on all advanced endpoints, see the [Advanced API Reference](/api-reference/advanced-endpoints).
+
+| Category | Endpoints | Description |
+|----------|-----------|-------------|
+| RAG Scanning | `POST /api/scan/rag/chunk`, `/api/scan/rag/document` | Scan documents before RAG ingestion |
+| Grounding | `POST /api/grounding/check`, `/api/grounding/claims` | Hallucination detection via source matching |
+| Multi-Turn | `POST /api/scan/multi-turn`, `GET /:sessionId`, `DELETE /expired` | Session-based attack tracking |
+| Intelligence | `POST /api/intelligence/signatures`, `/query`, `GET /stats` | Federated threat signatures |
+| Compliance | `POST /api/compliance/map`, `/evidence`, `GET /regulations` | Regulatory mapping |
+| Red Team | `POST /api/redteam/probes`, `/evaluate`, `GET /library` | Adversarial testing |
+| Shadow AI | `POST /api/network/analyze`, `/approved`, `GET /stats`, `/endpoints` | Unapproved LLM detection |
+| Business Logic | `POST /api/policy/rules/parse`, `/evaluate`, `/validate` | Org-specific rule DSL |
+| ML Detection | `POST /api/ml/detect`, `/train`, `GET /stats` | Embedding-based injection detection |
+| Multi-Modal | `POST /api/scan/multimodal/image`, `/audio`, `/file` | Image, audio, file scanning |

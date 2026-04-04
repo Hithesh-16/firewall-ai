@@ -10,7 +10,8 @@ Open-source AI code agent (built on Continue) with a built-in security proxy. Ev
 continue-main/
 ├── proxy/                    — Security proxy (Fastify, port 8080)
 │   ├── src/scanner/          — Re-exports from @ai-firewall/scanner (backward-compatible)
-│   ├── src/policy/           — Policy engine (BLOCK/REDACT/ALLOW decisions)
+│   ├── src/policy/           — Policy engine (BLOCK/REDACT/ALLOW decisions) + business logic DSL
+│   │   └── businessLogicDsl.ts — Org-specific rule DSL (9 operators, AND/OR/NOT, 5 actions)
 │   ├── src/gateway/          — Multi-provider adapters + token intelligence
 │   │   ├── adapters/         — OpenAI, Anthropic, Gemini, Ollama format adapters
 │   │   ├── tokenCounter.ts   — Real token counting (js-tiktoken, WASM BPE)
@@ -20,12 +21,33 @@ continue-main/
 │   ├── src/mcp/              — MCP Security Gateway
 │   │   ├── mcpScanPipeline.ts — Scan MCP tool I/O through scanner pipeline
 │   │   └── mcpAuditLogger.ts  — Log/query MCP audit trail
-│   ├── src/routes/           — 40+ API endpoints
+│   ├── src/scanner/          — Advanced scanners (multi-turn, RAG, multimodal, grounding, etc.)
+│   │   ├── multiTurnTracker.ts — Multi-turn attack memory (session state, escalation detection)
+│   │   ├── ragScanner.ts     — RAG injection shield (document/chunk scanning, 17 patterns)
+│   │   ├── intentCluster.ts  — Semantic intent clustering (SimHash, coordinated attack detection)
+│   │   ├── behaviorFingerprint.ts — Per-user behavioral profiling (z-score anomaly detection)
+│   │   ├── promptConfidentiality.ts — Prompt extraction shield (22 patterns)
+│   │   ├── crossModelCorrelation.ts — Cross-model attack correlation (incident grouping)
+│   │   ├── multiModalScanner.ts — Multi-modal scanning (image OCR, audio, structured files)
+│   │   └── groundingEngine.ts — Hallucination grounding (claim extraction, source matching)
+│   ├── src/ml/               — ML-based detection
+│   │   └── embeddingDetector.ts — Embedding-based injection detector (60-dim features, KNN+centroid)
+│   ├── src/intelligence/     — Threat intelligence
+│   │   ├── federatedIntel.ts — Privacy-preserving federated threat signatures (LSH, MinHash)
+│   │   └── supplyChain.ts    — LLM supply chain integrity (hash verify, backdoor scan, drift)
+│   ├── src/compliance/       — Regulatory compliance
+│   │   └── complianceMapper.ts — Compliance mapping (GDPR, EU AI Act, HIPAA, NIST, SOC 2, ISO 42001)
+│   ├── src/agents/           — Autonomous agents
+│   │   └── redTeamAgent.ts   — Continuous red team agent (62 probes, 10 categories)
+│   ├── src/network/          — Network security
+│   │   └── shadowAiDetector.ts — Shadow AI discovery (32 known LLM endpoints)
+│   ├── src/routes/           — 50+ API endpoints
 │   ├── src/router/           — Risk-based + cost-aware smart routing
 │   ├── src/auth/             — Auth, SSO, RBAC middleware
 │   ├── src/vault/            — AES-256-GCM encrypted token vault
 │   ├── src/db/               — SQLite (better-sqlite3, WAL mode)
-│   ├── src/redactor/         — Sensitive data redaction
+│   ├── src/redactor/         — Sensitive data redaction + reversible PII vault
+│   │   └── piiVault.ts       — Zero-knowledge reversible PII tokenization (HMAC-SHA256)
 │   ├── src/tasks/            — Task framework (7 types, state machine, progress tracking)
 │   │   ├── taskTypes.ts      — Task type definitions + state transitions
 │   │   └── taskFramework.ts  — Task lifecycle, validation, progress
@@ -36,7 +58,7 @@ continue-main/
 │   ├── src/commands/         — Command system (10 built-in slash commands)
 │   │   ├── commandTypes.ts   — Command type definitions
 │   │   ├── commandLoader.ts  — Discover + load commands
-│   │   └── builtinCommands.ts — /doctor, /compact, /cost, /stats, /memory, /tasks, /review, /help, /share, /resume
+│   │   └── builtinCommands.ts — /doctor, /compact, /cost, /stats, /memory, /tasks, /review, /diff, /help, /share, /resume
 │   ├── src/skills/           — Skills system (SKILL.md format, bundled skills)
 │   │   ├── skillTypes.ts     — Skill type definitions + frontmatter schema
 │   │   ├── skillLoader.ts    — Discover + load skills from SKILL.md files
@@ -70,10 +92,11 @@ continue-main/
 │   ├── autocomplete/         — Tab completion engine
 │   └── commands/             — Slash commands (/commit, /review, /cmd)
 ├── gui/                      — React + Vite + Tailwind webview UI (environment-aware)
-│   ├── src/pages/            — Chat, Security, Organization, Config, History, Usage, Setup
+│   ├── src/pages/            — Chat, Security, Organization, Config, History, Usage, Setup, Tasks, Memory, Plugins, Skills, Privacy
 │   ├── src/pages/setup/      — Setup wizard route (OnboardingWizard)
 │   ├── src/components/ui/    — Reusable: StatCard, RoleBadge, ConfirmDialog, LoadingSpinner, ErrorBanner
 │   ├── src/components/agents/CoordinatorView.tsx — Multi-agent dashboard
+│   ├── src/components/agents/AgentWizard.tsx — 4-step agent creation wizard
 │   ├── src/components/onboarding/OnboardingWizard.tsx — 5-step setup wizard
 │   ├── src/hooks/useCostTracker.ts — Real-time cost tracking hook
 │   └── src/components/WebNavSidebar.tsx — Standalone web navigation (hidden in IDE mode)
@@ -149,16 +172,32 @@ cd extensions/cli && npm run build
 - **Cron Service** — `proxy/src/services/cronService.ts` simple polling (60s interval), schedule format (`Nm`/`Nh`/`Nd` for minutes/hours/days). CRUD + enable/disable per job.
 - **Feature Flags** — `proxy/src/services/featureFlagService.ts` hash-based rollout (0-100%), include/exclude user lists, CRUD for flag definitions
 - **Cost Tracker** — `proxy/src/gateway/costTracker.ts` in-memory session-level cost tracking with per-model breakdown, format helpers, purge of old sessions
+- **Multi-Turn Attack Memory** — `proxy/src/scanner/multiTurnTracker.ts` tracks escalation across conversation turns. Detects escalation (rising risk over 3+ turns), pivot (>60% category change), repetition (same text hash 3+ times). Session TTL 30min.
+- **RAG Injection Shield** — `proxy/src/scanner/ragScanner.ts` scans documents/chunks before RAG ingestion. 17 patterns covering instruction override, delimiter injection, encoding tricks, whitespace padding. Paragraph-based chunk splitting (max 2000 chars).
+- **Intent Clustering** — `proxy/src/scanner/intentCluster.ts` detects coordinated attacks from multiple users. SimHash fingerprinting with 3-word n-gram shingles, Hamming distance < 5 threshold. Alerts when 3+ distinct users cluster within 5min window.
+- **Behavioral Fingerprinting** — `proxy/src/scanner/behaviorFingerprint.ts` builds per-user profiles (prompt length, word count, vocabulary diversity, frequency, time-of-day). Z-score anomaly detection (>2 std deviations), cold start protection (10 samples min).
+- **Prompt Confidentiality Shield** — `proxy/src/scanner/promptConfidentiality.ts` detects system prompt extraction attempts. 22 weighted patterns covering direct requests, role-play, translation, encoding, model inversion, training data extraction.
+- **Cross-Model Correlation** — `proxy/src/scanner/crossModelCorrelation.ts` correlates attacks across GPT-4/Claude/Gemini into unified incidents. SimHash text similarity + user ID matching. Severity: 2 models = medium, 3+ = high, 3+ models AND 2+ users = critical.
+- **Multi-Modal Scanner** — `proxy/src/scanner/multiModalScanner.ts` scans non-text content. Image (11 OCR injection patterns), audio (10 phonetic/SSML patterns), structured files (12 patterns: HTML hidden elements, CSV formula injection, JSON prototype pollution, PDF JS, XML XXE).
+- **Hallucination Grounding** — `proxy/src/scanner/groundingEngine.ts` cross-references LLM outputs against source documents. 4-component scoring: Jaccard term overlap (40%), bigram overlap (25%), exact substring (20%), entity overlap (15%). Per-claim and overall grounding scores.
+- **Embedding Detector** — `proxy/src/ml/embeddingDetector.ts` lightweight ML injection detection. 60-dimensional feature vectors (character distribution, token stats, structural, injection-specific). KNN (k=5) + centroid distance classification. Pre-seeded with 40 examples.
+- **Federated Threat Intelligence** — `proxy/src/intelligence/federatedIntel.ts` privacy-preserving attack signature sharing via LSH (locality-sensitive hashing). MinHash with 64 hash functions, 8 bands. Signatures auto-purge after 24 hours. Tenant IDs SHA-256 hashed.
+- **Supply Chain Integrity** — `proxy/src/intelligence/supplyChain.ts` LLM supply chain verification. Model hash verification, backdoor trigger scanning (16 patterns), provenance auditing (provider trust, license, quantization), behavior drift detection (response length, tokens, refusal rate, topics).
+- **Compliance Mapper** — `proxy/src/compliance/complianceMapper.ts` maps security events to 6 regulations (GDPR, EU AI Act, HIPAA, NIST AI RMF, SOC 2, ISO 42001) with 31 articles. Auto-generates evidence packages with event-to-regulation mapping and remediation guidance.
+- **Business Logic DSL** — `proxy/src/policy/businessLogicDsl.ts` org-specific rule engine. YAML-like syntax, 9 condition operators (contains, matches, startsWith, endsWith, length_gt, length_lt, category_is, role_is, model_is), AND/OR/NOT logic, 5 actions (BLOCK/REDACT/WARN/LOG/ESCALATE), priority ordering.
+- **Red Team Agent** — `proxy/src/agents/redTeamAgent.ts` autonomous adversarial testing. 62 probe templates across 10 categories (injection, jailbreak, extraction, hallucination, bias, privacy, toxicity, encoding, roleplay, multilingual). Vulnerability detection + refusal recognition. Auto-generates recommendations.
+- **Shadow AI Detector** — `proxy/src/network/shadowAiDetector.ts` discovers unapproved LLM API usage. 32 known endpoints (OpenAI, Anthropic, Google, Cohere, Mistral, HuggingFace, Replicate, etc.). Hostname + path + content-type heuristics. Approved endpoint allowlist.
+- **PII Vault** — `proxy/src/redactor/piiVault.ts` reversible PII tokenization. Replace PII with `<PII_{TYPE}_{6-char-hex}>` tokens before LLM, restore after. HMAC-SHA256 deterministic tokens per session. Auto-expire sessions after TTL (default 1 hour). Zero-knowledge: nothing persists.
 
 ## Testing
 
 ```bash
-cd proxy && npm run test:unit  # 532 tests (policy, scanners, token, file scan, MCP, control plane, enterprise, agent core, commands, skills, coordinator, cron, flags)
+cd proxy && npm run test:unit  # 662 tests (policy, scanners, token, file scan, MCP, control plane, enterprise, agent core, commands, skills, coordinator, cron, flags, advanced scanners, advanced features)
 cd core && npm test            # Core agent engine tests
 cd gui && npm test             # GUI component tests
 ```
 
-Test breakdown (532 proxy tests):
+Test breakdown (662 proxy tests):
 
 - **14** — Original (policy engine, prompt injection, STRICT_LOCAL, model policy, BlindMI)
 - **20** — Phase 1: Token Intelligence (tokenCounter, contextWindow, costEstimator)
@@ -183,6 +222,8 @@ Test breakdown (532 proxy tests):
 - **~12** — Phase 3: Feature Flags (CRUD, rollout eval, include/exclude, load settings)
 - **~9** — Phase 3: Cron Service (schedule parsing, CRUD, enable/disable)
 - **~5** — Phase 3: Hook Service (register, event filtering, unregister, history)
+- **55** — Advanced Scanners (multi-turn tracker, RAG scanner, intent clustering, behavior fingerprinting, prompt confidentiality, cross-model correlation, multi-modal scanner, grounding engine)
+- **63** — Advanced Features (PII vault, embedding detector, federated intelligence, supply chain integrity, compliance mapper, business logic DSL, red team agent, shadow AI detector)
 - **1 pre-existing fail** (known)
 
 ## Request Flow (Token-Optimized)
@@ -402,6 +443,85 @@ Agent triggers high-risk action (risk >= approval threshold in policy.json)
 | POST   | `/api/cron/:id/disable` | Disable a cron job   |
 | DELETE | `/api/cron/:id`         | Delete a cron job    |
 
+### RAG Scanning (Advanced)
+
+| Method | Endpoint                 | Description                                    |
+| ------ | ------------------------ | ---------------------------------------------- |
+| POST   | `/api/scan/rag/chunk`    | Scan a single RAG chunk for hidden injections  |
+| POST   | `/api/scan/rag/document` | Scan a full document (auto-splits into chunks) |
+
+### Hallucination Grounding (Advanced)
+
+| Method | Endpoint                | Description                                     |
+| ------ | ----------------------- | ----------------------------------------------- |
+| POST   | `/api/grounding/check`  | Check output grounding against source documents |
+| POST   | `/api/grounding/claims` | Extract individual claims from text             |
+
+### Multi-Turn Tracking (Advanced)
+
+| Method | Endpoint                          | Description                        |
+| ------ | --------------------------------- | ---------------------------------- |
+| POST   | `/api/scan/multi-turn`            | Record a turn and get session risk |
+| GET    | `/api/scan/multi-turn/:sessionId` | Get current session risk           |
+| DELETE | `/api/scan/multi-turn/expired`    | Clean expired sessions             |
+
+### Federated Threat Intelligence (Advanced)
+
+| Method | Endpoint                       | Description                            |
+| ------ | ------------------------------ | -------------------------------------- |
+| POST   | `/api/intelligence/signatures` | Publish a privacy-preserving signature |
+| POST   | `/api/intelligence/query`      | Query matching attack signatures       |
+| GET    | `/api/intelligence/stats`      | Get signature store statistics         |
+
+### Compliance (Advanced)
+
+| Method | Endpoint                      | Description                          |
+| ------ | ----------------------------- | ------------------------------------ |
+| POST   | `/api/compliance/map`         | Map security event to regulations    |
+| POST   | `/api/compliance/evidence`    | Generate compliance evidence package |
+| GET    | `/api/compliance/regulations` | List supported regulations           |
+
+### Red Team Agent (Advanced)
+
+| Method | Endpoint                | Description                     |
+| ------ | ----------------------- | ------------------------------- |
+| POST   | `/api/redteam/probes`   | Generate adversarial probes     |
+| POST   | `/api/redteam/evaluate` | Evaluate response vulnerability |
+| GET    | `/api/redteam/library`  | Get probe library categories    |
+
+### Shadow AI Detection (Advanced)
+
+| Method | Endpoint                 | Description                     |
+| ------ | ------------------------ | ------------------------------- |
+| POST   | `/api/network/analyze`   | Analyze request for shadow AI   |
+| POST   | `/api/network/approved`  | Register approved LLM endpoints |
+| GET    | `/api/network/stats`     | Get detection statistics        |
+| GET    | `/api/network/endpoints` | List known LLM endpoints        |
+
+### Business Logic DSL (Advanced)
+
+| Method | Endpoint                     | Description                    |
+| ------ | ---------------------------- | ------------------------------ |
+| POST   | `/api/policy/rules/parse`    | Parse business logic rules     |
+| POST   | `/api/policy/rules/evaluate` | Evaluate rules against context |
+| POST   | `/api/policy/rules/validate` | Validate a single rule         |
+
+### Embedding ML Detection (Advanced)
+
+| Method | Endpoint         | Description                          |
+| ------ | ---------------- | ------------------------------------ |
+| POST   | `/api/ml/detect` | Detect injection via embedding model |
+| POST   | `/api/ml/train`  | Add training examples                |
+| GET    | `/api/ml/stats`  | Get model statistics                 |
+
+### Multi-Modal Scanning (Advanced)
+
+| Method | Endpoint                     | Description                  |
+| ------ | ---------------------------- | ---------------------------- |
+| POST   | `/api/scan/multimodal/image` | Scan OCR text from image     |
+| POST   | `/api/scan/multimodal/audio` | Scan audio transcript        |
+| POST   | `/api/scan/multimodal/file`  | Scan structured file content |
+
 ### Auth, Policy, Gateway, Org (existing)
 
 | Method   | Endpoint                                  | Description                   |
@@ -523,19 +643,38 @@ All proxy scanner files (`proxy/src/scanner/*.ts`) re-export from this package f
 | `compactService.ts`          | Conversation compaction (3 strategies: clear tool results, summarize, drop oldest) | `proxy/src/services/`               |
 | `commandTypes.ts`            | Command type definitions                                                           | `proxy/src/commands/`               |
 | `commandLoader.ts`           | Discover + load commands (built-in + external)                                     | `proxy/src/commands/`               |
-| `builtinCommands.ts`         | 10 built-in slash commands (/doctor, /compact, /cost, etc.)                        | `proxy/src/commands/`               |
+| `builtinCommands.ts`         | 11 built-in slash commands (/doctor, /compact, /cost, /diff, etc.)                 | `proxy/src/commands/`               |
 | `skillTypes.ts`              | Skill type definitions + SKILL.md frontmatter schema                               | `proxy/src/skills/`                 |
 | `skillLoader.ts`             | Discover + load skills from SKILL.md files                                         | `proxy/src/skills/`                 |
 | `pluginTypes.ts`             | Plugin manifest + lifecycle type definitions                                       | `proxy/src/plugins/`                |
 | `pluginLoader.ts`            | Plugin discover, load, enable/disable lifecycle                                    | `proxy/src/plugins/`                |
 | `hookService.ts`             | Shell command hooks on 13 event types (variable expansion, safe env)               | `proxy/src/services/`               |
 | `CoordinatorView.tsx`        | Multi-agent dashboard with worker pool status                                      | `gui/src/components/agents/`        |
+| `AgentWizard.tsx`            | 4-step agent creation wizard (info, model, tools, review+launch)                   | `gui/src/components/agents/`        |
 | `OnboardingWizard.tsx`       | 5-step first-run setup wizard                                                      | `gui/src/components/onboarding/`    |
 | `useCostTracker.ts`          | Real-time cost polling hook                                                        | `gui/src/hooks/`                    |
 | `costTracker.ts`             | In-memory session-level cost tracking with per-model breakdown                     | `proxy/src/gateway/`                |
 | `cronService.ts`             | Cron job scheduling (polling, Nm/Nh/Nd format, enable/disable)                     | `proxy/src/services/`               |
 | `featureFlagService.ts`      | Feature flags with hash-based rollout + include/exclude lists                      | `proxy/src/services/`               |
 | `cronAndFlags.test.ts`       | Tests for cost tracker, feature flags, cron, hooks                                 | `proxy/src/test/`                   |
+| `multiTurnTracker.ts`        | Multi-turn attack memory (session state, escalation/pivot/repetition detection)    | `proxy/src/scanner/`                |
+| `ragScanner.ts`              | RAG injection shield (17 patterns, document/chunk scanning)                        | `proxy/src/scanner/`                |
+| `intentCluster.ts`           | Semantic intent clustering (SimHash, coordinated attack detection)                 | `proxy/src/scanner/`                |
+| `behaviorFingerprint.ts`     | Per-user behavioral profiling (z-score anomaly, vocabulary diversity)              | `proxy/src/scanner/`                |
+| `promptConfidentiality.ts`   | Prompt extraction shield (22 weighted patterns, system prompt protection)          | `proxy/src/scanner/`                |
+| `crossModelCorrelation.ts`   | Cross-model attack correlation (incident grouping, severity escalation)            | `proxy/src/scanner/`                |
+| `multiModalScanner.ts`       | Multi-modal threat scanning (image OCR, audio transcript, structured files)        | `proxy/src/scanner/`                |
+| `groundingEngine.ts`         | Hallucination grounding (claim extraction, 4-component source matching)            | `proxy/src/scanner/`                |
+| `embeddingDetector.ts`       | Embedding-based injection detector (60-dim features, KNN + centroid)               | `proxy/src/ml/`                     |
+| `federatedIntel.ts`          | Privacy-preserving federated threat intelligence (LSH, MinHash, 8 bands)           | `proxy/src/intelligence/`           |
+| `supplyChain.ts`             | LLM supply chain integrity (hash verify, backdoor scan, drift detection)           | `proxy/src/intelligence/`           |
+| `complianceMapper.ts`        | Regulatory compliance mapping (6 regulations, 31 articles, evidence packages)      | `proxy/src/compliance/`             |
+| `businessLogicDsl.ts`        | Business logic policy DSL (9 operators, AND/OR/NOT, 5 actions, priority ordering)  | `proxy/src/policy/`                 |
+| `redTeamAgent.ts`            | Continuous red team agent (62 probes, 10 categories, vulnerability detection)      | `proxy/src/agents/`                 |
+| `shadowAiDetector.ts`        | Shadow AI discovery (32 known LLM endpoints, heuristic detection)                  | `proxy/src/network/`                |
+| `piiVault.ts`                | Reversible PII tokenization (HMAC-SHA256, session-scoped, zero-knowledge)          | `proxy/src/redactor/`               |
+| `advancedScanners.test.ts`   | Tests for 8 advanced scanner modules (55 tests)                                    | `proxy/src/test/`                   |
+| `advancedFeatures.test.ts`   | Tests for 8 advanced feature modules (63 tests)                                    | `proxy/src/test/`                   |
 
 ## Conventions
 
@@ -560,6 +699,14 @@ All proxy scanner files (`proxy/src/scanner/*.ts`) re-export from this package f
 - Memory files stored in `proxy/data/projects/<project>/memory/` — never write to arbitrary paths
 - Task state transitions enforced by state machine in `taskFramework.ts` — do not bypass
 - `proxy/data/` contains runtime data (memory files, SQLite DB) — always in `.gitignore`
+- New advanced scanners go in `proxy/src/scanner/` (multi-turn, RAG, intent, behavior, grounding, etc.)
+- ML-based detectors go in `proxy/src/ml/` — must work without external model dependencies
+- Threat intelligence modules go in `proxy/src/intelligence/` — always privacy-preserving (hash/LSH, never raw data)
+- Compliance modules go in `proxy/src/compliance/` — map events to specific regulatory articles
+- Red team probes go in `proxy/src/agents/redTeamAgent.ts` — add new categories/templates there
+- Network detection patterns go in `proxy/src/network/shadowAiDetector.ts` — add new LLM endpoints there
+- Business logic rules use `proxy/src/policy/businessLogicDsl.ts` — 9 condition operators, 5 actions
+- PII vault sessions are ephemeral — never persist token mappings to disk or DB
 
 ## Don't
 

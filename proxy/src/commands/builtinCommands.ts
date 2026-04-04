@@ -12,8 +12,9 @@
  *   /memory   — List/manage persistent memories
  *   /tasks    — List/manage running tasks
  *   /review   — Code review on current diff
- *   /share    — Share session (placeholder)
- *   /resume   — Resume previous session (placeholder)
+ *   /diff     — Show git diff
+ *   /share    — Export session as JSON snapshot
+ *   /resume   — Resume a previous session
  *   /help     — List available commands
  */
 
@@ -440,41 +441,207 @@ const helpCommand: LocalCommand = {
   },
 };
 
-// ── /share (placeholder) ───────────────────────────────────────
+// ── /diff ──────────────────────────────────────────────────────
 
-const shareCommand: LocalCommand = {
-  name: "share",
-  description: "Share current session (coming soon)",
+const diffCommand: LocalCommand = {
+  name: "diff",
+  description: "Show git diff (staged, unstaged, or between refs)",
   type: "local",
   source: "builtin",
 
   async call(
-    _args: string,
+    args: string,
     _context: CommandContext,
   ): Promise<LocalCommandResult> {
+    const { execSync } = await import("node:child_process");
+    const scope = args.trim() || "";
+
+    try {
+      // Build the git diff command
+      let cmd: string;
+      if (scope === "staged" || scope === "--staged") {
+        cmd = "git diff --staged";
+      } else if (scope === "head" || scope === "HEAD") {
+        cmd = "git diff HEAD";
+      } else if (scope) {
+        // Allow arbitrary refs: e.g. "main..HEAD", "abc123"
+        cmd = `git diff ${scope}`;
+      } else {
+        // Default: show both staged and unstaged
+        cmd = "git diff HEAD";
+      }
+
+      const output = execSync(cmd, {
+        encoding: "utf-8",
+        maxBuffer: 1024 * 1024, // 1MB
+        timeout: 10_000,
+      }).trim();
+
+      if (!output) {
+        return {
+          output: "No changes found.",
+          success: true,
+          data: { linesChanged: 0 },
+        };
+      }
+
+      // Count changed lines
+      const additions = (output.match(/^\+[^+]/gm) ?? []).length;
+      const deletions = (output.match(/^-[^-]/gm) ?? []).length;
+
+      return {
+        output: `${output}\n\n+${additions} -${deletions} lines changed`,
+        success: true,
+        data: { additions, deletions },
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("not a git repository")) {
+        return { output: "Not a git repository.", success: false };
+      }
+      return { output: `git diff failed: ${msg}`, success: false };
+    }
+  },
+};
+
+// ── /share ─────────────────────────────────────────────────────
+
+const shareCommand: LocalCommand = {
+  name: "share",
+  description: "Export current session as a shareable JSON snapshot",
+  type: "local",
+  source: "builtin",
+
+  async call(
+    args: string,
+    context: CommandContext,
+  ): Promise<LocalCommandResult> {
+    const { writeFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+
+    const messages = context.extra?.messages as unknown[] | undefined;
+    if (!messages || messages.length === 0) {
+      return {
+        output:
+          "No conversation messages to share. Pass messages via the API:\n  POST /api/commands/execute { input: '/share', extra: { messages } }",
+        success: true,
+      };
+    }
+
+    const snapshot = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      model: context.model,
+      messageCount: messages.length,
+      messages,
+    };
+
+    const format = args.trim().toLowerCase();
+
+    if (format === "json" || format === "") {
+      // Write to file
+      const fileName = `session-${Date.now()}.json`;
+      const filePath = join(context.projectPath || process.cwd(), fileName);
+      writeFileSync(filePath, JSON.stringify(snapshot, null, 2), "utf-8");
+
+      return {
+        output: `Session exported to ${filePath} (${messages.length} messages)`,
+        success: true,
+        data: { filePath, messageCount: messages.length },
+      };
+    }
+
+    if (format === "clipboard") {
+      // Return JSON for the client to copy
+      return {
+        output: JSON.stringify(snapshot, null, 2),
+        success: true,
+        data: { format: "clipboard", messageCount: messages.length },
+      };
+    }
+
     return {
-      output: "Session sharing is not yet implemented. Coming in Phase 2.",
-      success: false,
+      output:
+        "Usage: /share [json|clipboard]\n  json — save to file (default)\n  clipboard — output JSON for copy",
+      success: true,
     };
   },
 };
 
-// ── /resume (placeholder) ──────────────────────────────────────
+// ── /resume ────────────────────────────────────────────────────
 
 const resumeCommand: LocalCommand = {
   name: "resume",
-  description: "Resume a previous session (coming soon)",
+  description: "Resume a previous session from an exported snapshot",
   type: "local",
   source: "builtin",
 
   async call(
-    _args: string,
-    _context: CommandContext,
+    args: string,
+    context: CommandContext,
   ): Promise<LocalCommandResult> {
-    return {
-      output: "Session resume is not yet implemented. Coming in Phase 2.",
-      success: false,
-    };
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+
+    const dir = context.projectPath || process.cwd();
+    const target = args.trim();
+
+    if (target) {
+      // Resume specific file
+      try {
+        const filePath = target.startsWith("/") ? target : join(dir, target);
+        const raw = readFileSync(filePath, "utf-8");
+        const snapshot = JSON.parse(raw) as {
+          version: number;
+          exportedAt: string;
+          model: string;
+          messageCount: number;
+          messages: unknown[];
+        };
+
+        return {
+          output: `Loaded session from ${filePath}\n  ${snapshot.messageCount} messages, exported ${snapshot.exportedAt}\n  Model: ${snapshot.model}`,
+          success: true,
+          data: {
+            messages: snapshot.messages,
+            model: snapshot.model,
+            source: filePath,
+          },
+        };
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { output: `Failed to load session: ${msg}`, success: false };
+      }
+    }
+
+    // List available session files
+    try {
+      const files = readdirSync(dir)
+        .filter((f) => f.startsWith("session-") && f.endsWith(".json"))
+        .sort()
+        .reverse()
+        .slice(0, 10);
+
+      if (files.length === 0) {
+        return {
+          output:
+            "No saved sessions found. Use /share to export a session first.",
+          success: true,
+        };
+      }
+
+      const lines = files.map((f) => `  ${f}`);
+      return {
+        output: `Available sessions:\n${lines.join("\n")}\n\nUsage: /resume <filename>`,
+        success: true,
+        data: { files },
+      };
+    } catch {
+      return {
+        output: "Could not scan for session files.",
+        success: false,
+      };
+    }
   },
 };
 
@@ -488,6 +655,7 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
   memoryCommand,
   tasksCommand,
   reviewCommand,
+  diffCommand,
   helpCommand,
   shareCommand,
   resumeCommand,

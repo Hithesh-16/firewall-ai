@@ -20,6 +20,9 @@ import AgentManagerPage from "./pages/agents";
 import TeamDashboard from "./pages/team";
 import TasksPage from "./pages/tasks";
 import MemoryPage from "./pages/memory";
+import PluginsPage from "./pages/plugins";
+import SkillsPage from "./pages/skills";
+import PrivacyPage from "./pages/privacy";
 import SetupWizardPage from "./pages/setup";
 import ThemePage from "./styles/ThemePage";
 import { ROUTES } from "./util/navigation";
@@ -48,6 +51,9 @@ const webOnlyRoutes = [
   { path: ROUTES.AGENTS, element: <AgentManagerPage /> },
   { path: ROUTES.TASKS, element: <TasksPage /> },
   { path: ROUTES.MEMORY, element: <MemoryPage /> },
+  { path: ROUTES.PLUGINS, element: <PluginsPage /> },
+  { path: ROUTES.SKILLS, element: <SkillsPage /> },
+  { path: ROUTES.PRIVACY, element: <PrivacyPage /> },
   { path: ROUTES.SETUP, element: <SetupWizardPage /> },
 ];
 

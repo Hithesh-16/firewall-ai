@@ -52,6 +52,7 @@
     "js-yaml": "^4.1.1"
   },
   "devDependencies": {
+    "@ai-firewall/brand": "file:../../packages/brand",
     "@ai-firewall/config-yaml": "file:../../packages/config-yaml",
     "@ai-firewall/openai-adapters": "file:../../packages/openai-adapters",
     "@ai-firewall/sdk": "npm:@continuedev/sdk@^0.0.13",

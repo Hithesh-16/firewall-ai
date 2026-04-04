@@ -77,6 +77,10 @@ try {
         __dirname,
         "../../packages/terminal-security/dist/index.js",
       ),
+      "@ai-firewall/brand": resolve(
+        __dirname,
+        "../../packages/brand/dist/index.js",
+      ),
     },
 
     // Add banner to create require for CommonJS packages

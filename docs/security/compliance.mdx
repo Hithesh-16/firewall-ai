@@ -1,0 +1,158 @@
+---
+title: "Compliance & Regulations"
+description: "Automated regulatory compliance mapping and evidence generation for GDPR, EU AI Act, HIPAA, NIST, SOC 2, and ISO 42001"
+---
+
+## Overview
+
+The compliance engine automatically maps security events detected by the scanner pipeline to specific regulatory obligations. When the proxy blocks a secret leak or redacts PII, the compliance mapper tells you exactly which GDPR articles, HIPAA sections, or SOC 2 controls are relevant -- and what remediation steps to take.
+
+This is not a substitute for legal counsel. It is an automated first-pass that accelerates audit preparation and evidence gathering.
+
+## Supported Regulations
+
+| Regulation | Jurisdiction | Articles | Focus |
+|------------|-------------|----------|-------|
+| **GDPR** | European Union | Art 5, 6, 9, 13, 17, 22, 25, 32, 33, 34 | Personal data processing, breach notification, data protection by design |
+| **EU AI Act** | European Union | Art 9, 13, 14, 15, 52 | AI risk management, transparency, human oversight, adversarial robustness |
+| **HIPAA** | United States | 164.502, 164.514, 164.524, 164.530 | PHI disclosure, de-identification, access rights, administrative requirements |
+| **NIST AI RMF** | United States | MAP, MEASURE, MANAGE, GOVERN | AI risk framing, assessment, treatment, governance |
+| **SOC 2** | International | CC6.1, CC6.6, CC7.2, CC8.1 | Logical access, boundary protection, monitoring, change management |
+| **ISO 42001** | International | 6.1, 8.2, 8.4, 9.1 | AI risk assessment, impact assessment, documentation, monitoring |
+
+**Total: 6 regulations, 31 articles.**
+
+## How Mapping Works
+
+The mapper takes a security event with a `type` and `severity`, then matches it against the regulatory article database:
+
+1. **Event type match** -- each article declares which event types it covers (e.g., `pii_detected`, `secret_leaked`, `injection_blocked`)
+2. **Severity threshold** -- each article has a minimum severity. A `low` severity PII event won't trigger HIPAA 164.502 (requires `high`), but it will trigger GDPR Art 25 (requires `low`)
+3. **Relevance classification** -- mappings are tagged as `direct` (the event directly implicates this article) or `indirect` (the event is tangentially relevant)
+
+### Supported Event Types
+
+| Event Type | Description | Example |
+|------------|-------------|---------|
+| `pii_detected` | Personal data found in prompt/response | Email, SSN, phone number sent to LLM |
+| `secret_leaked` | Credentials or API keys detected | AWS key in prompt, DB connection string |
+| `injection_blocked` | Prompt injection attempt blocked | Jailbreak attempt, system prompt extraction |
+| `hallucination` | Ungrounded claims in LLM output | Fabricated citations, incorrect facts |
+| `policy_violation` | Policy rule violated | Blocked model used, file scope exceeded |
+| `unauthorized_access` | Auth or RBAC failure | Invalid token, insufficient permissions |
+
+## API Endpoints
+
+### Map Event to Regulations
+
+```bash
+curl -X POST http://localhost:8080/api/compliance/map \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "type": "pii_detected",
+    "severity": "high",
+    "timestamp": 1712188800000,
+    "details": { "piiType": "SSN", "model": "gpt-4" }
+  }'
+```
+
+**Response:**
+
+```json
+[
+  {
+    "regulation": "GDPR",
+    "article": "Art 5",
+    "title": "Principles of Processing",
+    "description": "Personal data must be processed lawfully, fairly, and transparently",
+    "relevance": "direct",
+    "remediation": "Review data processing activities and ensure lawful basis for each"
+  },
+  {
+    "regulation": "GDPR",
+    "article": "Art 9",
+    "title": "Special Categories of Data",
+    "description": "Processing of sensitive personal data requires explicit consent",
+    "relevance": "direct",
+    "remediation": "Block transmission of special category data to AI providers"
+  },
+  {
+    "regulation": "HIPAA",
+    "article": "§164.502",
+    "title": "Uses and Disclosures",
+    "description": "PHI may only be used or disclosed as permitted",
+    "relevance": "direct",
+    "remediation": "Block all PHI from being transmitted to AI providers without BAA"
+  }
+]
+```
+
+Results are sorted with `direct` relevance first, then alphabetically by regulation.
+
+### Generate Evidence Package
+
+Generates a compliance evidence package from a batch of security events within a time range. Suitable for auditor review.
+
+```bash
+curl -X POST http://localhost:8080/api/compliance/evidence \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "events": [
+      { "type": "pii_detected", "severity": "high", "timestamp": 1712188800000 },
+      { "type": "secret_leaked", "severity": "critical", "timestamp": 1712189000000 },
+      { "type": "injection_blocked", "severity": "medium", "timestamp": 1712189200000 }
+    ],
+    "timeRange": { "start": 1712188000000, "end": 1712190000000 }
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "generatedAt": 1712189500000,
+  "timeRange": { "start": 1712188000000, "end": 1712190000000 },
+  "totalEvents": 3,
+  "summary": "3 security event(s) mapped to 14 regulatory article(s) across 6 regulation(s): EU AI Act, GDPR, HIPAA, ISO 42001, NIST AI RMF, SOC 2.",
+  "recommendations": [
+    "Review PII handling policies and strengthen redaction rules",
+    "Rotate potentially exposed credentials and tighten secret scanning patterns",
+    "Analyze blocked injection patterns and update threat intelligence feeds"
+  ]
+}
+```
+
+### List Supported Regulations
+
+```bash
+curl http://localhost:8080/api/compliance/regulations \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{
+  "regulations": [
+    { "name": "GDPR", "shortName": "GDPR", "articles": ["Art 5", "Art 6", "Art 9", "Art 13", "Art 17", "Art 22", "Art 25", "Art 32", "Art 33", "Art 34"], "jurisdiction": "European Union" },
+    { "name": "EU AI Act", "shortName": "EU AI Act", "articles": ["Art 9", "Art 13", "Art 14", "Art 15", "Art 52"], "jurisdiction": "European Union" },
+    { "name": "HIPAA", "shortName": "HIPAA", "articles": ["§164.502", "§164.514", "§164.524", "§164.530"], "jurisdiction": "United States" },
+    { "name": "NIST AI RMF", "shortName": "NIST AI RMF", "articles": ["GOVERN", "MANAGE", "MAP", "MEASURE"], "jurisdiction": "United States" },
+    { "name": "SOC 2", "shortName": "SOC 2", "articles": ["CC6.1", "CC6.6", "CC7.2", "CC8.1"], "jurisdiction": "International" },
+    { "name": "ISO 42001", "shortName": "ISO 42001", "articles": ["6.1", "8.2", "8.4", "9.1"], "jurisdiction": "International" }
+  ]
+}
+```
+
+## Configuration
+
+The compliance engine requires no configuration. It runs as a pure mapping function against the built-in regulatory database. To add new regulations or articles, extend the `REGULATORY_ARTICLES` array in `proxy/src/compliance/complianceMapper.ts` -- no existing code needs to change (Open/Closed Principle).
+
+<Info>
+All compliance endpoints require authentication via the `Authorization: Bearer` header. The compliance mapper is a pure function with no side effects -- it does not store events or generate alerts on its own.
+</Info>
+
+<Warning>
+Compliance mappings are informational. They identify which regulations may be relevant to a security event, but they do not constitute legal compliance. Always consult your compliance team or legal counsel for binding determinations.
+</Warning>

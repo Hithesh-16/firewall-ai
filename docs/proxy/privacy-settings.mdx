@@ -1,0 +1,94 @@
+---
+title: "Privacy & Data Controls"
+description: "Telemetry settings, data retention, export, and deletion for privacy-conscious deployments"
+---
+
+## Overview
+
+AI Firewall is designed to be privacy-first. All scanning happens locally — no data leaves your machine unless you explicitly configure an AI provider. This page covers the user-facing privacy controls.
+
+## Privacy Settings Page
+
+Access at `/privacy` in the web dashboard. Controls:
+
+### Telemetry
+
+- **Off by default** — no anonymous usage data is sent
+- Toggle on to help improve AI Firewall (no PII, secrets, or prompt content ever sent)
+
+### Data Retention
+
+Configure how long audit logs are kept:
+
+| Option | Description |
+|--------|-------------|
+| 7 days | Minimal retention |
+| 30 days | Default |
+| 90 days | Extended for compliance |
+| 1 year | Long-term audit trail |
+| Forever | Never auto-delete |
+
+### Log Anonymization
+
+When enabled, strips user IDs and IP addresses from audit logs after the retention period expires.
+
+### Data Export
+
+Export all your data:
+
+```bash
+# JSON export
+curl http://localhost:8080/api/export/json -o firewall-data.json
+
+# CSV export
+curl http://localhost:8080/api/export/csv -o firewall-data.csv
+```
+
+Or use the "Export JSON" / "Export CSV" buttons on the Privacy page.
+
+### Data Deletion
+
+Permanently delete all audit logs, usage data, and scan cache:
+
+```bash
+curl -X DELETE http://localhost:8080/api/privacy/data
+```
+
+<Warning>This action cannot be undone. All historical data will be permanently removed.</Warning>
+
+## What Data AI Firewall Stores
+
+| Data | Location | Purpose | Sensitive? |
+|------|----------|---------|-----------|
+| Audit logs | SQLite `logs` table | Request history (sanitized) | No — text is hashed |
+| Usage records | SQLite `usage_logs` | Token/cost tracking | No |
+| Scan cache | SQLite `file_scan_cache` | Avoid re-scanning files | No — keyed by SHA-256 hash |
+| API keys | SQLite `providers` | BYOK provider credentials | **Yes** — AES-256-GCM encrypted |
+| MCP audit | SQLite `mcp_audit` | MCP tool call history | No |
+| Memory files | `proxy/data/projects/` | Persistent agent memories | Potentially — user content |
+| Session state | SQLite `active_sessions` | Cross-device tracking | No |
+
+## What AI Firewall Does NOT Store
+
+- Raw prompt text (only SHA-256 hashes in audit logs)
+- Raw LLM responses
+- File contents (only scan results cached, keyed by content hash)
+- Unencrypted API keys (always AES-256-GCM)
+
+## Offline Mode
+
+AI Firewall works fully offline with local models (Ollama):
+
+1. No internet connection required
+2. All scanning is local (pure TypeScript regex, no cloud APIs)
+3. Token counting uses local WASM tokenizer
+4. Only the LLM provider call requires network (and Ollama is local)
+
+## Enterprise Compliance
+
+For organizations with strict compliance requirements:
+
+- **GDPR**: Data export and deletion endpoints satisfy Right to Access and Right to Erasure
+- **SOC 2**: Audit trail with SHA-256 hashing, AES-256-GCM encryption for secrets
+- **HIPAA**: PII detection + redaction before data reaches AI providers
+- **No third-party telemetry**: Zero external analytics by default

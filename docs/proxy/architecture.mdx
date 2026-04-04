@@ -83,6 +83,31 @@ The proxy is designed as a **gateway, not a controller**. It informs via headers
 **Exception:** File reads are actively enforced. The `readFile` tool in both CLI and core calls `POST /api/scan/file` before reading. If the proxy returns BLOCK, the file is never read. If it returns REDACT, the sanitized content is used instead. This is the one path where the proxy actively prevents access rather than just informing.
 </Tip>
 
+## Advanced Security Layers
+
+Beyond the core scanner pipeline, the proxy includes advanced security modules:
+
+| Layer | Module | Purpose |
+|-------|--------|---------|
+| Multi-Turn Tracking | `multiTurnTracker.ts` | Detects escalation, pivot, and repetition patterns across conversation turns |
+| RAG Injection Shield | `ragScanner.ts` | Scans documents/chunks before RAG ingestion (17 patterns) |
+| Intent Clustering | `intentCluster.ts` | SimHash fingerprinting detects coordinated attacks from multiple users |
+| Behavioral Fingerprinting | `behaviorFingerprint.ts` | Per-user z-score anomaly detection |
+| Prompt Confidentiality | `promptConfidentiality.ts` | Blocks system prompt extraction attempts (22 patterns) |
+| Cross-Model Correlation | `crossModelCorrelation.ts` | Groups attacks across GPT-4/Claude/Gemini into unified incidents |
+| Multi-Modal Scanner | `multiModalScanner.ts` | Scans images (OCR), audio transcripts, structured files |
+| Grounding Engine | `groundingEngine.ts` | Cross-references LLM outputs against source documents |
+| Embedding Detector | `embeddingDetector.ts` | ML-based injection detection (60-dim features, KNN + centroid) |
+| Federated Intelligence | `federatedIntel.ts` | Privacy-preserving threat signature sharing via LSH/MinHash |
+| Supply Chain Integrity | `supplyChain.ts` | Model hash verification, backdoor scanning, behavior drift |
+| Compliance Mapper | `complianceMapper.ts` | Maps events to GDPR, EU AI Act, HIPAA, NIST, SOC 2, ISO 42001 |
+| Business Logic DSL | `businessLogicDsl.ts` | Org-specific rule engine (9 operators, 5 actions) |
+| Red Team Agent | `redTeamAgent.ts` | 62 adversarial probes across 10 categories |
+| Shadow AI Detector | `shadowAiDetector.ts` | Detects unapproved LLM API usage (32 known endpoints) |
+| PII Vault | `piiVault.ts` | Reversible PII tokenization (replace before LLM, restore after) |
+
+See [Advanced Scanners](/security/advanced-scanners), [Advanced Features](/proxy/advanced-features), and the [Advanced API Reference](/api-reference/advanced-endpoints) for full details.
+
 ## Design Principles
 
 1. **Proxy is a gateway, not a controller** — informs, never modifies silently

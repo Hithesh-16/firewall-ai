@@ -25,6 +25,9 @@ export const ROUTES = {
   TASKS: "/tasks",
   MEMORY: "/memory",
   SETUP: "/setup",
+  PLUGINS: "/plugins",
+  SKILLS: "/skills",
+  PRIVACY: "/privacy",
 };
 
 // Helper function to build config URLs with tabs

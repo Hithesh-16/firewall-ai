@@ -1,0 +1,122 @@
+---
+title: "Integrations"
+description: "Connect AI Firewall to Slack, GitHub, and other services for notifications and automation"
+---
+
+## Slack Integration
+
+AI Firewall can send security notifications to Slack channels via Incoming Webhooks.
+
+### Setup
+
+<Steps>
+<Step title="Install the Slack App">
+Run from the CLI:
+```bash
+/install-slack-app install
+```
+This opens the Slack marketplace page. Install the app in your workspace.
+</Step>
+
+<Step title="Configure Webhook">
+After installing, copy the Incoming Webhook URL from Slack App Settings and configure it:
+```bash
+/install-slack-app webhook https://hooks.slack.com/services/T00/B00/XXX
+```
+The command verifies the webhook by sending a test message.
+</Step>
+
+<Step title="Verify">
+Send a test notification:
+```bash
+/install-slack-app test
+```
+</Step>
+</Steps>
+
+### What Gets Sent to Slack
+
+| Event | Slack Message |
+|-------|-------------|
+| Request blocked | Red alert with risk score and reason |
+| Approval needed | Action required with Allow/Deny context |
+| Approval resolved | Resolution status |
+| Credit exceeded | Warning with usage details |
+| Session started/ended | Session lifecycle info |
+| Policy changed | Configuration change notification |
+
+### Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `/install-slack-app install` | Open Slack app installation page |
+| `/install-slack-app webhook <URL>` | Configure incoming webhook URL |
+| `/install-slack-app test` | Send a test notification |
+| `/install-slack-app status` | Check configuration status |
+
+### API Configuration
+
+Configure Slack via the notification channels API:
+
+```bash
+curl -X POST http://localhost:8080/api/notifications/channels \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "slack",
+    "name": "Security Alerts",
+    "config": {
+      "webhookUrl": "https://hooks.slack.com/services/T00/B00/XXX",
+      "channel": "#security-alerts"
+    }
+  }'
+```
+
+## GitHub App Integration
+
+Full GitHub integration with OAuth flow, repo access, and PR automation.
+
+### Setup
+
+```bash
+/install-github-app
+```
+
+This opens the GitHub App installation page with:
+- OAuth authorization flow
+- Repository selection (all or specific repos)
+- Existing secret checks
+- GitHub Actions workflow generation
+
+### Capabilities
+
+- **PR Automation** — create PRs from agent work
+- **Repo Access** — read files and issues
+- **Actions Integration** — CI/CD workflow for security scanning
+
+## Notification Channels
+
+AI Firewall supports 4 notification channel types:
+
+| Channel | Config | Use Case |
+|---------|--------|----------|
+| **Webhook** | `{ url, headers }` | Any HTTP endpoint |
+| **Slack** | `{ webhookUrl, channel }` | Team notifications |
+| **Email** | `{ smtp, to }` | Compliance alerts |
+| **Web Push** | `{ subscription }` | Browser notifications |
+
+### Managing Channels
+
+```bash
+# List configured channels
+curl http://localhost:8080/api/notifications/channels
+
+# Add a new channel
+curl -X POST http://localhost:8080/api/notifications/channels \
+  -d '{"type": "webhook", "name": "PagerDuty", "config": {"url": "..."}}'
+
+# Remove a channel
+curl -X DELETE http://localhost:8080/api/notifications/channels/:id
+
+# Test all channels
+curl -X POST http://localhost:8080/api/notifications/test
+```

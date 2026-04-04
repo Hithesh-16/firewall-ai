@@ -23,8 +23,8 @@ description: "AI Firewall — local-first AI security gateway with token intelli
   <Card title="75% Token Savings" icon="chart-line">
     Context reduction strips comments and irrelevant code before sending to the LLM. Real tiktoken counting — not character heuristics.
   </Card>
-  <Card title="6 Security Scanners" icon="radar">
-    Secrets (12 patterns), PII (7 patterns), entropy analysis, prompt injection (13 categories), context-aware severity, plugin analysis.
+  <Card title="15+ Security Scanners" icon="radar">
+    Core pipeline (secrets, PII, entropy, injection) plus advanced scanners: RAG injection shield, multi-turn tracking, behavioral fingerprinting, grounding engine, multi-modal scanning, and more.
   </Card>
   <Card title="60+ LLM Providers" icon="brain">
     OpenAI, Anthropic, Gemini, Ollama, and 56 more. Switch providers without code changes. BYOK with AES-256-GCM encrypted vault.
@@ -41,9 +41,19 @@ description: "AI Firewall — local-first AI security gateway with token intelli
 | Pre-send security scanning | Yes | No | No | No |
 | Token optimization | 75% savings | — | — | — |
 | PII/Secret redaction | Yes | No | No | No |
+| Reversible PII tokenization | Yes | No | No | No |
 | Multi-provider (60+) | Yes | 3-4 | 1 | 1 |
 | Local-first / offline | Yes | No | No | No |
 | MCP tool I/O scanning | Yes | No | No | No |
+| Multi-turn attack detection | Yes | No | No | No |
+| RAG injection protection | Yes | No | No | No |
+| Hallucination grounding | Yes | No | No | No |
+| Multi-modal scanning | Yes | No | No | No |
+| Federated threat intel | Yes | No | No | No |
+| Compliance mapping (6 regs) | Yes | No | No | No |
+| Red team agent (62 probes) | Yes | No | No | No |
+| Shadow AI detection | Yes | No | No | No |
+| Business logic DSL | Yes | No | No | No |
 | Cost tracking + limits | Yes | No | No | No |
 | Open source | Yes | No | No | No |
 | Mobile approval | Yes | No | No | Partial |
@@ -62,6 +72,13 @@ description: "AI Firewall — local-first AI security gateway with token intelli
 | Multi-user / RBAC | — | Yes | Yes |
 | SSO (SAML/OIDC) | — | — | Yes |
 | Compliance reporting | — | — | Yes |
+| Advanced scanners (8 modules) | Yes | Yes | Yes |
+| Embedding ML detector | Yes | Yes | Yes |
+| Federated threat intelligence | — | Yes | Yes |
+| Red team agent | — | Yes | Yes |
+| Shadow AI detection | — | — | Yes |
+| Business logic DSL | — | Yes | Yes |
+| Supply chain integrity | — | — | Yes |
 
 <Info>
 **Core scanning is always free.** Expired licenses degrade to community tier — scanning never stops.
@@ -111,9 +128,18 @@ cd proxy && npx ts-node src/test/benchmark.ts
     System design and request flow
   </Card>
   <Card title="API Reference" icon="code" href="/api-reference/overview">
-    All 35+ proxy endpoints
+    All 65+ proxy endpoints
   </Card>
-  <Card title="Scanner Reference" icon="shield" href="/security/scanners">
-    All 6 scanners explained
+  <Card title="Core Scanners" icon="shield" href="/security/scanners">
+    7 core scanners explained
+  </Card>
+  <Card title="Advanced Scanners" icon="shield-check" href="/security/advanced-scanners">
+    8 advanced scanners (multi-turn, RAG, grounding, multi-modal)
+  </Card>
+  <Card title="Compliance" icon="scale-balanced" href="/security/compliance">
+    GDPR, EU AI Act, HIPAA, NIST, SOC 2, ISO 42001
+  </Card>
+  <Card title="Red Team Agent" icon="user-secret" href="/security/red-team">
+    62 adversarial probes across 10 categories
   </Card>
 </CardGroup>

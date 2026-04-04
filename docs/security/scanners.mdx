@@ -343,3 +343,18 @@ The scanner pipeline is enforced via the `policyEnforcer` middleware, which is w
 - **All routes now require auth** — previously 10+ routes (approvals, sessions, notifications, simulator) had zero authentication
 - **User registration assigns org role** — `user_org_roles` entry created on registration so `checkPermission()` works immediately
 - **Legacy role fallback** — users created before RBAC was added are auto-assigned based on their `users.role` field (self-healing)
+
+## Advanced Scanners
+
+Beyond the core scanner pipeline, AI Firewall includes 8 advanced scanners for deeper threat detection:
+
+- **Multi-Turn Attack Tracker** — detects slow-burn attacks across conversation turns
+- **RAG Injection Shield** — scans documents before RAG ingestion (17 patterns)
+- **Intent Clustering** — detects coordinated attacks from multiple users
+- **Behavioral Fingerprinting** — per-user anomaly detection via z-score profiling
+- **Prompt Confidentiality Shield** — blocks system prompt extraction attempts (22 patterns)
+- **Cross-Model Correlation** — groups attacks across GPT-4/Claude/Gemini into incidents
+- **Multi-Modal Scanner** — detects injection in images, audio, and structured files
+- **Grounding Engine** — cross-references LLM outputs against source documents
+
+See [Advanced Scanners](/security/advanced-scanners) for full details and API endpoints.

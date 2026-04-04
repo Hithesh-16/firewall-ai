@@ -8,8 +8,16 @@ import {
 import patchedFetch from "./node-fetch-patch.js";
 
 import { fetchwithRequestOptions } from "./fetch.js";
-import { extractFirewallMeta, extractScanHeaders, onScanResult } from "./scanHeaders.js";
-import type { FirewallScanResult, ScanResultListener } from "./scanHeaders.js";
+import {
+  extractFirewallMeta,
+  extractScanHeaders,
+  onScanResult,
+} from "./scanHeaders.js";
+import type {
+  FirewallScanResult,
+  ScanFinding,
+  ScanResultListener,
+} from "./scanHeaders.js";
 
 export {
   extractFirewallMeta,
@@ -23,4 +31,4 @@ export {
   toAsyncIterable,
 };
 
-export type { FirewallScanResult, ScanResultListener };
+export type { FirewallScanResult, ScanFinding, ScanResultListener };

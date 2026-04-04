@@ -110,8 +110,8 @@ export function CliInstallBanner({
         <div className="flex flex-col gap-3">
           <div>
             <div className="text-foreground flex items-center gap-2 font-medium">
-              <CommandLineIcon className="h-5 w-5 flex-shrink-0 text-description-muted" />
-              Try out the Continue CLI
+              <CommandLineIcon className="text-description-muted h-5 w-5 flex-shrink-0" />
+              Try out the AI Firewall CLI
             </div>
             <div className="text-description mt-1 text-sm">
               Use{" "}

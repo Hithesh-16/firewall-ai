@@ -1,0 +1,93 @@
+---
+title: "Setup Wizard"
+description: "Guided onboarding flow for first-time AI Firewall setup"
+---
+
+## Overview
+
+The setup wizard walks new users through initial configuration in 5 steps. It is accessible at the `/setup` route in the web dashboard and is shown automatically on first launch when no providers are configured.
+
+## Steps
+
+<Steps>
+
+### Step 1: Environment Check
+
+Verifies the proxy is running and reachable.
+
+**API call:** `GET /health`
+
+Checks:
+- Proxy is responding on port 8080
+- SQLite database is initialized
+- Scanner package is loaded
+
+If the health check fails, the wizard displays troubleshooting steps (is the proxy running? check `npm start` output).
+
+### Step 2: Provider Setup
+
+Configure at least one AI provider with an API key.
+
+**API call:** `POST /api/providers`
+
+```json
+{
+  "name": "openai",
+  "apiKey": "sk-proj-...",
+  "baseUrl": "https://api.openai.com/v1"
+}
+```
+
+Supported providers: OpenAI, Anthropic, Google Gemini, Ollama (local). The API key is encrypted with AES-256-GCM before storage in the token vault.
+
+<Tip>
+For local-only setups, select Ollama — no API key required. Just ensure Ollama is running on `localhost:11434`.
+</Tip>
+
+### Step 3: Security Configuration
+
+Set the base security policy. The wizard presents three presets:
+
+| Preset | Description | Behavior |
+|--------|-------------|----------|
+| **Strict** | Block all detected secrets and PII | `action: BLOCK` for any risk > 0 |
+| **Balanced** | Redact secrets, allow low-risk PII | `action: REDACT` for secrets, `ALLOW` for low-risk |
+| **Permissive** | Warn only, never block | `action: ALLOW` with warning headers |
+
+The selected preset writes to `policy.json`. Users can customize the policy later via the Security page or `PUT /api/policy`.
+
+### Step 4: First Scan
+
+Runs a test scan to verify the pipeline works end-to-end.
+
+**API call:** `POST /api/estimate`
+
+```json
+{
+  "model": "gpt-4o",
+  "messages": [
+    { "role": "user", "content": "Hello, this is a test message." }
+  ]
+}
+```
+
+The wizard displays the scan results: token count, estimated cost, risk score, and any findings. This confirms the scanner pipeline, token counter, and cost estimator are all functioning.
+
+### Step 5: Completion
+
+Confirms setup is complete and provides next steps:
+
+- Open the Chat page to start using the agent
+- Visit the Security dashboard to review scan history
+- Configure additional providers or adjust policy
+- Set up team members (if using org features)
+
+</Steps>
+
+## Route
+
+The setup wizard lives at `/setup` in the GUI. It is a single-page flow with a step indicator and back/next navigation. Each step validates before allowing progression to the next.
+
+## Skipping Setup
+
+Users can skip the wizard at any time. The wizard will reappear on next launch until at least one provider is configured. To permanently dismiss, the wizard sets a `setup_completed` flag in local storage.

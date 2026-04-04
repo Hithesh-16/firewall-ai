@@ -252,6 +252,78 @@ const injection = scanPromptInjection("Ignore all previous instructions");
 // → { score: 30, isInjection: false, matches: [{ pattern: "instruction_override" }] }
 ```
 
+## File Scan Enforcement
+
+Every file read in the CLI and core agent tools passes through the proxy's `/api/scan/file` endpoint **before** the file content is returned to the LLM. This closes the gap where restricted files could be read directly from the filesystem.
+
+**How it works:**
+1. Tool calls `readFile("path/to/file")`
+2. Static check: `throwIfFileIsSecurityConcern()` rejects known-dangerous paths (`.env`, `.pem`, `.ssh/`)
+3. Proxy scan: `scanFileViaProxy()` calls `POST /api/scan/file` with the file path
+4. Proxy runs full scanner pipeline (secrets, PII, entropy, injection) + policy evaluation
+5. Based on the decision:
+   - **BLOCK** → `ContinueError` thrown, file is **never read**
+   - **REDACT** → proxy's sanitized content returned (secrets replaced with `[REDACTED_TYPE]`)
+   - **ALLOW** → file read proceeds normally
+6. **Fail-open** — if the proxy is unreachable (not running), file reads proceed as before
+
+**Files enforcing this:**
+- `core/util/fileScanProxy.ts` — shared utility (5s timeout, fail-open)
+- `core/tools/implementations/readFile.ts` — core agent readFile tool
+- `extensions/cli/src/tools/readFile.ts` — CLI readFile tool
+
+<Info>
+The proxy caches scan results by SHA-256 content hash, so repeated reads of the same file are fast.
+</Info>
+
+## Scan Result Display
+
+When the proxy scans a request, the CLI and GUI show the scan result to the user with **malicious content highlighted in red**.
+
+### What's shown:
+- **Action** — ALLOW (green), REDACT (yellow), BLOCK (red)
+- **Risk score** — 0-100
+- **Findings** — each detected secret/PII item with:
+  - Severity badge (CRITICAL/HIGH in red, MEDIUM in yellow)
+  - Type label (e.g., `AWS_KEY`, `EMAIL`, `JWT`)
+  - Masked value in red (e.g., `AKIA********7E`, `j***@example.com`, `********1234`)
+
+### CLI display:
+```
+┌─────────────────────────────────────────┐
+│ ✖ BLOCK  Risk: 85/100                   │
+│ Secrets: 2  PII: 1                      │
+│                                          │
+│ Detected:                                │
+│ • [CRITICAL] AWS_KEY: AKIA********7E     │
+│ • [HIGH] BEARER_TOKEN: Bear********en   │
+│ • [HIGH] EMAIL: j***@example.com         │
+└─────────────────────────────────────────┘
+```
+
+### GUI display:
+The `ScanResultBanner` component shows a floating notification card with the same findings detail — severity badges, type labels, and masked values in red.
+
+### Auto-dismiss behavior:
+- **ALLOW** results auto-dismiss after 3 seconds
+- **REDACT/BLOCK** results persist until the next message is sent
+
+### Response header:
+The proxy sends findings via the `X-AF-Findings` header (compact JSON, max 20 items):
+```
+X-AF-Findings: [{"t":"AWS_KEY","s":"critical","c":"secret","v":"AKIA********7E"}]
+```
+
+### Masking rules:
+- Keys/tokens: first 4 + last 2 chars (e.g., `AKIA********7E`)
+- Emails: first char + masked local part + full domain (e.g., `j***@example.com`)
+- Phone/SSN/credit card: last 4 digits only (e.g., `********1234`)
+- Default: first 3 chars + masked rest
+
+<Warning>
+Masked values are safe for display — they never expose the full secret. The masking happens server-side in the proxy before the data leaves the scan endpoint.
+</Warning>
+
 ## Enforcement Chain (Post-Implementation)
 
 The scanner pipeline is enforced via the `policyEnforcer` middleware, which is wired into `/v1/chat/completions` as a Fastify `preHandler`:

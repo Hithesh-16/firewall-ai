@@ -5,6 +5,7 @@ import { useDispatch } from "react-redux";
 import { useAppSelector } from "../../redux/hooks";
 import { selectUIConfig } from "../../redux/slices/configSlice";
 import { deleteMessage } from "../../redux/slices/sessionSlice";
+import { MessageCostBadge } from "../security/CostBadge";
 import ThinkingBlockPeek from "../mainInput/belowMainInput/ThinkingBlockPeek";
 import StyledMarkdownPreview from "../StyledMarkdownPreview";
 import ConversationSummary from "./ConversationSummary";
@@ -23,6 +24,17 @@ export default function StepContainer(props: StepContainerProps) {
   const [isTruncated, setIsTruncated] = useState(false);
   const isStreaming = useAppSelector((state) => state.session.isStreaming);
   const uiConfig = useAppSelector(selectUIConfig);
+
+  // Show cost badge on the most recent assistant message using the
+  // latest scan result. We intentionally only show it on the last
+  // assistant message to avoid fragile index-based correlation between
+  // the recentScans array and history items.
+  const lastScanResult = useAppSelector((s) => s.security.lastScanResult);
+  const isAssistant = props.item.message.role === "assistant";
+  const messageCost =
+    isAssistant && props.isLast && lastScanResult?.tokensUsed
+      ? { tokens: lastScanResult.tokensUsed, cost: lastScanResult.cost }
+      : null;
 
   // Calculate dimming and indicator state based on latest summary index
   const latestSummaryIndex = props.latestSummaryIndex ?? -1;
@@ -77,7 +89,7 @@ export default function StepContainer(props: StepContainerProps) {
   return (
     <div>
       <div
-        className={`bg-transparent p-2 px-3 border-l-2 border-success/30 ml-1 ${isBeforeLatestSummary ? "opacity-35" : ""}`}
+        className={`border-success/30 ml-1 border-l-2 bg-transparent p-2 px-3 ${isBeforeLatestSummary ? "opacity-35" : ""}`}
       >
         {uiConfig?.displayRawMarkdown ? (
           <pre className="text-2xs max-w-full overflow-x-auto whitespace-pre-wrap break-words p-4">
@@ -106,7 +118,7 @@ export default function StepContainer(props: StepContainerProps) {
 
       {showResponseActions && (
         <div
-          className={`mt-2 h-7 transition-opacity duration-300 ease-in-out ${isBeforeLatestSummary || isStreaming ? "opacity-35" : ""} ${isStreaming && "pointer-events-none cursor-not-allowed"}`}
+          className={`mt-2 flex h-7 items-center gap-2 transition-opacity duration-300 ease-in-out ${isBeforeLatestSummary || isStreaming ? "opacity-35" : ""} ${isStreaming && "pointer-events-none cursor-not-allowed"}`}
         >
           <ResponseActions
             isTruncated={isTruncated}
@@ -116,6 +128,12 @@ export default function StepContainer(props: StepContainerProps) {
             item={props.item}
             isLast={props.isLast}
           />
+          {messageCost && (
+            <MessageCostBadge
+              tokens={messageCost.tokens}
+              cost={messageCost.cost}
+            />
+          )}
         </div>
       )}
 

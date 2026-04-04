@@ -39,6 +39,12 @@ import { registerTeamRoutes } from "./routes/team.route";
 import { registerScimRoutes } from "./routes/scim.route";
 import { registerRbacRoutes } from "./routes/rbac.route";
 import { registerReduceRoute } from "./routes/reduce.route";
+import { registerTaskRoutes } from "./routes/task.route";
+import { registerMemoryRoutes } from "./routes/memory.route";
+import { registerAgentRoutes } from "./routes/agent.route";
+import { registerCommandRoutes } from "./routes/command.route";
+import { registerSkillRoutes } from "./routes/skill.route";
+import { registerCronRoutes } from "./routes/cron.route";
 import { startWebhookPoller } from "./services/webhookQueue";
 import { startScheduledReports } from "./export/scheduledReports";
 import { logConfigSecurityWarnings } from "./middleware/configSecurityCheck";
@@ -47,23 +53,29 @@ async function bootstrap(): Promise<void> {
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? "info",
-      transport: process.env.NODE_ENV === "development"
-        ? { target: "pino-pretty" }
-        : undefined,
+      transport:
+        process.env.NODE_ENV === "development"
+          ? { target: "pino-pretty" }
+          : undefined,
       // NEVER log request bodies — they contain the secrets we're scanning for
       serializers: {
-        req: (req: { method: string; url: string }) => ({ method: req.method, url: req.url }),
+        req: (req: { method: string; url: string }) => ({
+          method: req.method,
+          url: req.url,
+        }),
       },
     },
   });
 
   // SECURITY: Only allow known origins — never use { origin: true } in production
   const ALLOWED_ORIGINS = [
-    "http://localhost:3000",   // GUI dev server
-    "http://localhost:5173",   // Vite dev server
+    "http://localhost:3000", // GUI dev server
+    "http://localhost:5173", // Vite dev server
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
-    ...(env.CORS_ORIGINS ? env.CORS_ORIGINS.split(",").map((o: string) => o.trim()) : []),
+    ...(env.CORS_ORIGINS
+      ? env.CORS_ORIGINS.split(",").map((o: string) => o.trim())
+      : []),
   ];
 
   await app.register(cors, {
@@ -85,7 +97,7 @@ async function bootstrap(): Promise<void> {
     if (fs.existsSync(dashboardDist)) {
       await app.register(fastifyStatic, {
         root: dashboardDist,
-        prefix: "/"
+        prefix: "/",
       });
       app.log.info(`Serving dashboard from ${dashboardDist}`);
     }
@@ -136,6 +148,24 @@ async function bootstrap(): Promise<void> {
   registerChannel(webhookChannel);
   registerChannel(slackChannel);
   registerChannel(emailChannel);
+
+  // Task management (Phase 1: Agent Core)
+  await registerTaskRoutes(app);
+
+  // Persistent memory system (Phase 1: Agent Core)
+  await registerMemoryRoutes(app);
+
+  // Agent lifecycle management (Phase 1: Agent Core)
+  await registerAgentRoutes(app);
+
+  // Command system (Phase 2: Commands & Extensibility)
+  await registerCommandRoutes(app);
+
+  // Skills system (Phase 2: Commands & Extensibility)
+  await registerSkillRoutes(app);
+
+  // Scheduled triggers (Phase 3: Multi-Agent)
+  await registerCronRoutes(app);
 
   // Context reduction (opt-in token optimization)
   await registerReduceRoute(app);

@@ -33,19 +33,27 @@ export const users = sqliteTable("users", {
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").default("developer").notNull(),
-  orgId: integer("org_id").references(() => organizations.id, { onDelete: "set null" }),
+  orgId: integer("org_id").references(() => organizations.id, {
+    onDelete: "set null",
+  }),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
 
 export const apiTokens = sqliteTable("api_tokens", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   tokenHash: text("token_hash").notNull().unique(),
   name: text("name").notNull(),
   scopes: text("scopes"),
-  orgId: integer("org_id").references(() => organizations.id, { onDelete: "cascade" }),
-  teamId: integer("team_id").references(() => teams.id, { onDelete: "cascade" }),
+  orgId: integer("org_id").references(() => organizations.id, {
+    onDelete: "cascade",
+  }),
+  teamId: integer("team_id").references(() => teams.id, {
+    onDelete: "cascade",
+  }),
   lastUsedAt: integer("last_used_at"),
   createdAt: integer("created_at").notNull(),
   expiresAt: integer("expires_at"),
@@ -65,7 +73,9 @@ export const providers = sqliteTable("providers", {
 
 export const models = sqliteTable("models", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  providerId: integer("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  providerId: integer("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
   modelName: text("model_name").notNull(),
   displayName: text("display_name"),
   inputCostPer1k: real("input_cost_per_1k").default(0),
@@ -76,8 +86,12 @@ export const models = sqliteTable("models", {
 
 export const credits = sqliteTable("credits", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  providerId: integer("provider_id").references(() => providers.id, { onDelete: "cascade" }),
-  modelId: integer("model_id").references(() => models.id, { onDelete: "cascade" }),
+  providerId: integer("provider_id").references(() => providers.id, {
+    onDelete: "cascade",
+  }),
+  modelId: integer("model_id").references(() => models.id, {
+    onDelete: "cascade",
+  }),
   limitType: text("limit_type").notNull(),
   totalLimit: real("total_limit").notNull(),
   usedAmount: real("used_amount").default(0),
@@ -90,14 +104,18 @@ export const credits = sqliteTable("credits", {
 export const usageLogs = sqliteTable("usage_logs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   logId: integer("log_id").references(() => logs.id),
-  providerId: integer("provider_id").notNull().references(() => providers.id),
+  providerId: integer("provider_id")
+    .notNull()
+    .references(() => providers.id),
   modelName: text("model_name").notNull(),
   inputTokens: integer("input_tokens").default(0),
   outputTokens: integer("output_tokens").default(0),
   totalTokens: integer("total_tokens").default(0),
   cost: real("cost").default(0),
   timestamp: integer("timestamp").notNull(),
-  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   teamId: integer("team_id"),
 });
 
@@ -126,7 +144,9 @@ export const auditQueue = sqliteTable("audit_queue", {
 
 export const ssoSessions = sqliteTable("sso_sessions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   provider: text("provider").notNull(),
   externalId: text("external_id").notNull(),
   accessTokenEncrypted: text("access_token_encrypted"),
@@ -137,7 +157,9 @@ export const ssoSessions = sqliteTable("sso_sessions", {
 
 export const webhooks = sqliteTable("webhooks", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  orgId: integer("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+  orgId: integer("org_id").references(() => organizations.id, {
+    onDelete: "cascade",
+  }),
   url: text("url").notNull(),
   events: text("events").notNull(),
   secret: text("secret"),
@@ -147,16 +169,22 @@ export const webhooks = sqliteTable("webhooks", {
 
 export const orgModelRules = sqliteTable("org_model_rules", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
   modelPattern: text("model_pattern").notNull(),
-  ruleType: text("rule_type").notNull(), 
+  ruleType: text("rule_type").notNull(),
   createdAt: integer("created_at").notNull(),
 });
 
 export const rateLimits = sqliteTable("rate_limits", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
-  orgId: integer("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "cascade",
+  }),
+  orgId: integer("org_id").references(() => organizations.id, {
+    onDelete: "cascade",
+  }),
   maxRequestsPerMinute: integer("max_requests_per_minute").default(30),
   maxTokensPerMinute: integer("max_tokens_per_minute").default(100000),
   createdAt: integer("created_at").notNull(),
@@ -179,7 +207,9 @@ export const mcpAudit = sqliteTable("mcp_audit", {
 
 export const approvalRequests = sqliteTable("approval_requests", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "cascade",
+  }),
   actionType: text("action_type").notNull(),
   resource: text("resource").notNull(),
   contextJson: text("context_json"),
@@ -191,7 +221,9 @@ export const approvalRequests = sqliteTable("approval_requests", {
 
 export const approvalRules = sqliteTable("approval_rules", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "cascade",
+  }),
   resourcePattern: text("resource_pattern").notNull(),
   actionType: text("action_type").notNull(),
   decision: text("decision").notNull(),
@@ -200,7 +232,9 @@ export const approvalRules = sqliteTable("approval_rules", {
 
 export const notificationChannels = sqliteTable("notification_channels", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "cascade",
+  }),
   channelType: text("channel_type").notNull(),
   configJson: text("config_json").notNull(),
   enabled: integer("enabled").default(1),
@@ -209,7 +243,9 @@ export const notificationChannels = sqliteTable("notification_channels", {
 
 export const webpushSubscriptions = sqliteTable("webpush_subscriptions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "cascade",
+  }),
   endpoint: text("endpoint").notNull().unique(),
   keysJson: text("keys_json").notNull(),
   deviceId: text("device_id"),
@@ -218,7 +254,9 @@ export const webpushSubscriptions = sqliteTable("webpush_subscriptions", {
 
 export const activeSessions = sqliteTable("active_sessions", {
   id: text("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "cascade",
+  }),
   deviceId: text("device_id").notNull(),
   deviceType: text("device_type").notNull(),
   model: text("model"),
@@ -228,7 +266,9 @@ export const activeSessions = sqliteTable("active_sessions", {
 
 export const webhookDeliveries = sqliteTable("webhook_deliveries", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  webhookId: integer("webhook_id").notNull().references(() => webhooks.id, { onDelete: "cascade" }),
+  webhookId: integer("webhook_id")
+    .notNull()
+    .references(() => webhooks.id, { onDelete: "cascade" }),
   event: text("event").notNull(),
   payloadHash: text("payload_hash").notNull(),
   idempotencyKey: text("idempotency_key").notNull().unique(),
@@ -278,7 +318,9 @@ export const ssoPendingStates = sqliteTable("sso_pending_states", {
 
 export const roles = sqliteTable("roles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  orgId: integer("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+  orgId: integer("org_id").references(() => organizations.id, {
+    onDelete: "cascade",
+  }),
   name: text("name").notNull(),
   displayName: text("display_name").notNull(),
   description: text("description"),
@@ -301,7 +343,9 @@ export const capabilities = sqliteTable("capabilities", {
 
 export const roleCapabilities = sqliteTable("role_capabilities", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  roleId: integer("role_id")
+    .notNull()
+    .references(() => roles.id, { onDelete: "cascade" }),
   capabilityName: text("capability_name").notNull(),
   scope: text("scope").notNull().default("org"),
   granted: integer("granted").notNull().default(1),
@@ -310,35 +354,56 @@ export const roleCapabilities = sqliteTable("role_capabilities", {
 
 export const userOrgRoles = sqliteTable("user_org_roles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
-  grantedBy: integer("granted_by").references(() => users.id, { onDelete: "set null" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  roleId: integer("role_id")
+    .notNull()
+    .references(() => roles.id, { onDelete: "cascade" }),
+  grantedBy: integer("granted_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
   expiresAt: integer("expires_at"),
   createdAt: integer("created_at").notNull(),
 });
 
 export const userTeamRoles = sqliteTable("user_team_roles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   teamId: integer("team_id").notNull(),
-  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
-  grantedBy: integer("granted_by").references(() => users.id, { onDelete: "set null" }),
+  roleId: integer("role_id")
+    .notNull()
+    .references(() => roles.id, { onDelete: "cascade" }),
+  grantedBy: integer("granted_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
   expiresAt: integer("expires_at"),
   createdAt: integer("created_at").notNull(),
 });
 
-export const userCapabilityOverrides = sqliteTable("user_capability_overrides", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-  capabilityName: text("capability_name").notNull(),
-  granted: integer("granted").notNull().default(1),
-  reason: text("reason").notNull(),
-  grantedBy: integer("granted_by").notNull(),
-  expiresAt: integer("expires_at"),
-  createdAt: integer("created_at").notNull(),
-});
+export const userCapabilityOverrides = sqliteTable(
+  "user_capability_overrides",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    capabilityName: text("capability_name").notNull(),
+    granted: integer("granted").notNull().default(1),
+    reason: text("reason").notNull(),
+    grantedBy: integer("granted_by").notNull(),
+    expiresAt: integer("expires_at"),
+    createdAt: integer("created_at").notNull(),
+  },
+);
 
 export const permissionAuditLog = sqliteTable("permission_audit_log", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -362,7 +427,9 @@ export const permissionAuditLog = sqliteTable("permission_audit_log", {
 
 export const teams = sqliteTable("teams", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   slug: text("slug").notNull(),
   createdAt: integer("created_at").notNull(),
@@ -370,8 +437,12 @@ export const teams = sqliteTable("teams", {
 
 export const teamMembers = sqliteTable("team_members", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  teamId: integer("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  teamId: integer("team_id")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   role: text("role").notNull().default("member"),
   joinedAt: integer("joined_at").notNull(),
 });
@@ -380,7 +451,9 @@ export const teamMembers = sqliteTable("team_members", {
 
 export const fileRestrictions = sqliteTable("file_restrictions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
   teamId: integer("team_id"),
   userId: integer("user_id"),
   mode: text("mode").notNull().default("blocklist"),
@@ -399,4 +472,27 @@ export const tokenVault = sqliteTable("token_vault", {
   type: text("type").notNull(),
   createdAt: integer("created_at").notNull(),
   expiresAt: integer("expires_at"),
+});
+
+// ── Tasks (Agent Core) ────────────────────────────────────────────────
+
+export const tasks = sqliteTable("tasks", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  status: text("status").notNull().default("pending"),
+  description: text("description").notNull(),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  agentId: text("agent_id"),
+  parentTaskId: text("parent_task_id"),
+  model: text("model"),
+  prompt: text("prompt"),
+  worktreePath: text("worktree_path"),
+  progressJson: text("progress_json"),
+  error: text("error"),
+  resultSummary: text("result_summary"),
+  startedAt: integer("started_at").notNull(),
+  completedAt: integer("completed_at"),
+  notified: integer("notified").default(0),
 });

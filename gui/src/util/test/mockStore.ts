@@ -56,6 +56,23 @@ export const getEmptyRootState: () => RootState = () => {
       pendingApprovals: [],
       approvalHistory: [],
     },
+    tasks: {
+      tasks: [],
+      activeCount: 0,
+      loading: false,
+      error: null,
+    },
+    memory: {
+      memories: [],
+      indexContent: "",
+      loading: false,
+      error: null,
+    },
+    permissions: {
+      queue: [],
+      rules: [],
+      loading: false,
+    },
   };
   const { streamAborter, ...serializableSession } = INITIAL_SESSION_STATE;
   const sessionCopy = copyOf(serializableSession) as Omit<

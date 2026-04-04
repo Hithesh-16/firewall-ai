@@ -1,0 +1,130 @@
+---
+title: "Cost Tracking"
+description: "Session-level cost tracking with per-model breakdowns and real-time display"
+---
+
+## Overview
+
+AI Firewall tracks token usage and cost per session, per model, in real time. The session cost tracker runs in-memory on the proxy, while persistent cost data is stored in the `usage_logs` table. The GUI displays cost via badge components and a React hook.
+
+## Session Cost Tracker
+
+**Location:** `proxy/src/gateway/costTracker.ts`
+
+The tracker maintains an in-memory map of sessions, each containing cumulative totals and per-model breakdowns.
+
+### Data Model
+
+```typescript
+interface SessionCost {
+  sessionId: string;
+  totalCostUSD: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalRequests: number;
+  modelUsage: Record<string, ModelUsage>;
+  startedAt: number;
+  lastRequestAt: number;
+}
+
+interface ModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  costUSD: number;
+  requestCount: number;
+}
+```
+
+### Functions
+
+| Function | Description |
+|----------|-------------|
+| `trackUsage(sessionId, model, inputTokens, outputTokens, costUSD)` | Record usage for a request |
+| `getSessionCost(sessionId)` | Get cost summary for a session |
+| `getAllSessionCosts()` | Get all active session costs |
+| `formatSessionCost(sessionId)` | Human-readable cost summary string |
+| `clearSession(sessionId)` | Remove a session's cost data |
+| `purgeOldSessions(maxAgeMs?)` | Remove sessions older than threshold (default 24h) |
+
+## Response Headers
+
+Every `/v1/chat/completions` response includes cost-related headers:
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `X-AF-Input-Tokens` | number | Real token count (tiktoken) |
+| `X-AF-Estimated-Cost` | number | Pre-request cost estimate in USD |
+| `X-AF-Token-Method` | `tiktoken` or `heuristic` | Token counting method used |
+
+## API
+
+### Usage summary
+
+```http
+GET /api/usage/summary
+```
+
+Returns aggregated usage data across sessions including total tokens, cost, and per-model breakdown.
+
+### Recent usage
+
+```http
+GET /api/usage/recent
+```
+
+Returns recent usage log entries from the `usage_logs` table (persistent).
+
+### Pre-flight estimate
+
+```http
+POST /api/estimate
+```
+
+Returns real token count, cost estimate, context window utilization, and scan preview **before** sending the request to a provider. Use this for cost confirmation UIs.
+
+## GUI Components
+
+### SessionCostBadge
+
+Displays the total cost for the current session. Updates in real time as requests complete.
+
+### MessageCostBadge
+
+Displays the cost of an individual message (input tokens + output tokens for that request).
+
+### useCostTracker Hook
+
+React hook that polls session cost data and provides formatted values:
+
+```typescript
+const { sessionCost, formatCost, formatTokens } = useCostTracker(sessionId);
+```
+
+### Format Helpers
+
+| Helper | Example Output |
+|--------|---------------|
+| `formatCost(0.0042)` | `$0.0042` |
+| `formatCost(1.50)` | `$1.50` |
+| `formatTokens(1500)` | `1.5K` |
+| `formatTokens(2500000)` | `2.5M` |
+
+## Cost-Aware Routing
+
+<Info>
+Cost-aware routing is **opt-in** via `policy.json`. When disabled (default), the smart router uses risk-based routing only.
+</Info>
+
+When enabled, the router considers remaining credit budget alongside risk score to select the optimal provider/model combination. Configure in `policy.json`:
+
+```json
+{
+  "cost_routing": {
+    "enabled": true,
+    "prefer_cheaper_below_risk": 30
+  }
+}
+```
+
+This routes requests with risk score below 30 to the cheapest available model, while higher-risk requests continue to use the risk-based routing logic.

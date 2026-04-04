@@ -31,6 +31,60 @@ const DEFAULT_OPTIONS: Required<ExponentialBackoffOptions> = {
 };
 
 /**
+ * Checks if the error is a non-retryable provider error (quota, billing, auth, model blocked).
+ * These will never succeed on retry — fail immediately with a clean message.
+ */
+function isNonRetryableProviderError(err: any): string | null {
+  const msg = (err.message ?? "").toLowerCase();
+  const errBody =
+    typeof err.error === "string"
+      ? err.error.toLowerCase()
+      : JSON.stringify(err.error ?? "").toLowerCase();
+  const combined = msg + " " + errBody;
+
+  // Quota / billing exhausted (Gemini, OpenAI, Groq, Anthropic)
+  if (
+    combined.includes("quota") ||
+    combined.includes("exceeded your current quota") ||
+    combined.includes("resource_exhausted") ||
+    combined.includes("billing")
+  ) {
+    return "API quota exceeded. Check your plan and billing at your provider's console. Use /model to switch models.";
+  }
+
+  // Invalid API key / auth
+  if (
+    combined.includes("invalid api key") ||
+    combined.includes("invalid_api_key") ||
+    combined.includes("incorrect api key") ||
+    combined.includes("authentication")
+  ) {
+    return "Invalid API key. Check your key in the config. Use /model to switch models.";
+  }
+
+  // Model not found / decommissioned / blocked
+  if (
+    combined.includes("decommissioned") ||
+    combined.includes("does not exist") ||
+    combined.includes("model not found") ||
+    combined.includes("is blocked")
+  ) {
+    return "Model unavailable or blocked. Use /model to switch to a different model.";
+  }
+
+  // Insufficient permissions / access denied
+  if (
+    combined.includes("permission denied") ||
+    combined.includes("access denied") ||
+    combined.includes("insufficient_quota")
+  ) {
+    return "Access denied by provider. Check your account permissions. Use /model to switch models.";
+  }
+
+  return null;
+}
+
+/**
  * Checks if the error is a network-related error
  */
 function isNetworkError(error: any): boolean {
@@ -117,6 +171,14 @@ export function isContextLengthError(error: unknown): boolean {
 function isRetryableError(error: any): boolean {
   // Context length errors are never retryable - they need user intervention
   if (isContextLengthError(error)) {
+    return false;
+  }
+
+  // Provider-specific non-retryable errors (quota, billing, auth, model blocked)
+  const providerMsg = isNonRetryableProviderError(error);
+  if (providerMsg) {
+    // Replace the raw error message with a clean one
+    error.message = providerMsg;
     return false;
   }
 

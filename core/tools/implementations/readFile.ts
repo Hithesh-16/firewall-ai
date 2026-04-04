@@ -6,6 +6,7 @@ import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
 import { getStringArg } from "../parseArgs";
 import { throwIfFileExceedsHalfOfContext } from "./readFileLimit";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
+import { scanFileViaProxy } from "../../util/fileScanProxy";
 import { countTokensAsync } from "../../llm/countTokens";
 
 /**
@@ -36,7 +37,24 @@ export const readFileImpl: ToolImpl = async (args, extras) => {
   // Security check on the resolved display path
   throwIfFileIsSecurityConcern(resolvedPath.displayPath);
 
-  const content = await extras.ide.readFile(resolvedPath.uri);
+  // Proxy-side file scan enforcement (fail-open if proxy unreachable)
+  const scanDecision = await scanFileViaProxy(
+    resolvedPath.displayPath,
+    extras.fetch as typeof fetch,
+  );
+
+  if (scanDecision.action === "BLOCK") {
+    throw new ContinueError(
+      ContinueErrorReason.FileIsSecurityConcern,
+      `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+    );
+  }
+
+  // For REDACT, use proxy's sanitized content; for ALLOW, read normally
+  const content =
+    scanDecision.action === "REDACT" && scanDecision.redactedContent
+      ? scanDecision.redactedContent
+      : await extras.ide.readFile(resolvedPath.uri);
 
   // Try context reduction for large files before throwing "too large" error
   const reducedContent = await tryReduceContent(
@@ -78,7 +96,14 @@ export const readFileImpl: ToolImpl = async (args, extras) => {
 async function tryReduceContent(
   content: string,
   filepath: string,
-  extras: { fetch: Function; config: { selectedModelByRole: { chat?: { contextLength: number; title?: string } | null } } },
+  extras: {
+    fetch: Function;
+    config: {
+      selectedModelByRole: {
+        chat?: { contextLength: number; title?: string } | null;
+      };
+    };
+  },
 ): Promise<string> {
   const model = extras.config.selectedModelByRole.chat;
   if (!model) return content;
@@ -113,7 +138,11 @@ async function tryReduceContent(
 
     if (response && typeof response.json === "function") {
       const data = await response.json();
-      if (data?.reduced && typeof data.reduced === "string" && data.reduced.length > 0) {
+      if (
+        data?.reduced &&
+        typeof data.reduced === "string" &&
+        data.reduced.length > 0
+      ) {
         return data.reduced;
       }
     }

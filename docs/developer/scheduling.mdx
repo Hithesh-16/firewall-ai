@@ -1,0 +1,202 @@
+---
+title: "Scheduling & Feature Flags"
+description: "Cron-based agent scheduling, feature flag rollouts, and event-driven hooks"
+---
+
+## Cron Service
+
+**Location:** `proxy/src/services/cronService.ts`
+
+Schedule agents to run at regular intervals. Cron jobs are stored in-memory (backed by DB) and checked every minute by an internal poller.
+
+### Schedule Format
+
+Simple duration strings — no POSIX cron syntax:
+
+| Format | Meaning | Minimum |
+|--------|---------|---------|
+| `5m` | Every 5 minutes | 1m |
+| `1h` | Every hour | — |
+| `24h` | Every 24 hours | — |
+| `7d` | Every 7 days | — |
+
+Regex: `/^\d+(m|h|d)$/`
+
+### API
+
+All endpoints require `Authorization: Bearer afw_...`.
+
+#### Create a cron job
+
+```http
+POST /api/cron
+```
+
+```json
+{
+  "name": "Daily security scan",
+  "schedule": "24h",
+  "agentConfig": {
+    "description": "Scan project for new vulnerabilities",
+    "prompt": "Run a full security scan on the src/ directory...",
+    "model": "claude-sonnet-4-20250514",
+    "background": true
+  }
+}
+```
+
+**Response (201):**
+
+```json
+{
+  "job": {
+    "id": "cron_1712000000_abc123",
+    "name": "Daily security scan",
+    "schedule": "24h",
+    "enabled": true,
+    "nextRunAt": 1712086400000,
+    "runCount": 0
+  }
+}
+```
+
+#### List cron jobs
+
+```http
+GET /api/cron
+```
+
+Returns all cron jobs for the authenticated user.
+
+#### Enable / disable a cron job
+
+```http
+POST /api/cron/:id/enable
+POST /api/cron/:id/disable
+```
+
+#### Delete a cron job
+
+```http
+DELETE /api/cron/:id
+```
+
+### Security
+
+Each cron execution creates a new agent with an independent scan context. Cron jobs respect rate limits per-execution — there is no bypass for scheduled runs.
+
+---
+
+## Feature Flags
+
+**Location:** `proxy/src/services/featureFlagService.ts`
+
+Simple in-memory feature flag system for gradual rollouts. No external dependencies.
+
+### Data Model
+
+```typescript
+interface FeatureFlag {
+  name: string;
+  description: string;
+  enabled: boolean;
+  rolloutPercent: number | null;  // 0-100, null = use enabled boolean
+  includeUserIds?: number[];      // Always enabled for these users
+  excludeUserIds?: number[];      // Always disabled for these users
+}
+```
+
+### Evaluation Order
+
+When checking `isFeatureEnabled(name, userId)`:
+
+1. **Exclude list** — if user is in `excludeUserIds`, return `false`
+2. **Include list** — if user is in `includeUserIds`, return `true`
+3. **Rollout percent** — hash-based consistent assignment (`hash(name:userId) % 100 < rolloutPercent`)
+4. **Enabled boolean** — fallback to the flag's `enabled` value
+
+### Functions
+
+| Function | Description |
+|----------|-------------|
+| `setFlag(flag)` | Create or update a feature flag |
+| `removeFlag(name)` | Delete a feature flag |
+| `getFlag(name)` | Get a flag definition |
+| `listFlags()` | List all defined flags |
+| `isFeatureEnabled(name, userId?)` | Check if enabled for a specific user |
+
+### Usage
+
+```typescript
+import { setFlag, isFeatureEnabled } from "../services/featureFlagService";
+
+setFlag({
+  name: "new-scanner-v2",
+  description: "Use the new prompt injection scanner",
+  enabled: false,
+  rolloutPercent: 25,
+});
+
+if (isFeatureEnabled("new-scanner-v2", userId)) {
+  // Use new scanner
+}
+```
+
+---
+
+## Hook Service
+
+**Location:** `proxy/src/services/hookService.ts`
+
+Event-driven shell command hooks. Configure hooks in policy settings to fire on specific events.
+
+### Event Types
+
+The hook service supports 13 event types:
+
+| Event | Fires When |
+|-------|------------|
+| `tool_call` | A tool is invoked |
+| `tool_result` | A tool returns a result |
+| `scan_blocked` | A scan results in BLOCK |
+| `scan_redacted` | A scan results in REDACT |
+| `task_created` | A new task is created |
+| `task_completed` | A task completes successfully |
+| `task_failed` | A task fails |
+| `agent_spawned` | An agent is spawned |
+| `agent_completed` | An agent completes |
+| `memory_saved` | A memory entry is saved |
+| `command_executed` | A slash command is executed |
+| `approval_needed` | An approval request is created |
+| `approval_resolved` | An approval is resolved |
+
+### Configuration
+
+Hooks are configured in policy.json or settings (not user input):
+
+```json
+{
+  "hooks": {
+    "tool_call": ["echo 'tool called: $TOOL_NAME' >> /tmp/hooks.log"],
+    "scan_blocked": ["curl -X POST http://slack/webhook -d '{\"text\":\"BLOCKED\"}'"],
+    "task_completed": ["notify-send 'Task done: $TASK_ID'"]
+  }
+}
+```
+
+### Functions
+
+| Function | Description |
+|----------|-------------|
+| `registerHook(config)` | Register a single hook |
+| `registerHooks(configs)` | Register multiple hooks |
+| `unregisterHooks(event)` | Remove all hooks for an event |
+| `fireHooks(event, context)` | Execute all hooks for an event with variable expansion |
+
+### Security
+
+<Warning>
+Hook commands are executed with the proxy's process permissions. They come from settings files only — never from user input. Hook output is logged but never returned to the LLM. Hook failures never block the main request pipeline. Environment variables are sanitized to prevent secret leaking.
+</Warning>
+
+Default timeout per hook: 10 seconds. Maximum result history: 100 entries.

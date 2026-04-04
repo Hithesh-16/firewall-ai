@@ -23,6 +23,9 @@ import agentReducer from "./slices/agentSlice";
 import securityReducer from "./slices/securitySlice";
 import sessionReducer from "./slices/sessionSlice";
 import tabsReducer from "./slices/tabsSlice";
+import taskReducer from "./slices/taskSlice";
+import memoryReducer from "./slices/memorySlice";
+import permissionReducer from "./slices/permissionSlice";
 import uiReducer from "./slices/uiSlice";
 
 const rootReducer = combineReducers({
@@ -35,6 +38,9 @@ const rootReducer = combineReducers({
   profiles: profilesReducer,
   security: securityReducer,
   agent: agentReducer,
+  tasks: taskReducer,
+  memory: memoryReducer,
+  permissions: permissionReducer,
 });
 
 const saveSubsetFilters = [

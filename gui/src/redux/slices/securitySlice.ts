@@ -1,5 +1,12 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
+export interface ScanFinding {
+  type: string;
+  severity: string;
+  category: "secret" | "pii";
+  maskedValue: string;
+}
+
 export interface ScanResult {
   action: "ALLOW" | "REDACT" | "BLOCK" | "REQUIRE_APPROVAL";
   riskScore: number;
@@ -7,6 +14,7 @@ export interface ScanResult {
   piiCount: number;
   entropyCount: number;
   redactedTypes: string[];
+  findings: ScanFinding[];
   tokensUsed?: number;
   cost?: number;
   timestamp: number;
@@ -57,10 +65,19 @@ export const ACTIVITY_LABELS: Record<
 > = {
   scanning_secrets: { icon: "\uD83D\uDD10", text: "Scanning for secrets..." },
   scanning_pii: { icon: "\uD83D\uDC64", text: "Scanning for PII..." },
-  scanning_injection: { icon: "\uD83D\uDEE1\uFE0F", text: "Checking for prompt injection..." },
-  checking_policy: { icon: "\uD83D\uDCCB", text: "Evaluating security policy..." },
+  scanning_injection: {
+    icon: "\uD83D\uDEE1\uFE0F",
+    text: "Checking for prompt injection...",
+  },
+  checking_policy: {
+    icon: "\uD83D\uDCCB",
+    text: "Evaluating security policy...",
+  },
   counting_tokens: { icon: "\uD83D\uDD22", text: "Counting tokens..." },
-  checking_context_window: { icon: "\uD83D\uDCCF", text: "Checking context window..." },
+  checking_context_window: {
+    icon: "\uD83D\uDCCF",
+    text: "Checking context window...",
+  },
   estimating_cost: { icon: "\uD83D\uDCB0", text: "Estimating cost..." },
   reducing_context: { icon: "\u2702\uFE0F", text: "Optimizing context..." },
   redacting: { icon: "\uD83D\uDD12", text: "Redacting sensitive data..." },

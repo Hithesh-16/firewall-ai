@@ -3,15 +3,15 @@
  *
  * Loads hooks from settings files in the same locations as Claude Code:
  * - ~/.ai-firewall/settings.json  (user-global)
- * - .continue/settings.json    (project, committable)
- * - .continue/settings.local.json (project-local, gitignored)
+ * - .ai-firewall/settings.json    (project, committable)
+ * - .ai-firewall/settings.local.json (project-local, gitignored)
  *
  * Also supports Claude Code's native locations for cross-compatibility:
  * - ~/.claude/settings.json
  * - .claude/settings.json
  * - .claude/settings.local.json
  *
- * Hooks from all sources are merged (project > user, continue > claude).
+ * Hooks from all sources are merged (project > user, ai-firewall > claude).
  */
 
 import * as fs from "fs";

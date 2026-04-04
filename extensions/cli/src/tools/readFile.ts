@@ -2,6 +2,7 @@ import * as fs from "fs";
 
 import { throwIfFileIsSecurityConcern } from "core/indexing/ignore.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
+import { scanFileViaProxy } from "core/util/fileScanProxy.js";
 
 import { parseEnvNumber } from "../util/truncateOutput.js";
 
@@ -81,7 +82,22 @@ export const readFileTool: Tool = {
         );
       }
       const realPath = fs.realpathSync(filepath);
-      const content = fs.readFileSync(realPath, "utf-8");
+
+      // Proxy-side file scan enforcement (fail-open if proxy unreachable)
+      const scanDecision = await scanFileViaProxy(realPath);
+
+      if (scanDecision.action === "BLOCK") {
+        throw new ContinueError(
+          ContinueErrorReason.FileIsSecurityConcern,
+          `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+        );
+      }
+
+      // For REDACT, use proxy's sanitized content; for ALLOW, read normally
+      const content =
+        scanDecision.action === "REDACT" && scanDecision.redactedContent
+          ? scanDecision.redactedContent
+          : fs.readFileSync(realPath, "utf-8");
 
       // Divide limits by parallel tool call count to avoid context overflow
       const parallelCount = context?.parallelToolCallCount ?? 1;

@@ -29,6 +29,7 @@ import StepContainer from "../../components/StepContainer";
 import { TabBar } from "../../components/TabBar/TabBar";
 import { SessionCostBadge } from "../../components/security/CostBadge";
 import { ScanResultBanner } from "../../components/security/ScanResultBanner";
+import { PreflightPanel } from "../../components/security/PreflightPanel";
 import { FirewallActivityIndicator } from "../../components/security/FirewallActivityIndicator";
 import { ShieldStatus } from "../../components/security/ShieldStatus";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
@@ -63,6 +64,7 @@ import { FatalErrorIndicator } from "../../components/config/FatalErrorNotice";
 import InlineErrorMessage from "../../components/mainInput/InlineErrorMessage";
 import { resolveEditorContent } from "../../components/mainInput/TipTapEditor/utils/resolveEditorContent";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
+import { clearPreflight } from "../../redux/slices/securitySlice";
 import { RootState } from "../../redux/store";
 import { cancelStream } from "../../redux/thunks/cancelStream";
 import { getLocalStorage, setLocalStorage } from "../../util/localStorage";
@@ -92,6 +94,26 @@ const StepsDiv = styled.div`
     margin: 0 0 0 1px;
   }
 `;
+
+/**
+ * Wrapper that renders PreflightPanel when a preflight result is pending.
+ * Shows scan results before the user decides to proceed, redact, or cancel.
+ */
+function PreflightPanelWrapper() {
+  const dispatch = useAppDispatch();
+  const preflightResult = useAppSelector((s) => s.security.preflightResult);
+
+  if (!preflightResult) return null;
+
+  return (
+    <PreflightPanel
+      scanResult={preflightResult}
+      onProceed={() => dispatch(clearPreflight())}
+      onRedact={() => dispatch(clearPreflight())}
+      onCancel={() => dispatch(clearPreflight())}
+    />
+  );
+}
 
 export const MAIN_EDITOR_INPUT_ID = "main-editor-input";
 
@@ -152,8 +174,10 @@ export function Chat() {
   useAutoScroll(stepsDivRef, history);
 
   // Sticky prompt header tracking
-  const { activePromptIndex, isFirstPromptVisible } =
-    useActivePromptTracking(stepsDivRef, history);
+  const { activePromptIndex, isFirstPromptVisible } = useActivePromptTracking(
+    stepsDivRef,
+    history,
+  );
   const stickyVisible =
     activePromptIndex !== null && !isFirstPromptVisible && history.length > 0;
   const canRevert =
@@ -161,9 +185,7 @@ export function Chat() {
 
   const handleStickyEdit = useCallback((index: number) => {
     const container = stepsDivRef.current;
-    const promptEl = container?.querySelector(
-      `[data-prompt-index="${index}"]`,
-    );
+    const promptEl = container?.querySelector(`[data-prompt-index="${index}"]`);
     if (!promptEl || !container) return;
 
     promptEl.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -496,7 +518,7 @@ export function Chat() {
   return (
     <>
       {/* AI Firewall status bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-gradient-to-r from-emerald-950/20 to-transparent">
+      <div className="border-border flex items-center justify-between border-b bg-gradient-to-r from-emerald-950/20 to-transparent px-3 py-1.5">
         <ShieldStatus />
         <SessionCostBadge />
       </div>
@@ -529,8 +551,7 @@ export function Chat() {
                 item.message.role === "user" ? originalIndex : undefined
               }
               style={{
-                minHeight:
-                  originalIndex === history.length - 1 ? "200px" : 0,
+                minHeight: originalIndex === history.length - 1 ? "200px" : 0,
               }}
             >
               <ErrorBoundary
@@ -541,14 +562,13 @@ export function Chat() {
               >
                 {renderChatHistoryItem(item, originalIndex)}
               </ErrorBoundary>
-              {originalIndex === history.length - 1 && (
-                <InlineErrorMessage />
-              )}
+              {originalIndex === history.length - 1 && <InlineErrorMessage />}
             </div>
           ))}
       </StepsDiv>
       <FirewallActivityIndicator />
       <ScanResultBanner />
+      <PreflightPanelWrapper />
       <div className={"relative"}>
         <ContinueInputBox
           isMainInput

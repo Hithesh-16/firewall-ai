@@ -169,7 +169,10 @@ export type ChatCompletionRequest = {
 
 // --- Phase 2 types ---
 
-export type SmartRoutingTarget = "local_llm" | "cloud_redacted" | "cloud_direct";
+export type SmartRoutingTarget =
+  | "local_llm"
+  | "cloud_redacted"
+  | "cloud_direct";
 
 export type SmartRoutingRoute = {
   condition: string;
@@ -401,8 +404,18 @@ export type FileScanResult = {
   secretsFound: number;
   piiFound: number;
   entropyFound: number;
-  secrets: Array<{ type: string; severity: string; position: number; length: number }>;
-  pii: Array<{ type: string; severity: string; position: number; length: number }>;
+  secrets: Array<{
+    type: string;
+    severity: string;
+    position: number;
+    length: number;
+  }>;
+  pii: Array<{
+    type: string;
+    severity: string;
+    position: number;
+    length: number;
+  }>;
   redactedContent?: string;
   cached: boolean;
   scanDurationMs: number;
@@ -411,7 +424,11 @@ export type FileScanResult = {
 // --- Phase 4: Control Plane types ---
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired";
-export type ApprovalDecision = "allow_once" | "allow_always" | "deny" | "deny_always";
+export type ApprovalDecision =
+  | "allow_once"
+  | "allow_always"
+  | "deny"
+  | "deny_always";
 
 export type ApprovalRequest = {
   id: number;
@@ -453,7 +470,8 @@ export type WsEventType =
   | "session_started"
   | "session_ended"
   | "tool_called"
-  | "scan_result";
+  | "scan_result"
+  | "task_event";
 
 export type WsEvent = {
   type: WsEventType;

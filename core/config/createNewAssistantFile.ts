@@ -39,7 +39,7 @@ export async function createNewAssistantFile(
 
   const baseDirUri = joinPathsToUri(
     workspaceDirs[0],
-    assistantPath ?? ".continue/agents",
+    assistantPath ?? ".ai-firewall/agents",
   );
 
   // Find the first available filename

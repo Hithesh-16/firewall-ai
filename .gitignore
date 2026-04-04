@@ -143,6 +143,7 @@ Icon
 Icon?
 
 .continuerc.json
+.aifirewallrc.json
 .aider*
 
 *.notes.md
@@ -151,6 +152,7 @@ notes.md
 
 manual-testing-sandbox/.idea/**
 manual-testing-sandbox/.continue/**
+manual-testing-sandbox/.ai-firewall/**
 extensions/intellij/.idea/**
 
 **/.idea/workspace.xml
@@ -163,6 +165,7 @@ extensions/intellij/.idea/**
 
 extensions/intellij/bin
 extensions/.continue-debug/
+extensions/.ai-firewall-debug/
 
 *.vsix
 
@@ -170,7 +173,9 @@ extensions/.continue-debug/
 *.iml
 
 .continuerules
+.aifirewallrules
 **/.continue/assistants/
+**/.ai-firewall/assistants/
 keys
 
 .channels_cache.json
@@ -203,3 +208,6 @@ docs/AUDIT_REPORT.md
 
 claude-code/
 
+
+# AI Firewall runtime data (DB, memory files, test artifacts)
+proxy/data/

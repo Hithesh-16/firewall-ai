@@ -1,0 +1,167 @@
+---
+title: "Agent System"
+description: "Sub-agent spawning, worktree isolation, inter-agent messaging, and context compaction"
+---
+
+## Agent Service
+
+Manages the full lifecycle of sub-agents: spawn, kill, status, worktree isolation, and messaging.
+
+### Agent Modes
+
+| Mode | Description | Timeout |
+|------|-------------|---------|
+| `local` | Synchronous, blocks until result | 5 min |
+| `background` | Async, notifies via WebSocket | 10 min |
+| `coordinator` | Orchestrates worker agents | 5 min |
+| `worker` | Spawned by coordinator, limited tools | 5 min |
+| `dream` | Idle-time memory consolidation (future) | -- |
+
+### Built-in Agent Definitions
+
+| Name | Mode | Allowed Tools | Denied Tools |
+|------|------|--------------|--------------|
+| `general-purpose` | local | All | None |
+| `explore` | local | glob, grep, read, web_search, web_fetch | edit, write, bash, notebook_edit |
+| `plan` | local | glob, grep, read, web_search | edit, write, bash, notebook_edit |
+| `background` | background | All | None |
+
+### API Endpoints
+
+#### Spawn Agent
+```http
+POST /api/agents/spawn
+Content-Type: application/json
+
+{
+  "description": "Research auth patterns",
+  "prompt": "Find all authentication-related files",
+  "background": false,
+  "worktreeIsolation": false
+}
+```
+Response: `201` with `{ taskId, agentId, worktreePath, background }`.
+
+#### List Agents
+```http
+GET /api/agents
+GET /api/agents?active=false
+```
+Returns `{ agents: [...], runningCount: N }`.
+
+#### Kill Agent
+```http
+DELETE /api/agents/:taskId
+```
+
+#### Send Message
+```http
+POST /api/agents/:taskId/message
+Content-Type: application/json
+
+{
+  "message": "Focus on the proxy directory"
+}
+```
+
+#### Report Progress
+```http
+POST /api/agents/:taskId/progress
+Content-Type: application/json
+
+{
+  "toolUseCount": 5,
+  "inputTokens": 1200,
+  "outputTokens": 800,
+  "recentActivities": []
+}
+```
+
+#### Complete Agent
+```http
+POST /api/agents/:taskId/complete
+Content-Type: application/json
+
+{
+  "resultSummary": "Found 12 auth files using JWT + bcrypt"
+}
+```
+
+#### Kill All
+```http
+POST /api/agents/kill-all
+```
+
+### Worktree Isolation
+
+Agents can optionally run in a git worktree for safe file modifications:
+
+```
+POST /api/agents/spawn
+{ "worktreeIsolation": true }
+```
+
+The worktree is created in a temp directory, automatically cleaned up if no changes are made. If changes exist, the worktree path and branch are returned.
+
+### Security
+
+- Each agent gets an **independent scan context** (no shared state)
+- Workers respect rate limits independently
+- Workers spawned by coordinators cannot spawn sub-workers
+- Agent results are scanned by `responseScanner` before returning
+- Background agents count against user credit limits
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `proxy/src/services/agentService.ts` | Spawn, kill, status, worktree |
+| `proxy/src/agent/agentTypes.ts` | Agent mode definitions |
+| `proxy/src/routes/agent.route.ts` | REST endpoints |
+
+---
+
+## Context Compaction
+
+3 strategies for reducing conversation context when approaching token limits.
+
+### Strategies
+
+| Strategy | Method | Savings |
+|----------|--------|---------|
+| **Clear tool results** | Remove old tool call outputs (keep last N) | 40-60% |
+| **Summarize** | Compress old assistant messages to 1-line summaries | 50-70% |
+| **Drop oldest** | Remove oldest messages entirely | 60-80% |
+
+### How It Works
+
+```
+Token Count (real tiktoken)
+  -> IF tokens > model_context * 0.75:
+      -> Apply compaction strategy
+      -> Recount tokens
+  -> IF still over:
+      -> Set X-AF-Context-Overflow header
+      -> Client prompts user: "Context is 120% of limit. Compact?"
+  -> NEVER auto-truncate (user decides)
+```
+
+### Token Budget Per Component
+
+| Component | Max Tokens | Strategy |
+|-----------|-----------|----------|
+| System prompt | 2,000 | Static, cached |
+| MEMORY.md index | 1,500 (200 lines) | Truncate at line boundary |
+| Tool definitions | 4,000 (deferred) | ToolSearchTool defers if >20 tools |
+| Recent messages (last 3) | Unlimited | Never compressed |
+| Old messages | Summarized | 1-line per old turn |
+| Tool results | 300 chars (old) | Clear old, keep recent N |
+| MCP tool descriptions | 2,048 per tool | Truncate to preserve intent |
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `proxy/src/services/compactService.ts` | 3 compaction strategies |
+| `proxy/src/gateway/tokenCounter.ts` | Real tiktoken counting |
+| `proxy/src/gateway/contextWindow.ts` | Advisory context checks |

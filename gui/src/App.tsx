@@ -18,6 +18,9 @@ import RbacPage from "./pages/rbac";
 import Stats from "./pages/stats";
 import AgentManagerPage from "./pages/agents";
 import TeamDashboard from "./pages/team";
+import TasksPage from "./pages/tasks";
+import MemoryPage from "./pages/memory";
+import SetupWizardPage from "./pages/setup";
 import ThemePage from "./styles/ThemePage";
 import { ROUTES } from "./util/navigation";
 import { isInIde } from "./util";
@@ -43,6 +46,9 @@ const webOnlyRoutes = [
   { path: ROUTES.ORG, element: <OrgSettingsPage /> },
   { path: ROUTES.TEAM, element: <TeamDashboard /> },
   { path: ROUTES.AGENTS, element: <AgentManagerPage /> },
+  { path: ROUTES.TASKS, element: <TasksPage /> },
+  { path: ROUTES.MEMORY, element: <MemoryPage /> },
+  { path: ROUTES.SETUP, element: <SetupWizardPage /> },
 ];
 
 /** Redirect for web-only routes when accessed inside IDE */

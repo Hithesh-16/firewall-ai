@@ -26,17 +26,12 @@
           {
             "group": "Security",
             "icon": "shield-halved",
-            "pages": [
-              "security/scanners",
-              "security/policy-engine"
-            ]
+            "pages": ["security/scanners", "security/policy-engine"]
           },
           {
             "group": "API Reference",
             "icon": "code",
-            "pages": [
-              "api-reference/overview"
-            ]
+            "pages": ["api-reference/overview"]
           },
           {
             "group": "Developer Docs",
@@ -46,6 +41,14 @@
               "developer/setup",
               "developer/architecture-deep-dive",
               "developer/extending",
+              "developer/tasks-memory",
+              "developer/agent-system",
+              "developer/commands-skills",
+              "developer/coordinator",
+              "developer/cost-tracking",
+              "developer/scheduling",
+              "developer/onboarding",
+              "developer/gui-components",
               "CONTRIBUTING"
             ]
           }

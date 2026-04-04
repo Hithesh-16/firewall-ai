@@ -22,6 +22,9 @@ export const ROUTES = {
   ORG: "/org",
   TEAM: "/team",
   AGENTS: "/agents",
+  TASKS: "/tasks",
+  MEMORY: "/memory",
+  SETUP: "/setup",
 };
 
 // Helper function to build config URLs with tabs

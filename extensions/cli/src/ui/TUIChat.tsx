@@ -23,8 +23,11 @@ import { getTotalSessionCost } from "../session.js";
 import { bashToolEvents } from "../util/cli.js";
 import { logger } from "../util/logger.js";
 
+import { onScanResult, type FirewallScanResult } from "@ai-firewall/fetch";
+
 import { ActionStatus } from "./components/ActionStatus.js";
 import { BottomStatusBar } from "./components/BottomStatusBar.js";
+import { ScanBanner } from "./ScanBanner.js";
 import { ResourceDebugBar } from "./components/ResourceDebugBar.js";
 import { ScreenContent } from "./components/ScreenContent.js";
 import { StaticChatContent } from "./components/StaticChatContent.js";
@@ -235,6 +238,39 @@ const TUIChat: React.FC<TUIChatProps> = ({
   // State for temporary status message
   const [statusMessage, setStatusMessage] = useState<string>("");
 
+  // State for scan result banner
+  const [scanResult, setScanResult] = useState<FirewallScanResult | null>(null);
+  const [showScanBanner, setShowScanBanner] = useState(false);
+  const scanDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onScanResult((result) => {
+      // Clear any pending dismiss timer
+      if (scanDismissTimer.current) {
+        clearTimeout(scanDismissTimer.current);
+        scanDismissTimer.current = null;
+      }
+
+      setScanResult(result);
+      setShowScanBanner(true);
+
+      // Auto-dismiss ALLOW results after 3 seconds
+      if (result.action === "ALLOW") {
+        scanDismissTimer.current = setTimeout(() => {
+          setShowScanBanner(false);
+          scanDismissTimer.current = null;
+        }, 3000);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (scanDismissTimer.current) {
+        clearTimeout(scanDismissTimer.current);
+      }
+    };
+  }, []);
+
   // Handler to show diff overlay
   const handleShowDiff = useCallback(
     (content: string) => {
@@ -301,6 +337,13 @@ const TUIChat: React.FC<TUIChatProps> = ({
   useEffect(() => {
     resetChatHistoryRef.current = resetChatHistory;
   }, [resetChatHistory]);
+
+  // Dismiss REDACT/BLOCK banners when a new request starts
+  useEffect(() => {
+    if (isWaitingForResponse) {
+      setShowScanBanner(false);
+    }
+  }, [isWaitingForResponse]);
 
   // Memoize the chat history conversion to avoid expensive recalculation on every render
 
@@ -396,6 +439,19 @@ const TUIChat: React.FC<TUIChatProps> = ({
 
       {/* Fixed bottom section */}
       <Box flexDirection="column" flexShrink={0}>
+        {/* Scan result banner */}
+        {showScanBanner && scanResult && (
+          <ScanBanner
+            visible={showScanBanner}
+            action={scanResult.action}
+            riskScore={scanResult.riskScore}
+            secretsCount={scanResult.secretsCount}
+            piiCount={scanResult.piiCount}
+            reasons={scanResult.redactedTypes}
+            findings={scanResult.findings}
+          />
+        )}
+
         {/* Status */}
         <ActionStatus
           visible={isWaitingForResponse && !!responseStartTime}

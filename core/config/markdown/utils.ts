@@ -14,7 +14,7 @@ export function createRelativeRuleFilePath(ruleName: string): string {
 }
 
 /**
- * Creates the file path for a rule in the workspace .continue/rules directory
+ * Creates the file path for a rule in the workspace .ai-firewall/rules directory
  */
 export function createRuleFilePath(
   workspaceDir: string,

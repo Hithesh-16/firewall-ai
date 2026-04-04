@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Firewall — Rebrand Strategy Plan</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface-2: #1a2234;
+    --border: #1e293b;
+    --border-light: #334155;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --emerald: #10b981;
+    --emerald-dim: #059669;
+    --emerald-bg: rgba(16, 185, 129, 0.08);
+    --emerald-border: rgba(16, 185, 129, 0.2);
+    --red: #f87171;
+    --red-bg: rgba(248, 113, 113, 0.08);
+    --red-border: rgba(248, 113, 113, 0.2);
+    --amber: #fbbf24;
+    --amber-bg: rgba(251, 191, 36, 0.08);
+    --amber-border: rgba(251, 191, 36, 0.2);
+    --blue: #60a5fa;
+    --blue-bg: rgba(96, 165, 250, 0.08);
+    --blue-border: rgba(96, 165, 250, 0.2);
+    --purple: #a78bfa;
+    --purple-bg: rgba(167, 139, 250, 0.08);
+    --purple-border: rgba(167, 139, 250, 0.2);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 60px 24px 40px;
+    background: linear-gradient(180deg, rgba(16,185,129,0.06) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 99px;
+    background: var(--emerald-bg); border: 1px solid var(--emerald-border);
+    color: var(--emerald); font-size: 12px; font-weight: 600;
+    margin-bottom: 20px;
+  }
+  .hero-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--emerald); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .hero h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .hero h1 span { color: var(--emerald); }
+  .hero p { color: var(--text-dim); font-size: 16px; max-width: 600px; margin: 0 auto; }
+
+  /* Stats row */
+  .stats {
+    display: flex; justify-content: center; gap: 32px; padding: 24px 0;
+    flex-wrap: wrap;
+  }
+  .stat {
+    text-align: center; padding: 16px 24px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    min-width: 140px;
+  }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--emerald); }
+  .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+  /* Section */
+  .section { margin-bottom: 48px; }
+  .section-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .section-icon.emerald { background: var(--emerald-bg); border: 1px solid var(--emerald-border); }
+  .section-icon.red { background: var(--red-bg); border: 1px solid var(--red-border); }
+  .section-icon.amber { background: var(--amber-bg); border: 1px solid var(--amber-border); }
+  .section-icon.blue { background: var(--blue-bg); border: 1px solid var(--blue-border); }
+  .section-icon.purple { background: var(--purple-bg); border: 1px solid var(--purple-border); }
+  .section-title { font-size: 20px; font-weight: 600; }
+  .section-count { font-size: 12px; color: var(--text-muted); background: var(--surface-2); padding: 2px 10px; border-radius: 99px; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--border-light); }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .card-title { font-size: 14px; font-weight: 600; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge.done { background: var(--emerald-bg); color: var(--emerald); border: 1px solid var(--emerald-border); }
+  .badge.critical { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .badge.high { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+  .badge.medium { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+  .badge.low { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-border); }
+  .badge.info { background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--emerald); }
+  .strike { text-decoration: line-through; color: var(--text-muted); }
+  .arrow { color: var(--text-muted); margin: 0 6px; }
+
+  /* Grid */
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+
+  /* Phase timeline */
+  .phase {
+    position: relative;
+    padding-left: 36px;
+    margin-bottom: 32px;
+  }
+  .phase::before {
+    content: '';
+    position: absolute; left: 14px; top: 32px; bottom: -20px;
+    width: 2px; background: var(--border);
+  }
+  .phase:last-child::before { display: none; }
+  .phase-dot {
+    position: absolute; left: 6px; top: 4px;
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+  }
+  .phase-dot.done { background: var(--emerald); color: var(--bg); }
+  .phase-dot.active { background: var(--amber); color: var(--bg); animation: pulse 2s infinite; }
+  .phase-dot.pending { background: var(--surface-2); color: var(--text-muted); border: 2px solid var(--border); }
+  .phase-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .phase-desc { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; }
+
+  /* Code block */
+  .code-block {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    overflow-x: auto;
+    color: var(--text-dim);
+  }
+  .code-block .key { color: var(--blue); }
+  .code-block .str { color: var(--emerald); }
+  .code-block .comment { color: var(--text-muted); font-style: italic; }
+
+  /* Progress bar */
+  .progress-bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+  .progress-fill.emerald { background: var(--emerald); }
+  .progress-fill.amber { background: var(--amber); }
+
+  /* Checklist */
+  .checklist { list-style: none; }
+  .checklist li { padding: 6px 0; display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+  .checklist .check { color: var(--emerald); flex-shrink: 0; font-size: 14px; }
+  .checklist .pending-icon { color: var(--text-muted); flex-shrink: 0; font-size: 14px; }
+  .checklist .text-done { color: var(--text-dim); }
+
+  /* Warn box */
+  .warn-box {
+    background: var(--red-bg); border: 1px solid var(--red-border);
+    border-radius: 10px; padding: 16px 20px;
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .warn-box .icon { font-size: 18px; flex-shrink: 0; }
+  .warn-box .content { font-size: 13px; color: var(--text); }
+  .warn-box .content strong { color: var(--red); }
+
+  .info-box {
+    background: var(--blue-bg); border: 1px solid var(--blue-border);
+    border-radius: 10px; padding: 16px 20px;
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .info-box .icon { font-size: 18px; flex-shrink: 0; }
+  .info-box .content { font-size: 13px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ═══ HERO ═══ -->
+<div class="hero">
+  <div class="hero-badge"><span class="dot"></span> Rebranding Strategy</div>
+  <h1>Continue &rarr; <span>AI Firewall</span></h1>
+  <p>Complete strategy plan for renaming the application from Continue.dev to AI Firewall with a centralized constant system for future-proof naming.</p>
+</div>
+
+<!-- ═══ STATS ═══ -->
+<div class="container">
+<div class="stats">
+  <div class="stat"><div class="stat-value">558</div><div class="stat-label">Total References</div></div>
+  <div class="stat"><div class="stat-value">~50</div><div class="stat-label">Already Rebranded</div></div>
+  <div class="stat"><div class="stat-value">~508</div><div class="stat-label">Remaining</div></div>
+  <div class="stat"><div class="stat-value">8</div><div class="stat-label">External Services</div></div>
+</div>
+
+<!-- ═══ SECURITY WARNING ═══ -->
+<div class="warn-box">
+  <div class="icon">&#9888;</div>
+  <div class="content">
+    <strong>Security Alert:</strong> Google OAuth client secret is exposed in <code>proxy/.env</code>. Rotate immediately regardless of rebrand timeline.
+    Master key and test API keys in the same file should also be rotated before any deployment.
+  </div>
+</div>
+
+<!-- ═══ CENTRALIZED BRAND CONSTANT ═══ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon emerald">&#9881;</div>
+    <div class="section-title">Core Strategy: Centralized Brand Constants</div>
+    <span class="badge done">&#10003; Created</span>
+  </div>
+  <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 14px;">
+    A single <code>@ai-firewall/brand</code> package is the source of truth. To rename the product in the future, change <strong>one file</strong>.
+  </p>
+  <div class="code-block">
+<span class="comment">// packages/brand/src/index.ts</span>
+<span class="key">export const</span> BRAND = {
+  <span class="key">name</span>: <span class="str">"AI Firewall"</span>,           <span class="comment">// Display name</span>
+  <span class="key">nameLower</span>: <span class="str">"ai-firewall"</span>,       <span class="comment">// File paths, package names</span>
+  <span class="key">globalDir</span>: <span class="str">".ai-firewall"</span>,       <span class="comment">// Config directory (~/.ai-firewall/)</span>
+  <span class="key">envPrefix</span>: <span class="str">"AI_FIREWALL"</span>,        <span class="comment">// Environment variables</span>
+  <span class="key">appUrl</span>: <span class="str">"https://ai-firewall.dev"</span>,
+  <span class="key">apiUrl</span>: <span class="str">"https://api.ai-firewall.dev"</span>,
+  <span class="key">docsUrl</span>: <span class="str">"https://docs.ai-firewall.dev"</span>,
+  <span class="key">repoUrl</span>: <span class="str">"https://github.com/ai-firewall/ai-firewall"</span>,
+  <span class="key">cliBin</span>: <span class="str">"afw"</span>,
+  <span class="key">tagline</span>: <span class="str">"Secure AI code agent"</span>,
+  <span class="comment">// ... 20+ more constants</span>
+} <span class="key">as const</span>;
+  </div>
+</div>
+
+<!-- ═══ IMPLEMENTATION PHASES ═══ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon blue">&#9654;</div>
+    <div class="section-title">Implementation Phases</div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-dot done">&#10003;</div>
+    <div class="phase-title">Phase 1: Brand Package &amp; Core Wiring</div>
+    <div class="phase-desc">Create <code>@ai-firewall/brand</code> and wire into CLI + core config loading paths.</div>
+    <div class="card" style="border-color: var(--emerald-border);">
+      <ul class="checklist">
+        <li><span class="check">&#10003;</span> <span class="text-done">Created <code>packages/brand/src/index.ts</code> with all constants</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Wired into <code>extensions/cli/src/env.ts</code></span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Wired into <code>core/promptFiles/index.ts</code></span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Updated <code>core/indexing/ignore.ts</code></span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Updated <code>core/config/loadLocalAssistants.ts</code></span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Updated <code>core/config/createNewAssistantFile.ts</code></span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Updated <code>core/promptFiles/createNewPromptFile.ts</code></span></li>
+      </ul>
+      <div class="progress-bar"><div class="progress-fill emerald" style="width: 100%"></div></div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-dot active">2</div>
+    <div class="phase-title">Phase 2: Code References (~80 files)</div>
+    <div class="phase-desc">Replace remaining <code>.continue/</code> paths and <code>Continue</code> strings in TypeScript source files.</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Config Path Replacements</div>
+          <span class="badge critical">~100 refs</span>
+        </div>
+        <table>
+          <tr><td class="mono strike">.continue/rules</td><td class="arrow">&rarr;</td><td class="mono">.ai-firewall/rules</td></tr>
+          <tr><td class="mono strike">.continue/agents</td><td class="arrow">&rarr;</td><td class="mono">.ai-firewall/agents</td></tr>
+          <tr><td class="mono strike">.continue/prompts</td><td class="arrow">&rarr;</td><td class="mono">.ai-firewall/prompts</td></tr>
+          <tr><td class="mono strike">.continue/assistants</td><td class="arrow">&rarr;</td><td class="mono">.ai-firewall/assistants</td></tr>
+          <tr><td class="mono strike">.continue/mcpServers</td><td class="arrow">&rarr;</td><td class="mono">.ai-firewall/mcpServers</td></tr>
+          <tr><td class="mono strike">.continue/.env</td><td class="arrow">&rarr;</td><td class="mono">.ai-firewall/.env</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Variable Renames</div>
+          <span class="badge high">~80 refs</span>
+        </div>
+        <table>
+          <tr><td class="mono strike">continueHome</td><td class="arrow">&rarr;</td><td class="mono">BRAND.globalDir</td></tr>
+          <tr><td class="mono strike">continueConfig</td><td class="arrow">&rarr;</td><td class="mono">firewallConfig</td></tr>
+          <tr><td class="mono strike">continueDir</td><td class="arrow">&rarr;</td><td class="mono">firewallDir</td></tr>
+          <tr><td class="mono strike">CONTINUE_API_KEY</td><td class="arrow">&rarr;</td><td class="mono">AI_FIREWALL_API_KEY</td></tr>
+          <tr><td class="mono strike">CONTINUE_API_BASE</td><td class="arrow">&rarr;</td><td class="mono">AI_FIREWALL_API_BASE</td></tr>
+          <tr><td class="mono strike">CONTINUE_ORG</td><td class="arrow">&rarr;</td><td class="mono">AI_FIREWALL_ORG</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill amber" style="width: 15%"></div></div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-dot pending">3</div>
+    <div class="phase-title">Phase 3: GUI &amp; User-Facing Strings (~150 refs)</div>
+    <div class="phase-desc">Replace "Continue" brand name in all React components, help text, error messages, and banners.</div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Key Files</div>
+        <span class="badge medium">~30 components</span>
+      </div>
+      <table>
+        <th>File</th><th>Change</th>
+        <tr><td><code>gui/src/components/CliInstallBanner.tsx</code></td><td>"Try out the Continue CLI" &rarr; BRAND.name</td></tr>
+        <tr><td><code>gui/src/pages/config/sections/HelpSection.tsx</code></td><td>GitHub URLs &rarr; BRAND.repoUrl</td></tr>
+        <tr><td><code>gui/src/pages/gui/StreamError.tsx</code></td><td>Issue URL &rarr; BRAND.issuesUrl</td></tr>
+        <tr><td><code>gui/src/pages/login/index.tsx</code></td><td>Already rebranded &#10003;</td></tr>
+        <tr><td><code>gui/src/components/OnboardingCard/</code></td><td>"Continue" &rarr; "AI Firewall"</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-dot pending">4</div>
+    <div class="phase-title">Phase 4: Documentation (~150 refs)</div>
+    <div class="phase-desc">Bulk rename across all <code>.mdx</code> and <code>.md</code> files. Can be done with sed scripts.</div>
+    <div class="card">
+      <div class="code-block">
+<span class="comment"># Bulk replacement commands</span>
+find docs/ -name "*.mdx" -exec sed -i '' 's/\.continue\//\.ai-firewall\//g' {} +
+find docs/ -name "*.mdx" -exec sed -i '' 's/continue\.dev/ai-firewall.dev/g' {} +
+find docs/ -name "*.mdx" -exec sed -i '' 's/continuedev\/continue/ai-firewall\/ai-firewall/g' {} +
+find docs/ -name "*.mdx" -exec sed -i '' 's/@continuedev\//@ai-firewall\//g' {} +
+      </div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-dot pending">5</div>
+    <div class="phase-title">Phase 5: Directory &amp; File Renames</div>
+    <div class="phase-desc">Rename physical directories and update workspace references.</div>
+    <div class="card">
+      <table>
+        <th>Current</th><th></th><th>New</th>
+        <tr><td class="mono strike">packages/continue-sdk/</td><td class="arrow">&rarr;</td><td class="mono">packages/sdk/</td></tr>
+        <tr><td class="mono strike">binary/pkgJson/continue-binary</td><td class="arrow">&rarr;</td><td class="mono">binary/pkgJson/ai-firewall-binary</td></tr>
+        <tr><td class="mono strike">.continue-action-scripts/</td><td class="arrow">&rarr;</td><td class="mono">.ai-firewall-scripts/</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ EXTERNAL SERVICES ═══ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon red">&#128273;</div>
+    <div class="section-title">External Services — Keys Required at Deployment</div>
+    <span class="badge info">8 services</span>
+  </div>
+
+  <div class="info-box">
+    <div class="icon">&#9432;</div>
+    <div class="content">
+      None of these need immediate action. They're required when you deploy to production. Current hardcoded values are Continue.dev's keys.
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <tr>
+        <th>Service</th>
+        <th>What's Needed</th>
+        <th>Current Value</th>
+        <th>Where</th>
+        <th>Priority</th>
+      </tr>
+      <tr>
+        <td><strong>WorkOS</strong></td>
+        <td>New OAuth app &rarr; 2 client IDs</td>
+        <td class="mono" style="font-size: 11px;">client_01J0FW6X...Y65J</td>
+        <td><code>core/control-plane/env.ts</code><br><code>extensions/cli/src/env.ts</code></td>
+        <td><span class="badge critical">Deploy Auth</span></td>
+      </tr>
+      <tr>
+        <td><strong>PostHog</strong></td>
+        <td>New project &rarr; API key</td>
+        <td class="mono" style="font-size: 11px;">phc_JS6XFROu...lSPs</td>
+        <td><code>gui/src/hooks/TelemetryProviders.tsx</code><br><code>extensions/cli/src/telemetry/posthogService.ts</code></td>
+        <td><span class="badge high">Deploy Analytics</span></td>
+      </tr>
+      <tr>
+        <td><strong>Sentry</strong></td>
+        <td>New project &rarr; DSN string</td>
+        <td style="color: var(--text-muted);">Currently disabled (empty DSN)</td>
+        <td><code>core/util/sentry/constants.ts</code><br><code>extensions/intellij/.../ContinueSentryService.kt</code></td>
+        <td><span class="badge medium">Deploy Errors</span></td>
+      </tr>
+      <tr>
+        <td><strong>Google OAuth</strong></td>
+        <td>New OAuth app &rarr; client ID + secret</td>
+        <td class="mono" style="font-size: 11px;">926281559704-...8.apps</td>
+        <td><code>proxy/.env</code><br><code>proxy/src/auth/ssoService.ts</code></td>
+        <td><span class="badge critical">Deploy SSO</span></td>
+      </tr>
+      <tr>
+        <td><strong>GitHub OAuth</strong></td>
+        <td>New OAuth app &rarr; client ID + secret</td>
+        <td style="color: var(--text-muted);">Not yet configured</td>
+        <td><code>proxy/src/auth/ssoService.ts</code></td>
+        <td><span class="badge high">Deploy SSO</span></td>
+      </tr>
+      <tr>
+        <td><strong>Microsoft OAuth</strong></td>
+        <td>New OAuth app &rarr; client ID + secret</td>
+        <td style="color: var(--text-muted);">Not yet configured</td>
+        <td><code>proxy/src/auth/ssoService.ts</code></td>
+        <td><span class="badge medium">Deploy SSO</span></td>
+      </tr>
+      <tr>
+        <td><strong>Domain DNS</strong></td>
+        <td>A/CNAME records for ai-firewall.dev</td>
+        <td class="mono" style="font-size: 11px;">ai-firewall.dev</td>
+        <td><code>packages/brand/src/index.ts</code></td>
+        <td><span class="badge critical">Deploy</span></td>
+      </tr>
+      <tr>
+        <td><strong>NPM Registry</strong></td>
+        <td>Claim @ai-firewall scope on npmjs.com</td>
+        <td style="color: var(--text-muted);">Internal only (file refs)</td>
+        <td>All <code>package.json</code> files</td>
+        <td><span class="badge low">Publish</span></td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ REFERENCE BREAKDOWN ═══ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon amber">&#128200;</div>
+    <div class="section-title">Reference Breakdown by Category</div>
+  </div>
+
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Config Paths</div><span class="badge critical">~100</span></div>
+      <p style="font-size: 12px; color: var(--text-dim);">.continue/ &rarr; .ai-firewall/ across core, extensions, docs</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Brand Strings</div><span class="badge critical">~150</span></div>
+      <p style="font-size: 12px; color: var(--text-dim);">"Continue" in UI text, docs, marketing, help sections</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Domain URLs</div><span class="badge high">~110</span></div>
+      <p style="font-size: 12px; color: var(--text-dim);">continue.dev, github.com/continuedev, marketplace links</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Code Identifiers</div><span class="badge high">~80</span></div>
+      <p style="font-size: 12px; color: var(--text-dim);">continueHome, continueConfig, continueDir variables</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Package Names</div><span class="badge done">~50 (done)</span></div>
+      <p style="font-size: 12px; color: var(--text-dim);">@ai-firewall/* scope already applied to all package.json</p>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Comments</div><span class="badge low">~50</span></div>
+      <p style="font-size: 12px; color: var(--text-dim);">Code comments mentioning "Continue" — lowest priority</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ WHAT'S ALREADY DONE ═══ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon emerald">&#10003;</div>
+    <div class="section-title">Already Completed</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Package Names</div><span class="badge done">Done</span></div>
+      <ul class="checklist">
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/core</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/cli</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/scanner</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/fetch</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/config-yaml</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/config-types</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/llm-info</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/openai-adapters</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/terminal-security</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/hub</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/sdk</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Brand Infrastructure</div><span class="badge done">Done</span></div>
+      <ul class="checklist">
+        <li><span class="check">&#10003;</span> <span class="text-done">packages/brand/ — centralized constants</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">CLI env.ts — uses BRAND constants</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">VS Code extension displayName</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Proxy API URLs (api.ai-firewall.dev)</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Login page (glassmorphism redesign)</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Core config paths (rules, agents, prompts)</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">.ai-firewall/ in gitignore patterns</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ FUTURE RENAME STRATEGY ═══ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon purple">&#9733;</div>
+    <div class="section-title">Future Rename Strategy</div>
+  </div>
+  <div class="card">
+    <p style="font-size: 14px; color: var(--text-dim); margin-bottom: 16px;">
+      When the product name changes again, update <strong>one file</strong>:
+    </p>
+    <div class="code-block">
+<span class="comment">// packages/brand/src/index.ts — Change these values:</span>
+<span class="key">name</span>: <span class="str">"New Product Name"</span>,
+<span class="key">nameLower</span>: <span class="str">"new-product"</span>,
+<span class="key">globalDir</span>: <span class="str">".new-product"</span>,
+<span class="key">envPrefix</span>: <span class="str">"NEW_PRODUCT"</span>,
+<span class="key">appUrl</span>: <span class="str">"https://new-product.dev"</span>,
+<span class="comment">// ... rebuild all packages</span>
+    </div>
+    <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px;">
+      Note: Config directory migration (moving <code>~/.ai-firewall/</code> to <code>~/.new-product/</code>) would need a one-time migration script. The <code>altDirs</code> array in BRAND supports backward-compatible directory checking.
+    </p>
+  </div>
+</div>
+
+<!-- ═══ FOOTER ═══ -->
+<div style="text-align: center; padding: 40px 0 20px; border-top: 1px solid var(--border); margin-top: 40px;">
+  <p style="font-size: 12px; color: var(--text-muted);">
+    AI Firewall Rebrand Strategy &middot; Generated 2026-04-03 &middot; ~558 total references &middot; 8 external services
+  </p>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,6 +1,6 @@
 ---
-title: "API Reference — New Endpoints"
-description: "Complete reference for Teams, RBAC, File Restrictions, Policy Chain, SCIM, and Export APIs"
+title: "API Reference"
+description: "Complete reference for all AI Firewall proxy API endpoints — Teams, RBAC, Tasks, Memory, Agents, Commands, Skills, Cron, and more"
 ---
 
 ## Authentication
@@ -360,3 +360,311 @@ The `output` field is optional. When provided, the tool output is scanned throug
 **Additional response headers:**
 - `X-AF-MCP-Output-Action`: ALLOW/BLOCK/REDACT
 - `X-AF-MCP-Output-Risk-Score`: 0-100
+
+---
+
+## Task Framework (Phase 1)
+
+### Create task
+```http
+POST /api/tasks
+Body: { "type": "local_agent", "description": "Scan auth files" }
+```
+Returns `201` with task object.
+
+### List tasks
+```http
+GET /api/tasks
+GET /api/tasks?status=running&type=local_agent
+```
+
+### Get task
+```http
+GET /api/tasks/:id
+```
+
+### Update task status
+```http
+PATCH /api/tasks/:id
+Body: { "status": "running" }
+```
+State machine enforced — invalid transitions return `409`.
+
+### Report progress
+```http
+POST /api/tasks/:id/progress
+Body: { "toolUseCount": 5, "inputTokens": 1200, "outputTokens": 800, "recentActivities": [] }
+```
+
+### Kill task
+```http
+DELETE /api/tasks/:id
+```
+
+### Kill all
+```http
+POST /api/tasks/kill-all
+```
+
+### Acknowledge
+```http
+POST /api/tasks/:id/ack
+```
+
+---
+
+## Memory System (Phase 1)
+
+### List memories
+```http
+GET /api/memory
+GET /api/memory?type=user
+```
+
+### Create memory
+```http
+POST /api/memory
+Body: { "name": "User Role", "description": "...", "type": "user", "body": "..." }
+```
+
+### Read memory
+```http
+GET /api/memory/:fileName
+```
+
+### Delete memory
+```http
+DELETE /api/memory/:fileName
+```
+
+### Read index
+```http
+GET /api/memory/index
+```
+
+### Update index
+```http
+PUT /api/memory/index
+```
+
+### Auto-extract
+```http
+POST /api/memory/extract
+Body: { "conversationText": "I'm a data scientist..." }
+```
+
+---
+
+## Agent Service (Phase 1)
+
+### Spawn agent
+```http
+POST /api/agents/spawn
+Body: { "description": "Research task", "prompt": "...", "background": false }
+```
+
+### List agents
+```http
+GET /api/agents
+GET /api/agents?active=false
+```
+
+### Kill agent
+```http
+DELETE /api/agents/:taskId
+```
+
+### Send message
+```http
+POST /api/agents/:taskId/message
+Body: { "message": "Focus on proxy/" }
+```
+
+### Kill all
+```http
+POST /api/agents/kill-all
+```
+
+---
+
+## Command System (Phase 2)
+
+### List commands
+```http
+GET /api/commands
+```
+Returns array of 10 built-in commands.
+
+### Execute command
+```http
+POST /api/commands/execute
+Body: { "input": "/doctor" }
+```
+Returns `{ type: "local"|"prompt", result: { output: "..." } }`.
+
+---
+
+## Skills System (Phase 2)
+
+### List skills
+```http
+GET /api/skills
+```
+
+### Invoke skill
+```http
+POST /api/skills/invoke
+Body: { "name": "commit", "args": "Fix auth bug" }
+```
+
+---
+
+## Cron Service (Phase 3)
+
+### Create cron job
+```http
+POST /api/cron
+Body: { "name": "Health check", "schedule": "5m", "agentConfig": { "description": "...", "prompt": "..." } }
+```
+
+### List cron jobs
+```http
+GET /api/cron
+```
+
+### Get cron job
+```http
+GET /api/cron/:id
+```
+
+### Enable/Disable
+```http
+POST /api/cron/:id/enable
+POST /api/cron/:id/disable
+```
+
+### Delete
+```http
+DELETE /api/cron/:id
+```
+
+---
+
+## Pre-flight Scan
+
+### Scan messages before sending to LLM
+```http
+POST /api/scan
+No auth required (local-only endpoint)
+Body:
+{
+  "messages": [
+    { "role": "user", "content": "My AWS key is AKIAIOSFODNN7EXAMPLE" }
+  ],
+  "model": "gpt-4"
+}
+```
+
+**Response (ALLOW/REDACT):**
+```json
+{
+  "action": "REDACT",
+  "riskScore": 65,
+  "reasons": ["Critical secret: AWS_KEY"],
+  "secretsFound": 1,
+  "piiFound": 0,
+  "entropyFound": 0,
+  "findings": [
+    {
+      "type": "AWS_KEY",
+      "severity": "critical",
+      "category": "secret",
+      "maskedValue": "AKIA********LE"
+    }
+  ],
+  "sanitizedMessages": [
+    { "role": "user", "content": "My AWS key is [REDACTED_AWS_KEY]" }
+  ]
+}
+```
+
+**Response (BLOCK) — 403:**
+```json
+{
+  "action": "BLOCK",
+  "riskScore": 85,
+  "reasons": ["Critical secret: PRIVATE_KEY"],
+  "secretsFound": 1,
+  "piiFound": 0,
+  "findings": [
+    {
+      "type": "PRIVATE_KEY",
+      "severity": "critical",
+      "category": "secret",
+      "maskedValue": "----********--"
+    }
+  ]
+}
+```
+
+**Response headers** (set on every response):
+| Header | Value |
+|--------|-------|
+| `X-AF-Action` | ALLOW/BLOCK/REDACT |
+| `X-AF-Risk-Score` | 0-100 |
+| `X-AF-Secrets-Count` | number |
+| `X-AF-PII-Count` | number |
+| `X-AF-Entropy-Count` | number |
+| `X-AF-Redacted-Types` | comma-separated types |
+| `X-AF-Findings` | JSON array of findings (max 20) |
+
+---
+
+## File Scanning
+
+### Scan a single file
+```http
+POST /api/scan/file
+No auth required (local-only endpoint)
+Body:
+{
+  "filePath": "/path/to/file.ts",
+  "includeRedacted": true,
+  "projectRoot": "/path/to/project"
+}
+```
+
+**Response:**
+```json
+{
+  "filePath": "/path/to/file.ts",
+  "fileHash": "abc123...",
+  "fileSize": 1024,
+  "action": "BLOCK",
+  "riskScore": 85,
+  "reasons": ["Critical secret: AWS_KEY"],
+  "secretsFound": 1,
+  "piiFound": 0,
+  "entropyFound": 0,
+  "secrets": [
+    { "type": "AWS_KEY", "severity": "critical", "position": 42, "length": 20 }
+  ],
+  "pii": [],
+  "cached": false,
+  "scanDurationMs": 12
+}
+```
+
+**File scan enforcement:** The CLI and core `readFile` tools call this endpoint before every file read. If `action` is `BLOCK`, the file is never read. If `action` is `REDACT` and `includeRedacted` is true, the `redactedContent` field contains the sanitized file content.
+
+### Scan multiple files
+```http
+POST /api/scan/batch
+Auth: Bearer afw_...
+Body:
+{
+  "filePaths": ["/path/a.ts", "/path/b.ts"],
+  "includeRedacted": false
+}
+```
+Returns per-file results + summary. Max 50 files per request.

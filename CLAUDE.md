@@ -20,12 +20,32 @@ continue-main/
 │   ├── src/mcp/              — MCP Security Gateway
 │   │   ├── mcpScanPipeline.ts — Scan MCP tool I/O through scanner pipeline
 │   │   └── mcpAuditLogger.ts  — Log/query MCP audit trail
-│   ├── src/routes/           — 25+ API endpoints
+│   ├── src/routes/           — 40+ API endpoints
 │   ├── src/router/           — Risk-based + cost-aware smart routing
 │   ├── src/auth/             — Auth, SSO, RBAC middleware
 │   ├── src/vault/            — AES-256-GCM encrypted token vault
 │   ├── src/db/               — SQLite (better-sqlite3, WAL mode)
-│   └── src/redactor/         — Sensitive data redaction
+│   ├── src/redactor/         — Sensitive data redaction
+│   ├── src/tasks/            — Task framework (7 types, state machine, progress tracking)
+│   │   ├── taskTypes.ts      — Task type definitions + state transitions
+│   │   └── taskFramework.ts  — Task lifecycle, validation, progress
+│   ├── src/memory/           — Memory system (MEMORY.md index, auto-extraction)
+│   │   ├── memoryTypes.ts    — 4 memory types (user/feedback/project/reference)
+│   │   ├── memdir.ts         — File-based memory storage + MEMORY.md index
+│   │   └── memoryExtractor.ts — Auto-extract memories from conversation text
+│   ├── src/commands/         — Command system (10 built-in slash commands)
+│   │   ├── commandTypes.ts   — Command type definitions
+│   │   ├── commandLoader.ts  — Discover + load commands
+│   │   └── builtinCommands.ts — /doctor, /compact, /cost, /stats, /memory, /tasks, /review, /help, /share, /resume
+│   ├── src/skills/           — Skills system (SKILL.md format, bundled skills)
+│   │   ├── skillTypes.ts     — Skill type definitions + frontmatter schema
+│   │   ├── skillLoader.ts    — Discover + load skills from SKILL.md files
+│   │   └── bundled/          — Built-in skills (commit, explain)
+│   ├── src/plugins/          — Plugin system (plugin.json manifest)
+│   │   ├── pluginTypes.ts    — Plugin manifest + lifecycle types
+│   │   └── pluginLoader.ts   — Discover, load, enable/disable plugins
+│   └── src/permissions/      — Tool permission enforcement
+│       └── toolPermissions.ts — 3-level permission check (config → auto-classify → dialog)
 ├── packages/
 │   ├── scanner/              — @ai-firewall/scanner (pure-function scanners, shared)
 │   │   └── src/              — secretScanner, piiScanner, entropyScanner,
@@ -42,14 +62,20 @@ continue-main/
 │   ├── llm/llms/             — Provider implementations
 │   ├── llm/countTokens.ts    — Token counting (tiktoken + llama tokenizer)
 │   ├── tools/                — Built-in agent tools (read_file, edit_file, grep_search, etc.)
+│   │   ├── toolPermissions.ts — Permission rules, dangerous file/command detection
+│   │   └── toolRegistry.ts   — Tool registry with deduplication and search
 │   ├── context/              — Context providers (@file, @diff, @git, @web, @docs, MCP, etc.)
 │   ├── context/mcp/          — MCP client (stdio, ws, sse, http transports, OAuth)
 │   ├── indexing/             — LanceDB vector + full-text codebase search
 │   ├── autocomplete/         — Tab completion engine
 │   └── commands/             — Slash commands (/commit, /review, /cmd)
 ├── gui/                      — React + Vite + Tailwind webview UI (environment-aware)
-│   ├── src/pages/            — Chat, Security, Organization, Config, History, Usage
+│   ├── src/pages/            — Chat, Security, Organization, Config, History, Usage, Setup
+│   ├── src/pages/setup/      — Setup wizard route (OnboardingWizard)
 │   ├── src/components/ui/    — Reusable: StatCard, RoleBadge, ConfirmDialog, LoadingSpinner, ErrorBanner
+│   ├── src/components/agents/CoordinatorView.tsx — Multi-agent dashboard
+│   ├── src/components/onboarding/OnboardingWizard.tsx — 5-step setup wizard
+│   ├── src/hooks/useCostTracker.ts — Real-time cost tracking hook
 │   └── src/components/WebNavSidebar.tsx — Standalone web navigation (hidden in IDE mode)
 ├── extensions/
 │   ├── vscode/               — VS Code extension (spawns proxy, hosts webview)
@@ -92,32 +118,48 @@ cd extensions/cli && npm run build
 ## Key Patterns
 
 - **Zod** for input validation — centralized in `proxy/src/schemas/chatSchemas.ts` with strict role enum (`system|user|assistant|tool`) + multimodal content support
-- **SQLite** via better-sqlite3 — WAL mode, parameterized queries, 15+ tables
+- **SQLite** via better-sqlite3 — WAL mode, parameterized queries, 20+ tables
 - **Provider adapters** normalize OpenAI <-> Anthropic <-> Gemini <-> Ollama formats
 - **Scanner pipeline** order: unicode normalization -> secret -> PII -> entropy -> context adjustment -> prompt injection -> policy decision
 - **Token Intelligence** — real token counting via `js-tiktoken` in `proxy/src/gateway/tokenCounter.ts`, advisory context window checks (never truncates), cost-aware routing (opt-in via `policy.json`)
 - **File Scanning** — `proxy/src/scanner/fileScanService.ts` runs full pipeline on files, `fileScanCache.ts` provides content-addressed caching (SHA-256 hash key)
+- **File Scan Enforcement** — `core/util/fileScanProxy.ts` calls `POST /api/scan/file` before every file read in CLI and core tools. BLOCK = file never read, REDACT = sanitized content returned, ALLOW = normal read. Fail-open if proxy unreachable.
+- **Scan Result Display** — CLI `ScanBanner` and GUI `ScanResultBanner` show scan findings with masked malicious content in red. Findings sent via `X-AF-Findings` header (compact JSON). Masking: keys show first 4 + last 2 chars, emails mask local part, phone/SSN show last 4.
 - **MCP Security Gateway** — `proxy/src/mcp/mcpScanPipeline.ts` scans all MCP tool inputs/outputs, `mcpAuditLogger.ts` logs audit trail. No competitor scans MCP tool calls.
 - **Unicode Normalization** — `packages/scanner/src/unicodeNormalizer.ts` strips zero-width chars, maps Cyrillic/Greek confusables to Latin, removes bidi overrides. Runs BEFORE all scanners (ASI04 defense).
 - **Rules File Scanning** — `proxy/src/scanner/ruleFileScanService.ts` scans .cursorrules, .continuerules, CLAUDE.md for injection/secrets/unicode anomalies. Route: `POST /api/scan/rules`.
 - **Response Scanning** — `proxy/src/middleware/responseScanner.ts` scans LLM responses for leaked secrets/PII (LLM05 defense). Opt-in via `response_scanning.enabled` in policy.json. Supports streaming via Transform.
 - **Shared Scanner Package** — `@ai-firewall/scanner` (`packages/scanner/`) contains all pure-function scanners. Proxy re-exports for backward compatibility. MCP servers and future services import directly.
-- **X-AF-*** response headers carry scan metadata + token intelligence from proxy to extension
+- **X-AF-\*** response headers carry scan metadata + token intelligence from proxy to extension
 - **AES-256-GCM** encryption for all stored API keys in token vault
 - **Redux Toolkit** for GUI state management
 - **esbuild** for VS Code extension bundling
 - **LanceDB** for vector indexing of codebase
 - **MCP Client** (in `core/context/mcp/MCPConnection.ts`) — production-grade, 4 transports (stdio, ws, sse, http), OAuth, tool registry
+- **Task Framework** — `proxy/src/tasks/taskFramework.ts` manages 7 task types (`local_agent`, `bash`, `mcp_tool`, `file_edit`, `approval_wait`, `background_agent`, `sub_agent`) with state machine (pending -> running -> completed/failed/killed), progress tracking via WebSocket `task_event`
+- **Memory System** — `proxy/src/memory/memdir.ts` provides file-based memory storage with MEMORY.md index (max 200 lines / 25KB). 4 memory types: user, feedback, project, reference. `memoryExtractor.ts` auto-extracts memories from conversation text.
+- **Tool Permissions** — 3-level check: config rules (pattern matching) -> auto-classifier (dangerous file/command detection) -> user dialog. `core/tools/toolPermissions.ts` for rules, `proxy/src/permissions/toolPermissions.ts` for proxy-side enforcement.
+- **Agent Service** — `proxy/src/services/agentService.ts` manages sub-agent lifecycle: spawn, kill, worktree isolation, inter-agent messaging
+- **Compact Service** — `proxy/src/services/compactService.ts` provides 3 conversation compaction strategies: clear old tool results, summarize old messages, drop oldest
+- **Command System** — `proxy/src/commands/` provides 10 built-in slash commands (`/doctor`, `/compact`, `/cost`, `/stats`, `/memory`, `/tasks`, `/review`, `/help`, `/share`, `/resume`). Loaded via `commandLoader.ts`, commands reuse existing proxy services.
+- **Skills System** — `proxy/src/skills/` supports SKILL.md files with YAML frontmatter. Bundled skills: `commit`, `explain`. Loaded via `skillLoader.ts`.
+- **Plugin System** — `proxy/src/plugins/` supports `plugin.json` manifests for discover/load/enable/disable lifecycle
+- **Hook Service** — `proxy/src/services/hookService.ts` fires shell commands on 13 event types with variable expansion and safe environment
+- **WebSocket Events** — `task_event` WsEventType added for real-time task lifecycle updates (task_created, task_started, task_progress, task_completed, task_killed)
+- **Cron Service** — `proxy/src/services/cronService.ts` simple polling (60s interval), schedule format (`Nm`/`Nh`/`Nd` for minutes/hours/days). CRUD + enable/disable per job.
+- **Feature Flags** — `proxy/src/services/featureFlagService.ts` hash-based rollout (0-100%), include/exclude user lists, CRUD for flag definitions
+- **Cost Tracker** — `proxy/src/gateway/costTracker.ts` in-memory session-level cost tracking with per-model breakdown, format helpers, purge of old sessions
 
 ## Testing
 
 ```bash
-cd proxy && npm run test:unit  # 221 tests (policy, scanners, token, file scan, MCP, control plane, enterprise, security gaps)
+cd proxy && npm run test:unit  # 532 tests (policy, scanners, token, file scan, MCP, control plane, enterprise, agent core, commands, skills, coordinator, cron, flags)
 cd core && npm test            # Core agent engine tests
 cd gui && npm test             # GUI component tests
 ```
 
-Test breakdown (221 proxy tests):
+Test breakdown (532 proxy tests):
+
 - **14** — Original (policy engine, prompt injection, STRICT_LOCAL, model policy, BlindMI)
 - **20** — Phase 1: Token Intelligence (tokenCounter, contextWindow, costEstimator)
 - **9** — Phase 2: File Scanning (fileScanService, fileScanCache)
@@ -127,6 +169,21 @@ Test breakdown (221 proxy tests):
 - **16** — Unicode Normalizer (zero-width, confusable, bidi, CJK/emoji safe)
 - **7** — Rule File Scanning (injection, secrets, unicode in rule files)
 - **10** — Response Scanner (secrets/PII in LLM output, extract/replace)
+- **~50** — Agent Core Phase 1: Tasks (CRUD, state machine, progress, kill, lifecycle)
+- **~40** — Agent Core Phase 1: Memory (frontmatter, index, CRUD, extraction, truncation)
+- **~30** — Agent Core Phase 1: Tool Permissions (deny/allow/ask, plan mode, wildcards, dangerous paths)
+- **~25** — Agent Core Phase 1: Agent Service (spawn, kill, worktree, messaging)
+- **~20** — Agent Core Phase 1: Compact Service (3 strategies)
+- **~30** — Phase 2: Commands (10 built-in, loader, execution)
+- **~25** — Phase 2: Skills (SKILL.md, bundled, invoke)
+- **~20** — Phase 2: Plugins (manifest, loader, enable/disable)
+- **~15** — Phase 2: Hook Service (13 event types, shell exec, variable expansion)
+- **~30** — Phase 3: Coordinator + Worker Pool (agent defs, sessions, worker spawning, pool status, formatting)
+- **~12** — Phase 3: Cost Tracker (session tracking, per-model breakdown, format, purge)
+- **~12** — Phase 3: Feature Flags (CRUD, rollout eval, include/exclude, load settings)
+- **~9** — Phase 3: Cron Service (schedule parsing, CRUD, enable/disable)
+- **~5** — Phase 3: Hook Service (register, event filtering, unregister, history)
+- **1 pre-existing fail** (known)
 
 ## Request Flow (Token-Optimized)
 
@@ -194,139 +251,200 @@ Agent triggers high-risk action (risk >= approval threshold in policy.json)
 
 ### LLM Chat Headers (on every `/v1/chat/completions` response)
 
-| Header | Value | When |
-|--------|-------|------|
-| `X-AF-Action` | ALLOW/BLOCK/REDACT | Always |
-| `X-AF-Risk-Score` | 0-100 | Always |
-| `X-AF-Secrets-Count` | number | Always |
-| `X-AF-PII-Count` | number | Always |
-| `X-AF-Entropy-Count` | number | Always |
-| `X-AF-Redacted-Types` | comma-separated | When redacted |
-| `X-AF-Input-Tokens` | number | Always (real tiktoken count) |
-| `X-AF-Estimated-Cost` | number | Always (pre-request estimate) |
-| `X-AF-Token-Method` | tiktoken/heuristic | Always |
-| `X-AF-Context-Overflow` | true | Only when over model context limit |
-| `X-AF-Context-Tokens` | number | Only when overflow |
-| `X-AF-Context-Max` | number | Only when overflow |
-| `X-AF-Context-Warning` | string | Only when overflow (advisory) |
+| Header                  | Value              | When                                            |
+| ----------------------- | ------------------ | ----------------------------------------------- |
+| `X-AF-Action`           | ALLOW/BLOCK/REDACT | Always                                          |
+| `X-AF-Risk-Score`       | 0-100              | Always                                          |
+| `X-AF-Secrets-Count`    | number             | Always                                          |
+| `X-AF-PII-Count`        | number             | Always                                          |
+| `X-AF-Entropy-Count`    | number             | Always                                          |
+| `X-AF-Redacted-Types`   | comma-separated    | When redacted                                   |
+| `X-AF-Findings`         | JSON array         | When findings detected (max 20, compact format) |
+| `X-AF-Input-Tokens`     | number             | Always (real tiktoken count)                    |
+| `X-AF-Estimated-Cost`   | number             | Always (pre-request estimate)                   |
+| `X-AF-Token-Method`     | tiktoken/heuristic | Always                                          |
+| `X-AF-Context-Overflow` | true               | Only when over model context limit              |
+| `X-AF-Context-Tokens`   | number             | Only when overflow                              |
+| `X-AF-Context-Max`      | number             | Only when overflow                              |
+| `X-AF-Context-Warning`  | string             | Only when overflow (advisory)                   |
 
 ### MCP Gateway Headers (on every `/v1/mcp/tools/call` response)
 
-| Header | Value | When |
-|--------|-------|------|
-| `X-AF-MCP-Action` | ALLOW/BLOCK/REDACT | Always |
-| `X-AF-MCP-Risk-Score` | 0-100 | Always |
-| `X-AF-MCP-Server` | server ID | Always |
-| `X-AF-MCP-Tool` | tool name | Always |
+| Header                | Value              | When   |
+| --------------------- | ------------------ | ------ |
+| `X-AF-MCP-Action`     | ALLOW/BLOCK/REDACT | Always |
+| `X-AF-MCP-Risk-Score` | 0-100              | Always |
+| `X-AF-MCP-Server`     | server ID          | Always |
+| `X-AF-MCP-Tool`       | tool name          | Always |
 
 ## API Endpoints
 
 ### Core Proxy
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/v1/chat/completions` | OpenAI-compatible proxy with scanning + token intelligence |
-| GET | `/health` | Health check |
+| Method | Endpoint               | Description                                                |
+| ------ | ---------------------- | ---------------------------------------------------------- |
+| POST   | `/v1/chat/completions` | OpenAI-compatible proxy with scanning + token intelligence |
+| GET    | `/health`              | Health check                                               |
 
 ### Token Intelligence (Phase 1)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/estimate` | Pre-flight: real token count, cost estimate, context window utilization, scan preview |
+| Method | Endpoint        | Description                                                                           |
+| ------ | --------------- | ------------------------------------------------------------------------------------- |
+| POST   | `/api/estimate` | Pre-flight: real token count, cost estimate, context window utilization, scan preview |
 
 ### File Scanning (Phase 2)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/scan/file` | Scan a single file (with content-addressed cache) |
-| POST | `/api/scan/batch` | Scan multiple files (max 50, returns per-file results + summary) |
-| DELETE | `/api/scan/cache` | Clear scan cache (optional `filePath` query filter) |
-| GET | `/api/scan/cache/stats` | Cache statistics (total entries, total size) |
+| Method | Endpoint                | Description                                                      |
+| ------ | ----------------------- | ---------------------------------------------------------------- |
+| POST   | `/api/scan/file`        | Scan a single file (with content-addressed cache)                |
+| POST   | `/api/scan/batch`       | Scan multiple files (max 50, returns per-file results + summary) |
+| DELETE | `/api/scan/cache`       | Clear scan cache (optional `filePath` query filter)              |
+| GET    | `/api/scan/cache/stats` | Cache statistics (total entries, total size)                     |
 
 ### Rule File Scanning (Phase 6)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/scan/rules` | Scan provided rule file content (injection + secrets + unicode) |
-| POST | `/api/scan/rules/directory` | Scan all known rule files in a workspace directory |
+| Method | Endpoint                    | Description                                                     |
+| ------ | --------------------------- | --------------------------------------------------------------- |
+| POST   | `/api/scan/rules`           | Scan provided rule file content (injection + secrets + unicode) |
+| POST   | `/api/scan/rules/directory` | Scan all known rule files in a workspace directory              |
 
 ### MCP Security Gateway (Phase 3)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/v1/mcp/tools/call` | Scan tool inputs, forward to MCP server, scan outputs |
-| POST | `/v1/mcp/scan` | Standalone text scan for MCP context |
-| GET | `/v1/mcp/audit` | Query MCP audit log (filter by server, action, limit) |
-| GET | `/v1/mcp/audit/stats` | Aggregate MCP tool call stats |
+| Method | Endpoint              | Description                                           |
+| ------ | --------------------- | ----------------------------------------------------- |
+| POST   | `/v1/mcp/tools/call`  | Scan tool inputs, forward to MCP server, scan outputs |
+| POST   | `/v1/mcp/scan`        | Standalone text scan for MCP context                  |
+| GET    | `/v1/mcp/audit`       | Query MCP audit log (filter by server, action, limit) |
+| GET    | `/v1/mcp/audit/stats` | Aggregate MCP tool call stats                         |
 
 ### Control Plane — Approvals (Phase 4)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/approvals/pending` | List pending approvals for user |
-| POST | `/api/approvals/:id/resolve` | Respond to approval (allow_once/allow_always/deny/deny_always) |
-| GET | `/api/approvals/history` | Past approval decisions for audit |
-| GET | `/api/approvals/rules` | Remembered "Allow Always" / "Deny Always" rules |
-| DELETE | `/api/approvals/rules/:id` | Revoke a remembered rule |
+| Method | Endpoint                     | Description                                                    |
+| ------ | ---------------------------- | -------------------------------------------------------------- |
+| GET    | `/api/approvals/pending`     | List pending approvals for user                                |
+| POST   | `/api/approvals/:id/resolve` | Respond to approval (allow_once/allow_always/deny/deny_always) |
+| GET    | `/api/approvals/history`     | Past approval decisions for audit                              |
+| GET    | `/api/approvals/rules`       | Remembered "Allow Always" / "Deny Always" rules                |
+| DELETE | `/api/approvals/rules/:id`   | Revoke a remembered rule                                       |
 
 ### Control Plane — Sessions (Phase 4)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/sessions/active` | Active sessions across all devices |
-| GET | `/api/sessions/:id` | Get specific session details |
+| Method | Endpoint               | Description                        |
+| ------ | ---------------------- | ---------------------------------- |
+| GET    | `/api/sessions/active` | Active sessions across all devices |
+| GET    | `/api/sessions/:id`    | Get specific session details       |
 
 ### Control Plane — Notifications (Phase 4)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/notifications/channels` | List configured notification channels |
-| POST | `/api/notifications/channels` | Configure a new channel (webhook, slack, email, webpush) |
-| DELETE | `/api/notifications/channels/:id` | Remove a channel |
-| POST | `/api/notifications/test` | Send test notification to all channels |
+| Method | Endpoint                          | Description                                              |
+| ------ | --------------------------------- | -------------------------------------------------------- |
+| GET    | `/api/notifications/channels`     | List configured notification channels                    |
+| POST   | `/api/notifications/channels`     | Configure a new channel (webhook, slack, email, webpush) |
+| DELETE | `/api/notifications/channels/:id` | Remove a channel                                         |
+| POST   | `/api/notifications/test`         | Send test notification to all channels                   |
+
+### Task Framework (Agent Core Phase 1)
+
+| Method | Endpoint                  | Description                                        |
+| ------ | ------------------------- | -------------------------------------------------- |
+| GET    | `/api/tasks`              | List tasks (filter by status, type)                |
+| POST   | `/api/tasks`              | Create a new task (7 types)                        |
+| GET    | `/api/tasks/:id`          | Get task details + progress                        |
+| PATCH  | `/api/tasks/:id`          | Update task status (state machine enforced)        |
+| DELETE | `/api/tasks/:id`          | Kill a running task                                |
+| POST   | `/api/tasks/:id/progress` | Report progress (toolUseCount, tokens, activities) |
+| POST   | `/api/tasks/:id/ack`      | Acknowledge a completed/failed task                |
+| POST   | `/api/tasks/kill-all`     | Kill all running tasks for user                    |
+
+### Memory System (Agent Core Phase 1)
+
+| Method | Endpoint                | Description                                           |
+| ------ | ----------------------- | ----------------------------------------------------- |
+| GET    | `/api/memory`           | List memories (filter by type)                        |
+| POST   | `/api/memory`           | Create a new memory (user/feedback/project/reference) |
+| GET    | `/api/memory/:fileName` | Read a single memory file                             |
+| DELETE | `/api/memory/:fileName` | Delete a memory + remove index entry                  |
+| GET    | `/api/memory/index`     | Read MEMORY.md index                                  |
+| PUT    | `/api/memory/index`     | Update MEMORY.md index                                |
+| POST   | `/api/memory/extract`   | Auto-extract memories from conversation text          |
+
+### Agent Service (Agent Core Phase 1)
+
+| Method | Endpoint                      | Description                                          |
+| ------ | ----------------------------- | ---------------------------------------------------- |
+| POST   | `/api/agents/spawn`           | Spawn a sub-agent (with optional worktree isolation) |
+| GET    | `/api/agents`                 | List active agents                                   |
+| DELETE | `/api/agents/:taskId`         | Kill a specific agent                                |
+| POST   | `/api/agents/:taskId/message` | Send message to an agent                             |
+
+### Command System (Phase 2)
+
+| Method | Endpoint                | Description                                                                                   |
+| ------ | ----------------------- | --------------------------------------------------------------------------------------------- |
+| GET    | `/api/commands`         | List all available commands (built-in + loaded)                                               |
+| POST   | `/api/commands/execute` | Execute a slash command. Body: `{"input": "/doctor", "model?": "...", "projectPath?": "..."}` |
+
+### Skills System (Phase 2)
+
+| Method | Endpoint             | Description                                      |
+| ------ | -------------------- | ------------------------------------------------ |
+| GET    | `/api/skills`        | List all available skills (bundled + discovered) |
+| POST   | `/api/skills/invoke` | Invoke a skill by name with args                 |
+
+### Cron Service (Phase 3)
+
+| Method | Endpoint                | Description          |
+| ------ | ----------------------- | -------------------- |
+| POST   | `/api/cron`             | Create a cron job    |
+| GET    | `/api/cron`             | List cron jobs       |
+| GET    | `/api/cron/:id`         | Get cron job details |
+| POST   | `/api/cron/:id/enable`  | Enable a cron job    |
+| POST   | `/api/cron/:id/disable` | Disable a cron job   |
+| DELETE | `/api/cron/:id`         | Delete a cron job    |
 
 ### Auth, Policy, Gateway, Org (existing)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/register`, `/api/auth/login` | User auth |
-| GET/PUT | `/api/policy` | Policy CRUD |
-| POST/GET | `/api/providers` | AI provider management (BYOK) |
-| POST/GET | `/api/credits` | Credit limits |
-| GET | `/api/usage/summary`, `/api/usage/recent` | Usage analytics |
-| GET | `/api/logs` | Paginated audit logs |
-| GET | `/api/stats` | Aggregated statistics |
-| POST | `/api/browser-scan` | Browser extension scan |
-| POST | `/api/permission-check` | Interactive permission prompt |
-| POST | `/api/simulate` | AI leak simulator |
-| GET/POST | `/api/export/json`, `/api/export/csv` | Data export |
+| Method   | Endpoint                                  | Description                   |
+| -------- | ----------------------------------------- | ----------------------------- |
+| POST     | `/api/auth/register`, `/api/auth/login`   | User auth                     |
+| GET/PUT  | `/api/policy`                             | Policy CRUD                   |
+| POST/GET | `/api/providers`                          | AI provider management (BYOK) |
+| POST/GET | `/api/credits`                            | Credit limits                 |
+| GET      | `/api/usage/summary`, `/api/usage/recent` | Usage analytics               |
+| GET      | `/api/logs`                               | Paginated audit logs          |
+| GET      | `/api/stats`                              | Aggregated statistics         |
+| POST     | `/api/browser-scan`                       | Browser extension scan        |
+| POST     | `/api/permission-check`                   | Interactive permission prompt |
+| POST     | `/api/simulate`                           | AI leak simulator             |
+| GET/POST | `/api/export/json`, `/api/export/csv`     | Data export                   |
 
 ## Database Tables
 
-| Table | Phase | Purpose |
-|-------|-------|---------|
-| `logs` | 1 | Request audit trail (sanitized text, risk scores, actions) |
-| `organizations` | 3 | Multi-org support |
-| `users` | 3 | Auth + RBAC (4 roles: admin, security_lead, developer, auditor) |
-| `api_tokens` | 3 | Bearer token auth (SHA-256 hashed, never raw) |
-| `providers` | 4 | BYOK AI providers (API keys AES-256-GCM encrypted) |
-| `models` | 4 | Model registry per provider (pricing, context window) |
-| `credits` | 4 | Credit limits (requests/tokens/dollars, auto-reset) |
-| `usage_logs` | 4 | Per-request token + cost tracking |
-| `admin_audit` | — | Admin action audit trail |
-| `audit_queue` | — | Privacy review queue (BlindMI) |
-| `sso_sessions` | 7 | SSO provider sessions (encrypted tokens) |
-| `webhooks` | 7 | Webhook registrations per org |
-| `org_model_rules` | 7 | Model allowlist/denylist per org |
-| `rate_limits` | 7 | Per-user/org rate limits (schema only — enforcement in Phase 5) |
-| `file_scan_cache` | P2 | Content-addressed file scan cache (UNIQUE on path+hash) |
-| `mcp_audit` | P3 | MCP tool call audit log (server, tool, direction, action, risk) |
-| `approval_requests` | P4 | Human-in-the-loop approval workflow (pending/approved/denied/expired) |
-| `approval_rules` | P4 | Remembered decisions ("Allow Always" / "Deny Always" per resource pattern) |
-| `notification_channels` | P4 | Pluggable notification configs (webpush, slack, email, webhook) |
-| `webpush_subscriptions` | P4 | Web Push API subscription endpoints |
-| `active_sessions` | P4 | Cross-device session tracking (device, model, last activity) |
-| `webhook_deliveries` | P5 | Stripe-pattern delivery queue (status, attempts, retry, dead letter) |
+| Table                   | Phase | Purpose                                                                    |
+| ----------------------- | ----- | -------------------------------------------------------------------------- |
+| `logs`                  | 1     | Request audit trail (sanitized text, risk scores, actions)                 |
+| `organizations`         | 3     | Multi-org support                                                          |
+| `users`                 | 3     | Auth + RBAC (4 roles: admin, security_lead, developer, auditor)            |
+| `api_tokens`            | 3     | Bearer token auth (SHA-256 hashed, never raw)                              |
+| `providers`             | 4     | BYOK AI providers (API keys AES-256-GCM encrypted)                         |
+| `models`                | 4     | Model registry per provider (pricing, context window)                      |
+| `credits`               | 4     | Credit limits (requests/tokens/dollars, auto-reset)                        |
+| `usage_logs`            | 4     | Per-request token + cost tracking                                          |
+| `admin_audit`           | —     | Admin action audit trail                                                   |
+| `audit_queue`           | —     | Privacy review queue (BlindMI)                                             |
+| `sso_sessions`          | 7     | SSO provider sessions (encrypted tokens)                                   |
+| `webhooks`              | 7     | Webhook registrations per org                                              |
+| `org_model_rules`       | 7     | Model allowlist/denylist per org                                           |
+| `rate_limits`           | 7     | Per-user/org rate limits (schema only — enforcement in Phase 5)            |
+| `file_scan_cache`       | P2    | Content-addressed file scan cache (UNIQUE on path+hash)                    |
+| `mcp_audit`             | P3    | MCP tool call audit log (server, tool, direction, action, risk)            |
+| `approval_requests`     | P4    | Human-in-the-loop approval workflow (pending/approved/denied/expired)      |
+| `approval_rules`        | P4    | Remembered decisions ("Allow Always" / "Deny Always" per resource pattern) |
+| `notification_channels` | P4    | Pluggable notification configs (webpush, slack, email, webhook)            |
+| `webpush_subscriptions` | P4    | Web Push API subscription endpoints                                        |
+| `active_sessions`       | P4    | Cross-device session tracking (device, model, last activity)               |
+| `webhook_deliveries`    | P5    | Stripe-pattern delivery queue (status, attempts, retry, dead letter)       |
+| `tasks`                 | AC1   | Agent task tracking (7 types, state machine, progress, WebSocket events)   |
 
 ## Shared Packages
 
@@ -335,6 +453,7 @@ Agent triggers high-risk action (risk >= approval threshold in policy.json)
 Pure-function security scanners extracted for reuse across proxy, MCP servers, CLI tools, and tests.
 
 **Exports:**
+
 - `normalizeUnicode(text)` — Strip zero-width chars, map confusable Cyrillic/Greek to Latin, remove bidi overrides (ASI04 defense)
 - `scanSecrets(text)` — 12 secret patterns (AWS, private key, JWT, DB URL, GitHub token, etc.)
 - `scanPII(text)` — 7 PII patterns (email, phone, SSN, Aadhaar, PAN, credit card, IP)
@@ -344,8 +463,13 @@ Pure-function security scanners extracted for reuse across proxy, MCP servers, C
 - Types: `Severity`, `SecretMatch`, `PiiMatch`, `SecretScanResult`, `PiiScanResult`, `PromptInjectionResult`, `ScanPipelineResult`, `UnicodeNormalizerResult`, `UnicodeAnomaly`
 
 **Usage:**
+
 ```typescript
-import { scanSecrets, scanPII, scanPromptInjection } from "@ai-firewall/scanner";
+import {
+  scanSecrets,
+  scanPII,
+  scanPromptInjection,
+} from "@ai-firewall/scanner";
 
 const secrets = scanSecrets("AKIAIOSFODNN7EXAMPLE");
 const pii = scanPII("admin@example.com");
@@ -356,32 +480,62 @@ All proxy scanner files (`proxy/src/scanner/*.ts`) re-export from this package f
 
 ## Module Responsibilities (SOLID)
 
-| Module | SRP (does ONE thing) | Location |
-|--------|---------------------|----------|
-| `tokenCounter.ts` | Counts tokens via tiktoken with heuristic fallback | `proxy/src/gateway/` |
-| `contextWindow.ts` | Checks if messages fit context window (advisory only) | `proxy/src/gateway/` |
-| `costEstimator.ts` | Estimates request cost from tokens + model pricing | `proxy/src/gateway/` |
-| `chatSchemas.ts` | Validates chat input via Zod (strict roles, multimodal) | `proxy/src/schemas/` |
-| `unicodeNormalizer.ts` | Strip zero-width chars, confusable mapping, bidi removal (ASI04) | `packages/scanner/src/` |
-| `ruleFileScanService.ts` | Scans IDE rule files for injection/secrets/unicode anomalies | `proxy/src/scanner/` |
-| `responseScanner.ts` | Scans LLM responses for leaked secrets/PII (LLM05) | `proxy/src/middleware/` |
-| `fileScanService.ts` | Orchestrates scanner pipeline for files | `proxy/src/scanner/` |
-| `fileScanCache.ts` | Cache read/write/invalidate for file scans | `proxy/src/scanner/` |
-| `mcpScanPipeline.ts` | Scans MCP tool I/O text through scanner pipeline | `proxy/src/mcp/` |
-| `mcpAuditLogger.ts` | Writes/reads MCP audit log entries | `proxy/src/mcp/` |
-| `mcpGateway.route.ts` | HTTP route handling for MCP gateway (delegates to pipeline + logger) | `proxy/src/routes/` |
-| `smartRouter.ts` | Risk-based + cost-aware model routing | `proxy/src/router/` |
-| `wsManager.ts` | WebSocket connection lifecycle + message delivery (heartbeat, ping/pong) | `proxy/src/ws/` |
-| `approvalService.ts` | Approval workflow (create, wait, resolve, timeout, remembered rules) | `proxy/src/services/` |
-| `sessionTracker.ts` | Active session lifecycle (start, end, touch, query, cleanup stale) | `proxy/src/services/` |
-| `notificationService.ts` | Pluggable notification dispatch (fan out to channels via interface) | `proxy/src/notifications/` |
-| `webhook.ts` (channel) | Webhook notification channel (POST to any URL with JSON payload) | `proxy/src/notifications/channels/` |
-| `cacheAdapter.ts` | Cache interface + factory (ISP: get/set/del/incr only) | `proxy/src/cache/` |
-| `memoryAdapter.ts` | In-memory cache with TTL (default, zero deps) | `proxy/src/cache/` |
-| `valkeyAdapter.ts` | Valkey/Redis cache via ioredis (optional) | `proxy/src/cache/` |
-| `licenseVerifier.ts` | Ed25519 offline license key verification | `proxy/src/license/` |
-| `featureGuard.ts` | Fastify preHandler for license feature gating | `proxy/src/license/` |
-| `webhookQueue.ts` | Stripe-pattern delivery queue (6 retries, HMAC, idempotency) | `proxy/src/services/` |
+| Module                       | SRP (does ONE thing)                                                               | Location                            |
+| ---------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------- |
+| `tokenCounter.ts`            | Counts tokens via tiktoken with heuristic fallback                                 | `proxy/src/gateway/`                |
+| `contextWindow.ts`           | Checks if messages fit context window (advisory only)                              | `proxy/src/gateway/`                |
+| `costEstimator.ts`           | Estimates request cost from tokens + model pricing                                 | `proxy/src/gateway/`                |
+| `chatSchemas.ts`             | Validates chat input via Zod (strict roles, multimodal)                            | `proxy/src/schemas/`                |
+| `unicodeNormalizer.ts`       | Strip zero-width chars, confusable mapping, bidi removal (ASI04)                   | `packages/scanner/src/`             |
+| `ruleFileScanService.ts`     | Scans IDE rule files for injection/secrets/unicode anomalies                       | `proxy/src/scanner/`                |
+| `responseScanner.ts`         | Scans LLM responses for leaked secrets/PII (LLM05)                                 | `proxy/src/middleware/`             |
+| `fileScanService.ts`         | Orchestrates scanner pipeline for files                                            | `proxy/src/scanner/`                |
+| `fileScanCache.ts`           | Cache read/write/invalidate for file scans                                         | `proxy/src/scanner/`                |
+| `fileScanProxy.ts`           | Calls proxy `/api/scan/file` before reads (fail-open, 5s timeout)                  | `core/util/`                        |
+| `ScanBanner.tsx`             | CLI scan result display with red-highlighted findings                              | `extensions/cli/src/ui/`            |
+| `ScanResultBanner.tsx`       | GUI scan result display with red-highlighted findings                              | `gui/src/components/security/`      |
+| `mcpScanPipeline.ts`         | Scans MCP tool I/O text through scanner pipeline                                   | `proxy/src/mcp/`                    |
+| `mcpAuditLogger.ts`          | Writes/reads MCP audit log entries                                                 | `proxy/src/mcp/`                    |
+| `mcpGateway.route.ts`        | HTTP route handling for MCP gateway (delegates to pipeline + logger)               | `proxy/src/routes/`                 |
+| `smartRouter.ts`             | Risk-based + cost-aware model routing                                              | `proxy/src/router/`                 |
+| `wsManager.ts`               | WebSocket connection lifecycle + message delivery (heartbeat, ping/pong)           | `proxy/src/ws/`                     |
+| `approvalService.ts`         | Approval workflow (create, wait, resolve, timeout, remembered rules)               | `proxy/src/services/`               |
+| `sessionTracker.ts`          | Active session lifecycle (start, end, touch, query, cleanup stale)                 | `proxy/src/services/`               |
+| `notificationService.ts`     | Pluggable notification dispatch (fan out to channels via interface)                | `proxy/src/notifications/`          |
+| `webhook.ts` (channel)       | Webhook notification channel (POST to any URL with JSON payload)                   | `proxy/src/notifications/channels/` |
+| `cacheAdapter.ts`            | Cache interface + factory (ISP: get/set/del/incr only)                             | `proxy/src/cache/`                  |
+| `memoryAdapter.ts`           | In-memory cache with TTL (default, zero deps)                                      | `proxy/src/cache/`                  |
+| `valkeyAdapter.ts`           | Valkey/Redis cache via ioredis (optional)                                          | `proxy/src/cache/`                  |
+| `licenseVerifier.ts`         | Ed25519 offline license key verification                                           | `proxy/src/license/`                |
+| `featureGuard.ts`            | Fastify preHandler for license feature gating                                      | `proxy/src/license/`                |
+| `webhookQueue.ts`            | Stripe-pattern delivery queue (6 retries, HMAC, idempotency)                       | `proxy/src/services/`               |
+| `taskTypes.ts`               | Task type definitions + valid state transitions                                    | `proxy/src/tasks/`                  |
+| `taskFramework.ts`           | Task lifecycle management (create, validate, transition, progress)                 | `proxy/src/tasks/`                  |
+| `taskService.ts`             | Task CRUD service (DB operations, event emission)                                  | `proxy/src/services/`               |
+| `memoryTypes.ts`             | Memory type definitions (user/feedback/project/reference)                          | `proxy/src/memory/`                 |
+| `memdir.ts`                  | File-based memory storage + MEMORY.md index management                             | `proxy/src/memory/`                 |
+| `memoryExtractor.ts`         | Auto-extract memories from conversation text                                       | `proxy/src/memory/`                 |
+| `memoryService.ts`           | Memory CRUD service (delegates to memdir)                                          | `proxy/src/services/`               |
+| `toolPermissions.ts` (core)  | Permission rules, pattern matching, dangerous file/command detection               | `core/tools/`                       |
+| `toolPermissions.ts` (proxy) | Proxy-side tool permission enforcement                                             | `proxy/src/permissions/`            |
+| `toolRegistry.ts`            | Tool registry with deduplication and search                                        | `core/tools/`                       |
+| `agentService.ts`            | Sub-agent spawn, kill, worktree isolation, messaging                               | `proxy/src/services/`               |
+| `compactService.ts`          | Conversation compaction (3 strategies: clear tool results, summarize, drop oldest) | `proxy/src/services/`               |
+| `commandTypes.ts`            | Command type definitions                                                           | `proxy/src/commands/`               |
+| `commandLoader.ts`           | Discover + load commands (built-in + external)                                     | `proxy/src/commands/`               |
+| `builtinCommands.ts`         | 10 built-in slash commands (/doctor, /compact, /cost, etc.)                        | `proxy/src/commands/`               |
+| `skillTypes.ts`              | Skill type definitions + SKILL.md frontmatter schema                               | `proxy/src/skills/`                 |
+| `skillLoader.ts`             | Discover + load skills from SKILL.md files                                         | `proxy/src/skills/`                 |
+| `pluginTypes.ts`             | Plugin manifest + lifecycle type definitions                                       | `proxy/src/plugins/`                |
+| `pluginLoader.ts`            | Plugin discover, load, enable/disable lifecycle                                    | `proxy/src/plugins/`                |
+| `hookService.ts`             | Shell command hooks on 13 event types (variable expansion, safe env)               | `proxy/src/services/`               |
+| `CoordinatorView.tsx`        | Multi-agent dashboard with worker pool status                                      | `gui/src/components/agents/`        |
+| `OnboardingWizard.tsx`       | 5-step first-run setup wizard                                                      | `gui/src/components/onboarding/`    |
+| `useCostTracker.ts`          | Real-time cost polling hook                                                        | `gui/src/hooks/`                    |
+| `costTracker.ts`             | In-memory session-level cost tracking with per-model breakdown                     | `proxy/src/gateway/`                |
+| `cronService.ts`             | Cron job scheduling (polling, Nm/Nh/Nd format, enable/disable)                     | `proxy/src/services/`               |
+| `featureFlagService.ts`      | Feature flags with hash-based rollout + include/exclude lists                      | `proxy/src/services/`               |
+| `cronAndFlags.test.ts`       | Tests for cost tracker, feature flags, cron, hooks                                 | `proxy/src/test/`                   |
 
 ## Conventions
 
@@ -399,6 +553,13 @@ All proxy scanner files (`proxy/src/scanner/*.ts`) re-export from this package f
 - Cost routing is opt-in via `policy.json` `cost_routing` section — disabled by default
 - File scan results are cached by content hash — invalidate on policy change
 - MCP tool calls routed through `/v1/mcp/tools/call` for scanning — fallback to direct if proxy unavailable
+- New slash commands go in `proxy/src/commands/builtinCommands.ts` (or as external command files)
+- New skills go in `proxy/src/skills/bundled/` as SKILL.md files with YAML frontmatter
+- New plugins go in `proxy/src/plugins/bundled/` with a `plugin.json` manifest
+- Hook event types defined in `proxy/src/services/hookService.ts` — add new types there
+- Memory files stored in `proxy/data/projects/<project>/memory/` — never write to arbitrary paths
+- Task state transitions enforced by state machine in `taskFramework.ts` — do not bypass
+- `proxy/data/` contains runtime data (memory files, SQLite DB) — always in `.gitignore`
 
 ## Don't
 
@@ -415,3 +576,8 @@ All proxy scanner files (`proxy/src/scanner/*.ts`) re-export from this package f
 - Inline Zod schemas in route files — import from `proxy/src/schemas/`
 - Build custom MCP servers for filesystem/GitHub/Slack — use ecosystem packages, wrap through gateway
 - Duplicate scanner code — import from `@ai-firewall/scanner`, proxy files only re-export
+- Write memory files outside `proxy/data/projects/` — all memory is scoped to project directories
+- Bypass task state machine — always use `taskFramework.ts` for state transitions
+- Skip tool permission checks — all tool calls must pass through the 3-level permission chain
+- Run hook commands without safe environment — always use `hookService.ts` which sanitizes env vars
+- Commit `proxy/data/` — it contains runtime state (SQLite DB, memory files) and is gitignored

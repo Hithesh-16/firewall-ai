@@ -1,0 +1,264 @@
+---
+title: "Commands, Skills & Plugins"
+description: "Slash command system, SKILL.md-based skills, plugin lifecycle, and event-driven hooks"
+---
+
+## Command System
+
+10 built-in slash commands with dynamic loading and argument parsing.
+
+### Built-in Commands
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `/doctor` | -- | System health check (proxy, DB, scanners) |
+| `/compact` | `/c` | Context compaction (pass maxTokens as arg) |
+| `/cost` | -- | Session cost summary |
+| `/stats` | -- | Firewall statistics (scanned, blocked, redacted) |
+| `/memory` | `/mem` | List memories or show MEMORY.md index |
+| `/tasks` | -- | List active/all tasks |
+| `/review` | -- | Code review (generates prompt for LLM) |
+| `/help` | `/h`, `/?` | List all available commands |
+| `/share` | -- | Session sharing info |
+| `/resume` | -- | Restore previous session |
+
+### API Endpoints
+
+#### List Commands
+```http
+GET /api/commands
+Authorization: Bearer afw_...
+```
+Returns array of commands with `name`, `description`, `usage`, `examples`.
+
+#### Execute Command
+```http
+POST /api/commands/execute
+Content-Type: application/json
+
+{
+  "input": "/doctor"
+}
+```
+Returns command result. Type is either `"local"` (executed by proxy) or `"prompt"` (returns prompt for LLM).
+
+#### Examples
+
+```bash
+# Health check
+curl -X POST http://localhost:8080/api/commands/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"input":"/doctor"}'
+
+# Stats
+curl -X POST http://localhost:8080/api/commands/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"input":"/stats"}'
+
+# Memory with subcommand
+curl -X POST http://localhost:8080/api/commands/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"input":"/memory index"}'
+```
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `proxy/src/commands/commandTypes.ts` | PromptCommand / LocalCommand types |
+| `proxy/src/commands/commandLoader.ts` | Discover + load (built-in + external) |
+| `proxy/src/commands/builtinCommands.ts` | 10 built-in implementations |
+| `proxy/src/routes/command.route.ts` | REST API endpoints |
+
+### Adding Custom Commands
+
+Commands are loaded from `commandLoader.ts`. To add a new built-in command, add an entry to `builtinCommands.ts`:
+
+```typescript
+{
+  name: "mycommand",
+  description: "What it does",
+  usage: "/mycommand [args]",
+  type: "local",
+  execute: async (args, context) => {
+    return { output: "Result text" };
+  },
+}
+```
+
+---
+
+## Skills System
+
+Skills are SKILL.md files with YAML frontmatter that expand into prompts.
+
+### Bundled Skills
+
+| Skill | Description |
+|-------|-------------|
+| `commit` | Generate commit message from staged changes |
+| `explain` | Explain code or concepts |
+
+### SKILL.md Format
+
+```markdown
+---
+name: commit
+description: Generate a commit message
+args:
+  - name: message
+    description: Optional commit description
+    required: false
+---
+
+Analyze the staged changes and write a concise commit message.
+Focus on the "why" rather than the "what".
+
+{args.message}
+```
+
+### API Endpoints
+
+#### List Skills
+```http
+GET /api/skills
+Authorization: Bearer afw_...
+```
+
+#### Invoke Skill
+```http
+POST /api/skills/invoke
+Content-Type: application/json
+
+{
+  "name": "commit",
+  "args": "Fix authentication timeout bug"
+}
+```
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `proxy/src/skills/skillTypes.ts` | Type definitions + frontmatter schema |
+| `proxy/src/skills/skillLoader.ts` | Discover + load from SKILL.md files |
+| `proxy/src/skills/bundled/` | Built-in skills (commit.md, explain.md) |
+| `proxy/src/routes/skill.route.ts` | REST API endpoints |
+
+### Adding Custom Skills
+
+Create a `SKILL.md` file in the skills directory:
+
+```markdown
+---
+name: review-pr
+description: Review a pull request
+args:
+  - name: pr_number
+    description: PR number to review
+    required: true
+---
+
+Review pull request #{args.pr_number}. Check for security issues,
+code quality, and test coverage.
+```
+
+---
+
+## Plugin System
+
+Plugins are loaded from `plugin.json` manifests with discover/load/enable/disable lifecycle.
+
+### plugin.json Manifest
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "description": "Example plugin",
+  "main": "index.js",
+  "hooks": ["tool_call", "scan_blocked"],
+  "permissions": ["read_files", "network"]
+}
+```
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `proxy/src/plugins/pluginTypes.ts` | Manifest + lifecycle types |
+| `proxy/src/plugins/pluginLoader.ts` | Discover, load, enable/disable |
+
+### Security
+
+- Plugin manifest files are scanned by `ruleFileScanService` on load
+- Plugins cannot bypass the firewall pipeline
+- Plugin permissions are checked against policy
+
+---
+
+## Hook Service
+
+Event-driven shell command hooks fired on 13 event types.
+
+### Event Types
+
+| Event | When Fired |
+|-------|-----------|
+| `tool_call` | Before a tool is executed |
+| `tool_result` | After tool returns result |
+| `scan_blocked` | Request blocked by scanner |
+| `scan_redacted` | Request redacted by scanner |
+| `task_created` | New task registered |
+| `task_completed` | Task finished successfully |
+| `task_failed` | Task errored |
+| `agent_spawned` | Sub-agent created |
+| `agent_completed` | Sub-agent finished |
+| `memory_saved` | Memory file written |
+| `command_executed` | Slash command run |
+| `approval_needed` | Human approval required |
+| `approval_resolved` | Approval decision made |
+
+### Configuration
+
+Hooks are configured in `policy.json` or settings:
+
+```json
+{
+  "hooks": {
+    "scan_blocked": ["curl -X POST http://slack/webhook -d '{\"text\":\"BLOCKED\"}'"],
+    "task_completed": ["notify-send 'Task done: $TASK_ID'"],
+    "tool_call": ["echo '$TOOL_NAME called' >> /tmp/hooks.log"]
+  }
+}
+```
+
+### Variable Expansion
+
+Hook commands support variable expansion:
+
+| Variable | Context |
+|----------|---------|
+| `$TOOL_NAME` | Name of the tool being called |
+| `$TASK_ID` | Task identifier |
+| `$EVENT` | Event type that triggered the hook |
+| `$USER_ID` | Current user ID |
+| `$RISK_SCORE` | Scan risk score (0-100) |
+
+### Security
+
+- Commands run with proxy's process permissions
+- Environment is sandboxed: only `PATH`, `HOME`, `LANG` exposed
+- Shell metacharacters are sanitized in variable expansion
+- Hook output is logged but NEVER returned to the LLM
+- Hook failures never block the main request pipeline
+- All hook executions are logged to the audit trail
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `proxy/src/services/hookService.ts` | Registration, execution, history |

@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+8684fc359779c10f1d133dcd4faf0f411abca40a92189475c748a44e3d09797e
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Firewall — Complete System Redesign Plan</title>
+<style>
+:root{--bg:#0d1117;--s:#161b22;--s2:#21262d;--s3:#30363d;--b:#30363d;--t:#c9d1d9;--tm:#8b949e;--td:#484f58;--a:#58a6ff;--g:#3fb950;--y:#d29922;--r:#f85149;--p:#bc8cff;--o:#f0883e;--c:#39d2c0;--pk:#f778ba}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--t);line-height:1.6;font-size:13px}
+.ctn{max-width:1500px;margin:0 auto;padding:16px}
+a{color:var(--a);text-decoration:none}
+.hdr{text-align:center;padding:32px 0 20px;border-bottom:1px solid var(--b);margin-bottom:20px}
+.hdr h1{font-size:1.8rem}.hdr h1 b{color:var(--a)}.hdr .sub{color:var(--tm);font-size:.9rem}
+/* Stats */
+.sts{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:20px}
+.st{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:14px;text-align:center}
+.st .n{font-size:1.6rem;font-weight:700}.st .l{color:var(--tm);font-size:.7rem;text-transform:uppercase;letter-spacing:.4px}
+.st.R .n{color:var(--r)}.st.G .n{color:var(--g)}.st.Y .n{color:var(--y)}.st.P .n{color:var(--p)}.st.C .n{color:var(--c)}.st.O .n{color:var(--o)}.st.A .n{color:var(--a)}
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--b);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{padding:8px 14px;cursor:pointer;color:var(--tm);border-bottom:2px solid transparent;font-size:.8rem;white-space:nowrap;margin-bottom:-2px;transition:all .15s}
+.tab:hover{color:var(--t)}.tab.on{color:var(--a);border-bottom-color:var(--a);font-weight:600}
+.tc{display:none;padding-top:16px}.tc.on{display:block}
+/* Table */
+table{width:100%;border-collapse:collapse;background:var(--s);border:1px solid var(--b);border-radius:8px;overflow:hidden;margin-bottom:14px}
+thead th{background:var(--s2);padding:8px 12px;text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.3px;color:var(--tm);border-bottom:1px solid var(--b);position:sticky;top:0;z-index:1}
+tbody td{padding:6px 12px;border-bottom:1px solid var(--b);font-size:.82rem;vertical-align:top}
+tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:rgba(88,166,255,.04)}
+/* Badges */
+.bg{display:inline-block;padding:1px 7px;border-radius:10px;font-size:.68rem;font-weight:600;white-space:nowrap}
+.bA{background:rgba(63,185,80,.12);color:var(--g)}.bB{background:rgba(210,153,34,.12);color:var(--y)}.bC{background:rgba(248,81,73,.12);color:var(--r)}
+.bD{background:rgba(88,166,255,.12);color:var(--a)}.bN{background:rgba(188,140,255,.12);color:var(--p)}.bE{background:var(--s2);color:var(--tm)}
+.pri{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.63rem;font-weight:700;text-transform:uppercase}
+.pC{background:var(--r);color:#fff}.pH{background:var(--o);color:#000}.pM{background:var(--y);color:#000}.pL{background:var(--p);color:#fff}
+.cat{display:inline-block;padding:0 5px;border-radius:3px;font-size:.63rem;background:var(--s2);color:var(--tm);border:1px solid var(--b)}
+/* Cards */
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:16px}
+.cd{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:14px}
+.cd h4{margin-bottom:4px;font-size:.9rem}.cd p,.cd ul{color:var(--tm);font-size:.8rem}.cd ul{padding-left:16px}.cd li{margin-bottom:1px}
+.cd.al{border-left:3px solid var(--a)}.cd.gl{border-left:3px solid var(--g)}.cd.rl{border-left:3px solid var(--r)}
+.cd.yl{border-left:3px solid var(--y)}.cd.pl{border-left:3px solid var(--p)}.cd.ol{border-left:3px solid var(--o)}.cd.cl{border-left:3px solid var(--c)}
+/* Code */
+code{background:var(--s2);padding:1px 4px;border-radius:3px;font-size:.78rem;font-family:'SF Mono',Menlo,monospace}
+pre{background:var(--s2);padding:10px;border-radius:6px;overflow-x:auto;font-size:.78rem;line-height:1.5;margin:6px 0;font-family:'SF Mono',Menlo,monospace;color:var(--tm)}
+/* Tree */
+.tree{font-family:'SF Mono',Menlo,monospace;font-size:.75rem;line-height:1.7;color:var(--tm);background:var(--s);padding:14px;border-radius:8px;border:1px solid var(--b);overflow-x:auto;white-space:pre}
+.tree .nw{color:var(--g);font-weight:600}.tree .md{color:var(--y)}.tree .ex{color:var(--td)}.tree .fw{color:var(--r)}
+/* Bars */
+.cb{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.cb .cl{width:140px;font-size:.75rem;text-align:right;flex-shrink:0}
+.cb .ct{flex:1;height:20px;background:var(--s2);border-radius:3px;overflow:hidden}
+.cb .cf{height:100%;border-radius:3px;display:flex;align-items:center;padding-left:5px;font-size:.63rem;font-weight:600}
+.cfg{background:var(--g);color:#000}.cfb{background:var(--a);color:#000}.cfr{background:var(--r);color:#fff}.cfy{background:var(--y);color:#000}
+/* Section */
+.sec{margin-bottom:24px}.sec h3{font-size:1.05rem;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--b)}.sec h4{font-size:.9rem;margin-bottom:6px;color:var(--a)}
+/* Phase */
+.ph{background:var(--s);border:1px solid var(--b);border-radius:8px;padding:16px;margin-bottom:14px}
+.phh{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.phn{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem}
+.p1 .phn{background:var(--r);color:#fff}.p2 .phn{background:var(--o);color:#000}.p3 .phn{background:var(--y);color:#000}
+/* Filter */
+.flt{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.flt input{background:var(--s);border:1px solid var(--b);color:var(--t);padding:5px 10px;border-radius:5px;font-size:.82rem;flex:1;min-width:160px}
+.flt input::placeholder{color:var(--td)}
+.fb{padding:4px 10px;border-radius:5px;border:1px solid var(--b);background:var(--s);color:var(--tm);cursor:pointer;font-size:.72rem}
+.fb:hover,.fb.on{background:var(--a);color:#000;border-color:var(--a)}
+/* Details */
+details{margin-bottom:4px}details summary{cursor:pointer;padding:4px 0;color:var(--a);font-size:.82rem;font-weight:500}
+.db{padding:8px 12px;background:var(--s2);border-radius:5px;margin-top:3px;font-size:.78rem;color:var(--tm)}
+/* Responsive */
+@media(max-width:768px){.ctn{padding:8px}.hdr h1{font-size:1.3rem}.sts{grid-template-columns:repeat(3,1fr)}.g2,.g3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="ctn">
+
+<div class="hdr">
+  <h1>AI Firewall <b>Migration &amp; System Redesign</b></h1>
+  <div class="sub">Staff+ Engineering Plan &mdash; File-by-File Feature Replication from Claude Code</div>
+  <div style="color:var(--td);font-size:.75rem;margin-top:4px">April 1 2026 &bull; Claude Code: 1,902 files, 60+ tools, 130+ cmds &bull; AI Firewall: 118 proxy files, 33 routes, 20 tables &bull; Continue.dev: 200+ core files, 26 tools, 40+ ctx providers</div>
+</div>
+
+<div class="sts">
+  <div class="st G"><div class="n">14</div><div class="l">Cat A: Reusable</div></div>
+  <div class="st Y"><div class="n">28</div><div class="l">Cat B: Adapt</div></div>
+  <div class="st R"><div class="n">26</div><div class="l">Cat C: Rebuild</div></div>
+  <div class="st A"><div class="n">9</div><div class="l">Firewall Injection Points</div></div>
+  <div class="st P"><div class="n">55</div><div class="l">New Files</div></div>
+  <div class="st O"><div class="n">6</div><div class="l">Modular Agents</div></div>
+  <div class="st C"><div class="n">18</div><div class="l">Our Advantages</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="sw(this,'t1')">1. Feature Diff Table</div>
+  <div class="tab" onclick="sw(this,'t2')">2. A/B/C Classification</div>
+  <div class="tab" onclick="sw(this,'t3')">3. Security Injection</div>
+  <div class="tab" onclick="sw(this,'t4')">4. Token Optimization</div>
+  <div class="tab" onclick="sw(this,'t5')">5. Agent System</div>
+  <div class="tab" onclick="sw(this,'t6')">6. MCP Integration</div>
+  <div class="tab" onclick="sw(this,'t7')">7. UI/UX Replication</div>
+  <div class="tab" onclick="sw(this,'t8')">8. Architecture Alignment</div>
+  <div class="tab" onclick="sw(this,'t9')">9. File-Level Plan</div>
+  <div class="tab" onclick="sw(this,'t10')">10. Data Flow Diagram</div>
+  <div class="tab" onclick="sw(this,'t11')">11. Execution Plan</div>
+</div>
+
+<!-- =========== TAB 1: FEATURE DIFF TABLE =========== -->
+<div class="tc on" id="t1">
+<div class="sec"><h3>Complete Feature Diff Table</h3>
+<div class="flt">
+  <input placeholder="Search..." oninput="ft('fdt',this.value)">
+  <button class="fb on" onclick="fp(this,'all','fdt')">All</button>
+  <button class="fb" onclick="fp(this,'A','fdt')">Cat A</button>
+  <button class="fb" onclick="fp(this,'B','fdt')">Cat B</button>
+  <button class="fb" onclick="fp(this,'C','fdt')">Cat C</button>
+</div>
+<table id="fdt"><thead><tr><th>Feature</th><th>Claude Code</th><th>AI Firewall</th><th>Continue.dev</th><th>Cat</th><th>Action</th></tr></thead><tbody>
+<tr data-c="A"><td><strong>File Read</strong></td><td><code>FileReadTool.ts</code> (400L)</td><td>Pre-flight scan via <code>/api/scan</code></td><td><code>readFile.ts</code> — EXACT match</td><td><span class="bg bA">A</span></td><td>Use Continue's. Wire through preflight scan</td></tr>
+<tr data-c="A"><td><strong>Glob Search</strong></td><td><code>GlobTool.ts</code> (199L)</td><td>N/A</td><td><code>globSearch.ts</code> — EXACT match</td><td><span class="bg bA">A</span></td><td>Use Continue's directly</td></tr>
+<tr data-c="A"><td><strong>Grep Search</strong></td><td><code>GrepTool.ts</code> (500L)</td><td>N/A</td><td><code>grepSearch.ts</code> — EXACT match</td><td><span class="bg bA">A</span></td><td>Use Continue's directly</td></tr>
+<tr data-c="A"><td><strong>Terminal Exec</strong></td><td><code>BashTool.tsx</code> (1143L)</td><td>N/A</td><td><code>runTerminalCommand.ts</code> — Full impl</td><td><span class="bg bA">A</span></td><td>Use Continue's. Add pre-exec scanning</td></tr>
+<tr data-c="A"><td><strong>Web Search</strong></td><td><code>WebSearchTool.ts</code> (400L)</td><td>N/A</td><td><code>searchWeb.ts</code> — Full impl</td><td><span class="bg bA">A</span></td><td>Use Continue's directly</td></tr>
+<tr data-c="A"><td><strong>Web Fetch</strong></td><td><code>WebFetchTool.ts</code> (319L)</td><td>N/A</td><td><code>fetchUrlContent.ts</code> — Full impl</td><td><span class="bg bA">A</span></td><td>Use Continue's directly</td></tr>
+<tr data-c="A"><td><strong>File Write</strong></td><td><code>FileWriteTool.ts</code> (435L)</td><td>File scope + scan</td><td><code>createNewFile.ts</code> — Full impl</td><td><span class="bg bA">A</span></td><td>Use Continue's. Wire through file scope check</td></tr>
+<tr data-c="A"><td><strong>View Diff</strong></td><td><code>components/diff/</code></td><td>N/A</td><td><code>viewDiff.ts</code> — Full impl</td><td><span class="bg bA">A</span></td><td>Use Continue's tool</td></tr>
+<tr data-c="A"><td><strong>Memory Tool</strong></td><td><code>memdir/</code> (8 files)</td><td>N/A</td><td><code>memory.ts</code> — Stores in .ai-firewall/memory/</td><td><span class="bg bA">A</span></td><td>Extend Continue's memory.ts with typed taxonomy</td></tr>
+<tr data-c="A"><td><strong>Plan Tool</strong></td><td><code>EnterPlanModeTool.ts</code></td><td>N/A</td><td><code>planTool.ts</code> — Full impl</td><td><span class="bg bA">A</span></td><td>Use Continue's. Add plan mode state tracking</td></tr>
+<tr data-c="A"><td><strong>Worktree</strong></td><td><code>EnterWorktreeTool.ts</code> (127L)</td><td>N/A</td><td><code>worktree.ts</code> — Full impl</td><td><span class="bg bA">A</span></td><td>Use Continue's directly</td></tr>
+<tr data-c="A"><td><strong>Token Counting</strong></td><td><code>cost-tracker.ts</code></td><td><code>tokenCounter.ts</code> (tiktoken WASM)</td><td><code>countTokens.ts</code> (tiktoken + llama)</td><td><span class="bg bA">A</span></td><td>Both exist. Proxy uses its own. Core uses its own.</td></tr>
+<tr data-c="A"><td><strong>LLM Streaming</strong></td><td>Custom via Anthropic SDK</td><td>Proxy forwards streams</td><td><code>streamChat.ts</code> — 60+ providers</td><td><span class="bg bA">A</span></td><td>Continue handles. Proxy scans stream.</td></tr>
+<tr data-c="A"><td><strong>MCP Client</strong></td><td><code>services/mcp/client.ts</code></td><td><code>mcp/mcpScanPipeline.ts</code></td><td><code>MCPConnection.ts</code> — Production</td><td><span class="bg bA">A</span></td><td>Continue's MCP client. Proxy scans I/O.</td></tr>
+<tr data-c="B"><td><strong>File Edit</strong></td><td><code>FileEditTool.ts</code> (626L)</td><td>Pre/post scan</td><td>Basic edit in core</td><td><span class="bg bB">B</span></td><td>Adapt: add staleness detection + scan-before-write</td></tr>
+<tr data-c="B"><td><strong>Task Management</strong></td><td><code>Task.ts</code> + <code>tasks/</code> (7 types)</td><td>N/A</td><td><code>taskBoundary.ts</code> — Basic only</td><td><span class="bg bB">B</span></td><td>Extend Continue's basic with full state machine</td></tr>
+<tr data-c="B"><td><strong>Context Compaction</strong></td><td><code>services/compact/</code></td><td><code>/api/reduce</code> route (partial)</td><td>N/A</td><td><span class="bg bB">B</span></td><td>Adapt claude-code's microcompact into proxy reduce route</td></tr>
+<tr data-c="B"><td><strong>Agent Spawning</strong></td><td><code>AgentTool.tsx</code> (500+L)</td><td>N/A</td><td><code>spawnAgent.ts</code> — Basic spawn</td><td><span class="bg bB">B</span></td><td>Extend Continue's with worktree isolation + background mode</td></tr>
+<tr data-c="B"><td><strong>Permission System</strong></td><td>3-level (config→classifier→dialog)</td><td>Backend RBAC + policyEnforcer</td><td>N/A</td><td><span class="bg bB">B</span></td><td>Adapt: wire proxy RBAC + new client-side permission dialogs</td></tr>
+<tr data-c="B"><td><strong>Command System</strong></td><td><code>commands.ts</code> (130+ cmds)</td><td>N/A</td><td><code>core/commands/</code> — Basic slash cmds</td><td><span class="bg bB">B</span></td><td>Extend Continue's slash cmds with registry + dynamic loading</td></tr>
+<tr data-c="B"><td><strong>Notebook Edit</strong></td><td><code>NotebookEditTool.ts</code> (300L)</td><td>N/A</td><td>N/A</td><td><span class="bg bB">B</span></td><td>Port from claude-code, wire file scan on write</td></tr>
+<tr data-c="B"><td><strong>Cost Tracking</strong></td><td><code>cost-tracker.ts</code></td><td><code>costEstimator.ts</code> + <code>usageService.ts</code></td><td>N/A</td><td><span class="bg bB">B</span></td><td>Adapt: proxy estimates, GUI shows via CostBadge</td></tr>
+<tr data-c="B"><td><strong>Config Management</strong></td><td>5-level settings stack</td><td><code>policy.json</code></td><td><code>ConfigHandler.ts</code></td><td><span class="bg bB">B</span></td><td>Continue handles config. Policy stays in proxy.</td></tr>
+<tr data-c="B"><td><strong>Session History</strong></td><td>JSONL transcript persistence</td><td>DB logs + session table</td><td>In-memory + IDE</td><td><span class="bg bB">B</span></td><td>Adapt: proxy stores session, GUI restores</td></tr>
+<tr data-c="B"><td><strong>Approval Workflow</strong></td><td>N/A (has permissions)</td><td>Full: DB + WS + approval cards</td><td>N/A</td><td><span class="bg bB">B</span></td><td>Already built. Wire into permission dialog flow</td></tr>
+<tr data-c="B"><td><strong>Smart Routing</strong></td><td>N/A</td><td><code>smartRouter.ts</code> (risk+cost)</td><td>N/A</td><td><span class="bg bB">B</span></td><td>Already built. Extend with model preference from settings</td></tr>
+<tr data-c="B"><td><strong>Response Scanning</strong></td><td>N/A</td><td><code>responseScanner.ts</code></td><td>N/A</td><td><span class="bg bB">B</span></td><td>Already built. Wire streaming transform for all new tools</td></tr>
+<tr data-c="B"><td><strong>AskUser Tool</strong></td><td><code>AskUserQuestionTool.tsx</code></td><td>N/A</td><td>N/A</td><td><span class="bg bB">B</span></td><td>Port dialog pattern, wire via WebSocket</td></tr>
+<tr data-c="B"><td><strong>Tool Search (Deferred)</strong></td><td><code>ToolSearchTool.ts</code> (300L)</td><td>N/A</td><td>N/A</td><td><span class="bg bB">B</span></td><td>Port: keyword search over tool registry</td></tr>
+<tr data-c="B"><td><strong>SendMessage Tool</strong></td><td><code>SendMessageTool.ts</code> (300L)</td><td>N/A</td><td>N/A</td><td><span class="bg bB">B</span></td><td>Port for multi-agent communication</td></tr>
+<tr data-c="B"><td><strong>OAuth Multi-Provider</strong></td><td>PKCE flow + auto/manual</td><td><code>ssoService.ts</code></td><td>N/A</td><td><span class="bg bB">B</span></td><td>Extend SSO with PKCE + GitHub/Google providers</td></tr>
+<tr data-c="C"><td><strong>Coordinator Mode</strong></td><td><code>coordinatorMode.ts</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: multi-worker orchestration with scan-per-worker</td></tr>
+<tr data-c="C"><td><strong>Skills System</strong></td><td><code>skills/</code> + bundled</td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: skill loader + bundled + directory scanning</td></tr>
+<tr data-c="C"><td><strong>Plugin System</strong></td><td><code>plugins/</code> + hot-reload</td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: manifest, lifecycle, npm loading</td></tr>
+<tr data-c="C"><td><strong>Hook System</strong></td><td><code>utils/hooks/</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: event-driven shell hooks in settings.json</td></tr>
+<tr data-c="C"><td><strong>DreamTask</strong></td><td><code>DreamTask.ts</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: memory consolidation during idle</td></tr>
+<tr data-c="C"><td><strong>Memory Extraction</strong></td><td><code>extractMemories/</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: auto-extract from conversations via forked agent</td></tr>
+<tr data-c="C"><td><strong>Permission Dialogs</strong></td><td><code>components/permissions/</code></td><td>Backend RBAC exists</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: 5+ React components for per-tool approval</td></tr>
+<tr data-c="C"><td><strong>Sandbox Mode</strong></td><td><code>utils/sandbox/</code></td><td>N/A</td><td><code>terminal-security</code> pkg</td><td><span class="bg bC">C</span></td><td>Rebuild: restricted execution with Continue's terminal-security</td></tr>
+<tr data-c="C"><td><strong>Terminal UI (Ink)</strong></td><td><code>ink/</code> (96 files)</td><td>N/A</td><td>CLI uses Ink already</td><td><span class="bg bC">C</span></td><td>Rebuild: enhance CLI with full Ink TUI</td></tr>
+<tr data-c="C"><td><strong>Feature Flags</strong></td><td>GrowthBook integration</td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: simple flag service for gradual rollout</td></tr>
+<tr data-c="C"><td><strong>Team Memory Sync</strong></td><td><code>teamMemorySync/</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: append-only shared memory with secret scanning</td></tr>
+<tr data-c="C"><td><strong>Telemetry</strong></td><td>Protobuf events</td><td>Pino structured logs</td><td>Posthog + Sentry</td><td><span class="bg bC">C</span></td><td>Rebuild: structured events with privacy controls</td></tr>
+<tr data-c="C"><td><strong>Cron/Scheduling</strong></td><td><code>ScheduleCronTool/</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: cron service + proxy route + DB table</td></tr>
+<tr data-c="C"><td><strong>Bridge API</strong></td><td><code>bridge/</code> (31 files)</td><td>WebSocket exists</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: cross-device bridge using existing WS infra</td></tr>
+<tr data-c="C"><td><strong>LSP Tool</strong></td><td><code>LSPTool.ts</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: LSP client integration</td></tr>
+<tr data-c="C"><td><strong>Diff UI Components</strong></td><td><code>components/diff/</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: InlineDiff + SideBySideDiff React components</td></tr>
+<tr data-c="C"><td><strong>Onboarding Wizard</strong></td><td><code>components/wizard/</code></td><td><code>FirstLookPage</code> (security only)</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: full wizard (env detect + provider + security)</td></tr>
+<tr data-c="C"><td><strong>Settings Sync</strong></td><td><code>settingsSync/</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: cross-device settings via proxy API</td></tr>
+<tr data-c="C"><td><strong>Suggestions Engine</strong></td><td><code>utils/suggestions/</code></td><td>N/A</td><td>N/A</td><td><span class="bg bC">C</span></td><td>Rebuild: context-aware next-action suggestions</td></tr>
+</tbody></table>
+</div></div>
+
+<!-- =========== TAB 2: A/B/C CLASSIFICATION =========== -->
+<div class="tc" id="t2">
+<div class="sec"><h3>Feature Classification Summary</h3>
+<div class="g3">
+<div class="cd gl"><h4 style="color:var(--g)">Category A — Directly Reusable (14)</h4>
+<p>Can be used with zero or minimal changes. No conflict with Continue or Firewall.</p>
+<ul>
+<li><strong>Continue.dev tools (10):</strong> readFile, globSearch, grepSearch, runTerminalCommand, searchWeb, fetchUrlContent, createNewFile, viewDiff, memory, planTool, worktree</li>
+<li><strong>Continue.dev infra (3):</strong> countTokens.ts, streamChat.ts, MCPConnection.ts</li>
+<li><strong>Proxy intelligence (1):</strong> tokenCounter.ts (already uses tiktoken WASM)</li>
+</ul>
+<p style="margin-top:8px"><strong>Rule:</strong> DO NOT rebuild these. Use as-is. Only add firewall interception wrappers.</p>
+</div>
+<div class="cd yl"><h4 style="color:var(--y)">Category B — Needs Adaptation (28)</h4>
+<p>Must be modified to route through firewall proxy, respect policy engine, or integrate with Continue APIs.</p>
+<ul>
+<li><strong>Tools needing scan wiring (6):</strong> FileEdit, TaskMgmt, Agent, Notebook, AskUser, SendMessage</li>
+<li><strong>Services needing proxy integration (8):</strong> Compaction, Permissions, Commands, CostTracking, Config, Sessions, Approval, SmartRouting</li>
+<li><strong>Already built (3):</strong> ResponseScanning, SmartRouter, ApprovalWorkflow — extend only</li>
+<li><strong>Port + adapt (11):</strong> ToolSearch, OAuth, CostBadge wiring, SessionHistory, etc.</li>
+</ul>
+<p style="margin-top:8px"><strong>Rule:</strong> Every adapted feature MUST route LLM calls through <code>/v1/chat/completions</code> and file ops through <code>/api/scan/file</code>.</p>
+</div>
+<div class="cd rl"><h4 style="color:var(--r)">Category C — Must Be Rebuilt (26)</h4>
+<p>Tightly coupled to Claude's internal infra (Anthropic SDK, GrowthBook, CCR) or requires entirely new architecture.</p>
+<ul>
+<li><strong>Multi-agent (3):</strong> Coordinator, DreamTask, MemoryExtraction — coupled to claude-code's AppState</li>
+<li><strong>Extensibility (3):</strong> Skills, Plugins, Hooks — no equivalent exists</li>
+<li><strong>UI (4):</strong> PermissionDialogs, DiffComponents, OnboardingWizard, TerminalUI</li>
+<li><strong>Enterprise (5):</strong> FeatureFlags, TeamMemSync, Telemetry, SettingsSync, Bridge</li>
+<li><strong>Tools (3):</strong> Sandbox, LSP, Cron — platform-specific</li>
+<li><strong>Other (8):</strong> Suggestions, various commands, config migrations</li>
+</ul>
+<p style="margin-top:8px"><strong>Rule:</strong> Rebuild using our patterns (Fastify routes, Zod schemas, SQLite, Redux Toolkit). Never import from claude-code directly.</p>
+</div>
+</div>
+</div></div>
+
+<!-- =========== TAB 3: SECURITY INJECTION =========== -->
+<div class="tc" id="t3">
+<div class="sec"><h3>Security Injection Layer — Every Feature Must Go Through Firewall</h3>
+<p style="color:var(--tm);margin-bottom:12px">9 interception layers. <span style="color:var(--r)">Red = mandatory for new features.</span></p>
+
+<table><thead><tr><th>Layer</th><th>File</th><th>What It Scans</th><th>Decision</th><th>New Features Must Wire</th></tr></thead><tbody>
+<tr><td><span class="bg bC">1</span> Auth</td><td><code>authMiddleware.ts</code></td><td>Bearer token (afw_*)</td><td>401/403</td><td><span class="fw" style="color:var(--r)">YES</span> — All new routes need <code>requireAuth</code></td></tr>
+<tr><td><span class="bg bC">2</span> Rate Limit</td><td><code>rateLimiter.ts</code></td><td>Per-user request count</td><td>429</td><td><span class="fw" style="color:var(--r)">YES</span> — Agent spawn, cron triggers</td></tr>
+<tr><td><span class="bg bC">3</span> Policy Enforcer</td><td><code>policyEnforcer.ts</code> (350L)</td><td>Full pipeline: Unicode→Secrets→PII→Entropy→Injection→FileScope→Policy</td><td>BLOCK/REDACT/ALLOW</td><td><span class="fw" style="color:var(--r)">YES</span> — Every LLM call, every agent prompt</td></tr>
+<tr><td><span class="bg bB">4</span> Pre-flight</td><td><code>preflightScan.route.ts</code></td><td>Messages before LLM send</td><td>BLOCK/REDACT/ALLOW</td><td><span class="fw" style="color:var(--r)">YES</span> — Skills, plugins, agent prompts</td></tr>
+<tr><td><span class="bg bB">5</span> Response Scanner</td><td><code>responseScanner.ts</code></td><td>LLM output for leaked secrets/PII</td><td>REDACT/WARN</td><td><span class="fw" style="color:var(--r)">YES</span> — Agent responses, skill outputs</td></tr>
+<tr><td><span class="bg bB">6</span> MCP Scanner</td><td><code>mcpScanPipeline.ts</code></td><td>Tool I/O (STRICTER: +40 for critical)</td><td>BLOCK/REDACT/ALLOW</td><td><span class="fw" style="color:var(--r)">YES</span> — All new MCP servers</td></tr>
+<tr><td><span class="bg bA">7</span> File Scanner</td><td><code>fileScanService.ts</code></td><td>File content (SHA-256 cached)</td><td>Per-file decision</td><td><span style="color:var(--y)">IF</span> file ops in new tools</td></tr>
+<tr><td><span class="bg bA">8</span> Rule File Scanner</td><td><code>ruleFileScanService.ts</code></td><td>CLAUDE.md, .continuerules, etc. (STRICTER: threshold=40)</td><td>BLOCK/WARN/ALLOW</td><td><span style="color:var(--y)">IF</span> skill/plugin files loaded</td></tr>
+<tr><td><span class="bg bE">9</span> Estimate</td><td><code>estimate.route.ts</code></td><td>Full pipeline + token + cost</td><td>Advisory only</td><td>Optional — for pre-flight UI</td></tr>
+</tbody></table>
+
+<h4 style="margin-top:16px">Injection Points Per New Feature</h4>
+<table><thead><tr><th>New Feature</th><th>Layers Required</th><th>How to Wire</th></tr></thead><tbody>
+<tr><td>Agent Spawning</td><td><span class="bg bC">1</span><span class="bg bC">2</span><span class="bg bC">3</span><span class="bg bB">5</span></td><td>Agent prompt → preflight scan → LLM call through proxy → response scan</td></tr>
+<tr><td>Coordinator Mode</td><td><span class="bg bC">1</span><span class="bg bC">2</span><span class="bg bC">3</span><span class="bg bB">5</span></td><td>Each worker's prompt → independent scan → independent response scan</td></tr>
+<tr><td>Skills Execution</td><td><span class="bg bC">3</span><span class="bg bB">4</span><span class="bg bB">5</span><span class="bg bA">8</span></td><td>Skill prompt → preflight → LLM → response scan. Skill files → rule file scan</td></tr>
+<tr><td>Plugin Loading</td><td><span class="bg bA">8</span></td><td>Plugin manifest files → rule file scan on load</td></tr>
+<tr><td>Memory Write</td><td><span class="bg bA">7</span></td><td>Memory file content → file scan before persist</td></tr>
+<tr><td>Team Memory Sync</td><td><span class="bg bA">7</span><span class="bg bC">1</span></td><td>Secret scan before upload (matches claude-code's scanForSecrets())</td></tr>
+<tr><td>Cron Triggers</td><td><span class="bg bC">1</span><span class="bg bC">2</span><span class="bg bC">3</span></td><td>Scheduled agent → full pipeline per execution</td></tr>
+<tr><td>Permission Dialogs</td><td><span class="bg bC">3</span></td><td>Tool call → policy check → WS push → dialog → decision</td></tr>
+<tr><td>Notebook Edit</td><td><span class="bg bA">7</span></td><td>Cell content → file scan on write</td></tr>
+<tr><td>Web Fetch</td><td><span class="bg bB">6</span></td><td>Fetched content → MCP scan pipeline (treat as untrusted tool output)</td></tr>
+</tbody></table>
+
+<div class="cd rl" style="margin-top:14px">
+<h4>Non-Negotiable Security Rules</h4>
+<ul>
+<li><strong>EVERY</strong> LLM call routes through <code>POST /v1/chat/completions</code> (proxy intercepts)</li>
+<li><strong>EVERY</strong> file read/write routes through <code>/api/scan/file</code> or uses <code>fileScanService.scanFileContent()</code></li>
+<li><strong>EVERY</strong> MCP tool call routes through <code>/v1/mcp/tools/call</code> (mcpScanPipeline)</li>
+<li><strong>EVERY</strong> agent prompt gets independent scan context (no shared scan results between parent/child)</li>
+<li><strong>EVERY</strong> LLM response gets scanned before reaching user (responseScanner middleware)</li>
+<li><strong>NEVER</strong> bypass rate limits for automated features (cron, dream, coordinator workers)</li>
+</ul>
+</div>
+</div></div>
+
+<!-- =========== TAB 4: TOKEN OPTIMIZATION =========== -->
+<div class="tc" id="t4">
+<div class="sec"><h3>Token Optimization Enforcement</h3>
+<p style="color:var(--tm);margin-bottom:12px">Replace full-file context with minimal-chunk strategies. Every token justified before spent.</p>
+
+<table><thead><tr><th>Claude Code Pattern</th><th>Current AI Firewall</th><th>Optimization Strategy</th><th>Savings</th></tr></thead><tbody>
+<tr><td>Full file read → LLM</td><td>Preflight scan counts tokens</td><td>GrepTool first → read only relevant chunks → <code>X-AF-Context-Overflow</code> advisory</td><td>60-80%</td></tr>
+<tr><td>All messages in context</td><td><code>/api/reduce</code> route (partial)</td><td>Adapt claude-code's <strong>microcompact</strong>: clear old tool results, keep last N, time-based trigger</td><td>40-60%</td></tr>
+<tr><td>Full conversation on resume</td><td>N/A</td><td>Compress old turns via summary, preserve recent 3 turns verbatim</td><td>50-70%</td></tr>
+<tr><td>Tool descriptions (all 60+)</td><td>N/A</td><td>Claude-code's ToolSearchTool: defer tool schemas, load on demand (2048 char cap per MCP tool)</td><td>30-50%</td></tr>
+<tr><td>System prompt + all memory</td><td>N/A</td><td>MEMORY.md index (max 200 lines) → load specific files on demand</td><td>20-40%</td></tr>
+<tr><td>Skill prompts in full</td><td>N/A</td><td>Skill context: 'inline' (cheap) vs 'fork' (isolated token budget)</td><td>Varies</td></tr>
+</tbody></table>
+
+<h4 style="margin-top:14px">Implementation: Context Reduction Pipeline</h4>
+<pre>
+User Input
+  → Token Count (real tiktoken via proxy/src/gateway/tokenCounter.ts)
+  → IF tokens > model_context * 0.75:
+      → Context Compaction (compactService.ts)
+        → Time-based: clear tool results older than gap threshold
+        → Count-based: keep last N tool results
+        → Summary: compress old assistant messages to 1-line summaries
+      → Recount tokens
+  → IF still over:
+      → Set X-AF-Context-Overflow header (NEVER auto-truncate)
+      → Client prompts user: "Context is 120% of limit. Compact?"
+  → Proceed with optimized context
+</pre>
+
+<h4>Token Budget Per Component</h4>
+<table><thead><tr><th>Component</th><th>Max Tokens</th><th>Strategy</th></tr></thead><tbody>
+<tr><td>System prompt</td><td>2,000</td><td>Static, cached</td></tr>
+<tr><td>MEMORY.md index</td><td>1,500 (200 lines)</td><td>Truncate at line boundary, then byte boundary</td></tr>
+<tr><td>Tool definitions</td><td>4,000 (deferred)</td><td>ToolSearchTool defers if >20 tools</td></tr>
+<tr><td>Recent messages (last 3)</td><td>Unlimited</td><td>Never compressed</td></tr>
+<tr><td>Old messages</td><td>Summarized</td><td>1-line per old turn</td></tr>
+<tr><td>Tool results</td><td>300 chars each (old)</td><td>Clear old, keep recent N</td></tr>
+<tr><td>MCP tool descriptions</td><td>2,048 per tool</td><td>Truncate to preserve intent</td></tr>
+</tbody></table>
+</div></div>
+
+<!-- =========== TAB 5: AGENT SYSTEM =========== -->
+<div class="tc" id="t5">
+<div class="sec"><h3>Agent System — 6 Modular Agents</h3>
+<pre>
+┌────────────────────────────────────────────────────────────────┐
+│                     COORDINATOR AGENT                          │
+│  Receives user request, decomposes into parallel work items    │
+│  Spawns workers via AgentTool, aggregates via SendMessageTool  │
+└───────────┬──────────┬──────────┬──────────┬──────────┬───────┘
+            │          │          │          │          │
+    ┌───────▼──┐ ┌─────▼────┐ ┌──▼──────┐ ┌▼────────┐ ┌▼────────┐
+    │ PLANNER  │ │ CONTEXT  │ │SECURITY │ │REDUCER  │ │EXECUTOR │
+    │          │ │COLLECTOR │ │SCANNER  │ │         │ │         │
+    │Plan mode │ │Grep-first│ │Scan all │ │Compact  │ │Run tool │
+    │Design    │ │Read chunk│ │I/O via  │ │old msgs │ │Write    │
+    │before    │ │Web search│ │proxy    │ │Budget   │ │Edit     │
+    │implement │ │MCP query │ │pipeline │ │tokens   │ │Terminal │
+    └────┬─────┘ └────┬─────┘ └────┬────┘ └───┬────┘ └────┬────┘
+         │            │            │           │           │
+    ┌────▼────────────▼────────────▼───────────▼───────────▼────┐
+    │                      VALIDATOR AGENT                       │
+    │  Verify output: tests pass, no regressions, scan clean    │
+    │  DreamTask: consolidate learnings into memory during idle  │
+    └───────────────────────────────────────────────────────────┘
+</pre>
+
+<div class="g2">
+<div class="cd al"><h4>1. Planner Agent</h4>
+<p><strong>Source:</strong> <code>EnterPlanModeTool</code> + <code>planTool.ts</code> (Continue)</p>
+<p><strong>Behavior:</strong> Enter plan mode → restrict tools to read-only → design approach → exit plan mode → hand off to Executor</p>
+<p><strong>Firewall:</strong> Plan text scanned via preflight. No file writes in plan mode.</p>
+</div>
+<div class="cd al"><h4>2. Context Collector Agent</h4>
+<p><strong>Source:</strong> GlobTool + GrepTool + WebSearchTool + MCP resources</p>
+<p><strong>Behavior:</strong> Grep-first strategy (search before read). Read only relevant chunks. Minimize tokens sent to LLM.</p>
+<p><strong>Firewall:</strong> File reads through <code>/api/scan/file</code>. Web fetches through MCP scan pipeline.</p>
+</div>
+<div class="cd al"><h4>3. Security Scanner Agent</h4>
+<p><strong>Source:</strong> <code>@ai-firewall/scanner</code> package (our unique advantage)</p>
+<p><strong>Behavior:</strong> Runs pre/post scan on all I/O. Enforces policy. Sets X-AF-* headers.</p>
+<p><strong>Firewall:</strong> IS the firewall. All 9 layers applied.</p>
+</div>
+<div class="cd al"><h4>4. Reducer Agent</h4>
+<p><strong>Source:</strong> <code>compactService.ts</code> + claude-code's microcompact algorithm</p>
+<p><strong>Behavior:</strong> Monitor token usage. Compact old messages. Budget allocation per component.</p>
+<p><strong>Firewall:</strong> Compacted text re-scanned if new context added.</p>
+</div>
+<div class="cd al"><h4>5. Executor Agent</h4>
+<p><strong>Source:</strong> All write tools (FileEdit, FileWrite, BashTool, NotebookEdit)</p>
+<p><strong>Behavior:</strong> Execute plan. Permission check per tool call. Background mode for long tasks.</p>
+<p><strong>Firewall:</strong> Every tool call through permission layer. Every file write through scan.</p>
+</div>
+<div class="cd al"><h4>6. Validator Agent</h4>
+<p><strong>Source:</strong> DreamTask pattern + test execution</p>
+<p><strong>Behavior:</strong> Run tests after changes. Verify no regressions. Consolidate learnings to memory.</p>
+<p><strong>Firewall:</strong> Test outputs scanned. Memory writes scanned before persist.</p>
+</div>
+</div>
+</div></div>
+
+<!-- =========== TAB 6: MCP INTEGRATION =========== -->
+<div class="tc" id="t6">
+<div class="sec"><h3>MCP Tool Integration</h3>
+<p style="color:var(--tm);margin-bottom:12px">Continue.dev has production MCP CLIENT. We scan MCP I/O. Build SERVERS for new capabilities.</p>
+
+<table><thead><tr><th>MCP Server</th><th>Claude Code Has?</th><th>Continue Has?</th><th>Action</th><th>Firewall</th></tr></thead><tbody>
+<tr><td><strong>MCP Client (core)</strong></td><td>Custom (4 transports)</td><td><code>MCPConnection.ts</code> — Production (stdio, ws, sse, http, OAuth)</td><td><span class="bg bA">USE Continue's</span></td><td>All tool I/O through <code>mcpScanPipeline.ts</code></td></tr>
+<tr><td><strong>Filesystem MCP Server</strong></td><td>Not built (uses native tools)</td><td>Not built</td><td><span class="bg bC">BUILD</span> — controlled file access</td><td>Every read/write through fileScanService</td></tr>
+<tr><td><strong>Git MCP Server</strong></td><td>Not built (BashTool + git)</td><td>Not built</td><td><span class="bg bC">BUILD</span> — safe git operations</td><td>Scan commit messages, diff content</td></tr>
+<tr><td><strong>Terminal MCP Server</strong></td><td>Not built (BashTool)</td><td>Not built</td><td><span class="bg bC">BUILD</span> — sandboxed execution</td><td>Pre-exec scan + output scan</td></tr>
+<tr><td><strong>Gmail MCP Server</strong></td><td>Not built</td><td>Not built</td><td><span class="bg bC">BUILD</span> — email read/send</td><td>PII scan on email content, secret scan on attachments</td></tr>
+<tr><td><strong>HTTP/API MCP Server</strong></td><td>Not built</td><td>Not built</td><td><span class="bg bC">BUILD</span> — REST API calls</td><td>URL allowlist, response scanning</td></tr>
+</tbody></table>
+
+<h4 style="margin-top:14px">MCP Security Gateway Flow</h4>
+<pre>
+Agent requests MCP tool call
+  → POST /v1/mcp/tools/call (proxy route)
+  → Serialize arguments to text
+  → scanMcpContent(text, "input") ← STRICTER weights (+40 critical vs +20)
+  → IF BLOCK → 403 + audit log
+  → IF REDACT → sanitize args
+  → Forward to MCP server (via Continue's MCPConnection)
+  → Receive response
+  → scanMcpContent(response, "output") ← Same strict weights
+  → IF secrets in output → REDACT before returning to agent
+  → Log to mcp_audit table
+  → Return with X-AF-MCP-* headers
+</pre>
+</div></div>
+
+<!-- =========== TAB 7: UI/UX REPLICATION =========== -->
+<div class="tc" id="t7">
+<div class="sec"><h3>UI/UX Replication — High Priority</h3>
+
+<h4>Current GUI State</h4>
+<p style="color:var(--tm);margin-bottom:10px">9 Redux slices, 44+ components, 12 pages. Security-first with firewall activity tracking.</p>
+
+<h4>Component Gap — What to Build</h4>
+<table><thead><tr><th>Component Group</th><th>Claude Code</th><th>We Have</th><th>Build</th><th>Phase</th></tr></thead><tbody>
+<tr><td><strong>permissions/</strong></td><td>8+ dialogs: FileEdit, Bash, WebFetch, MCP, PowerShell</td><td>Backend RBAC + <code>PermissionModeSelector</code> (3 modes)</td><td>PermissionDialog (base), BashPermission, FileEditPermission (with diff preview), WebFetchPermission, McpPermission</td><td>P1</td></tr>
+<tr><td><strong>tasks/</strong></td><td>TaskCard, TaskList, TaskOutput, BackgroundPanel</td><td>None</td><td>TaskCard (progress bar + kill), TaskList, TaskOutput (live stream)</td><td>P1</td></tr>
+<tr><td><strong>memory/</strong></td><td>MemoryEditor, MemoryIndex</td><td>None</td><td>MemoryEditor (frontmatter + markdown), MemoryIndex (type filter)</td><td>P1</td></tr>
+<tr><td><strong>diff/</strong></td><td>InlineDiff, SideBySideDiff</td><td>None (VS Code handles diffs)</td><td>InlineDiff, SideBySideDiff for web dashboard</td><td>P2</td></tr>
+<tr><td><strong>agents/</strong></td><td>AgentWizard, AgentCard, CoordinatorView</td><td>ApprovalCard (partial)</td><td>AgentCard (status + progress), AgentWizard (creation flow), CoordinatorView</td><td>P2</td></tr>
+<tr><td><strong>skills/</strong></td><td>SkillBrowser, SkillCard</td><td>None</td><td>SkillBrowser (list + search), SkillCard (invoke)</td><td>P2</td></tr>
+<tr><td><strong>wizard/</strong></td><td>OnboardingWizard with step progress</td><td>FirstLookPage (security only)</td><td>Full OnboardingWizard (env detect → provider → security → first scan)</td><td>P2</td></tr>
+</tbody></table>
+
+<h4 style="margin-top:14px">Chat UX Enhancements</h4>
+<table><thead><tr><th>Feature</th><th>Claude Code</th><th>Our Current</th><th>Action</th></tr></thead><tbody>
+<tr><td>Sticky prompt header</td><td>Yes (locked input area)</td><td><code>StickyPromptHeader</code> exists</td><td>Already built</td></tr>
+<tr><td>Streaming + stop</td><td>Custom Anthropic streaming</td><td>Via Continue's streamChat.ts</td><td>Already works</td></tr>
+<tr><td>Cost badge per message</td><td>Per-model breakdown</td><td><code>CostBadge</code> exists but <strong>NOT wired into StepContainer</strong></td><td><span style="color:var(--r)">Wire MessageCostBadge into StepContainer</span></td></tr>
+<tr><td>Firewall activity indicator</td><td>N/A</td><td><code>FirewallActivityIndicator</code> exists</td><td>Ensure placement in chat flow</td></tr>
+<tr><td>Pre-flight validation panel</td><td>N/A</td><td><code>PreflightPanel</code> exists but <strong>NOT invoked</strong></td><td><span style="color:var(--r)">Wire into streamResponse thunk</span></td></tr>
+<tr><td>Permission modal</td><td>Per-tool dialogs with allow/deny</td><td>PermissionModeSelector (3 modes)</td><td>Build per-tool React dialogs, push via WebSocket</td></tr>
+<tr><td>Edit/retry/fork</td><td>Full support</td><td>Edit mode exists in Redux</td><td>Already works via editState slice</td></tr>
+<tr><td>Back navigation</td><td>Breadcrumbs</td><td>Route-based (React Router)</td><td>Add breadcrumb component</td></tr>
+</tbody></table>
+
+<h4 style="margin-top:14px">New Redux Slices Needed</h4>
+<table><thead><tr><th>Slice</th><th>State Shape</th><th>Key Actions</th></tr></thead><tbody>
+<tr><td><code>taskSlice</code></td><td><code>{ tasks: Map&lt;id, TaskState&gt;, activeCount }</code></td><td>fetchTasks, createTask, updateTask, stopTask, onTaskNotification</td></tr>
+<tr><td><code>memorySlice</code></td><td><code>{ memories: MemoryEntry[], indexContent: string }</code></td><td>loadMemories, saveMemory, deleteMemory, refreshIndex</td></tr>
+<tr><td><code>permissionSlice</code></td><td><code>{ queue: PermissionRequest[], rules: PermissionRule[] }</code></td><td>pushPermission, resolvePermission, addRule, removeRule</td></tr>
+</tbody></table>
+
+<h4 style="margin-top:14px">New Pages</h4>
+<table><thead><tr><th>Route</th><th>Page</th><th>Components</th><th>Phase</th></tr></thead><tbody>
+<tr><td><code>/tasks</code></td><td>Task Dashboard</td><td>TaskList, TaskCard, TaskOutput</td><td>P1</td></tr>
+<tr><td><code>/memory</code></td><td>Memory Browser</td><td>MemoryIndex, MemoryEditor</td><td>P1</td></tr>
+<tr><td><code>/plugins</code></td><td>Plugin Manager</td><td>PluginList, PluginCard</td><td>P2</td></tr>
+<tr><td><code>/skills</code></td><td>Skill Browser</td><td>SkillBrowser, SkillCard</td><td>P2</td></tr>
+<tr><td><code>/privacy</code></td><td>Privacy Settings</td><td>TelemetryToggle, DataExport</td><td>P2</td></tr>
+</tbody></table>
+
+<h4 style="margin-top:14px">Theme Compliance</h4>
+<p style="color:var(--tm)">All new components MUST use theme-mapped Tailwind classes. NO hardcoded colors.</p>
+<pre>
+CORRECT: bg-editor, text-foreground, text-error, border-border, bg-input
+WRONG:   bg-gray-800, text-white, #ff0000, bg-[#161b22]
+</pre>
+</div></div>
+
+<!-- =========== TAB 8: ARCHITECTURE ALIGNMENT =========== -->
+<div class="tc" id="t8">
+<div class="sec"><h3>Architecture Alignment — Resolving Conflicts</h3>
+
+<h4>Constraint Map</h4>
+<div class="g2">
+<div class="cd gl"><h4>Continue.dev Handles (DO NOT DUPLICATE)</h4>
+<ul>
+<li>60+ LLM provider implementations</li>
+<li>Token counting (countTokens.ts — tiktoken + llama)</li>
+<li>Streaming (streamChat.ts)</li>
+<li>26 tools (readFile, grep, glob, terminal, web, etc.)</li>
+<li>40+ context providers (@file, @diff, @git, @web, @docs, MCP, etc.)</li>
+<li>MCP client (MCPConnection.ts — 4 transports, OAuth)</li>
+<li>Autocomplete engine</li>
+<li>LanceDB vector indexing</li>
+<li>Config management (YAML + JSON + TypeScript)</li>
+</ul>
+</div>
+<div class="cd rl"><h4>AI Firewall MUST Handle (Security Boundary)</h4>
+<ul>
+<li>ALL prompt scanning (secrets, PII, entropy, injection, unicode)</li>
+<li>ALL response scanning (LLM output for leaks)</li>
+<li>ALL MCP tool I/O scanning</li>
+<li>ALL file access scanning</li>
+<li>Policy engine (BLOCK/REDACT/ALLOW decisions)</li>
+<li>Credit limits &amp; cost tracking</li>
+<li>RBAC &amp; authentication</li>
+<li>Audit trail (every request hashed + logged)</li>
+<li>Smart routing (risk-based + cost-aware)</li>
+<li>Token intelligence (proxy-side estimation)</li>
+</ul>
+</div>
+</div>
+
+<h4 style="margin-top:14px">Abstraction Layers Required</h4>
+<table><thead><tr><th>Layer</th><th>Purpose</th><th>Implementation</th></tr></thead><tbody>
+<tr><td><strong>Tool Permission Adapter</strong></td><td>Bridge between Continue tools and firewall permissions</td><td><code>core/tools/toolPermissions.ts</code> — wraps Continue's tool.call() with permission check + scan</td></tr>
+<tr><td><strong>Scan-Aware Fetch</strong></td><td>All HTTP calls go through proxy</td><td><code>packages/fetch/</code> already exists — add X-AF header extraction</td></tr>
+<tr><td><strong>Memory Persistence Adapter</strong></td><td>Continue's memory.ts → proxy memory API</td><td><code>core/tools/implementations/memory.ts</code> — already writes to .ai-firewall/memory/. Extend with typed taxonomy.</td></tr>
+<tr><td><strong>Task State Bridge</strong></td><td>Link Continue's basic taskBoundary → full task framework</td><td><code>proxy/src/tasks/taskFramework.ts</code> — DB-backed state machine, WS notifications</td></tr>
+<tr><td><strong>Command Registry Adapter</strong></td><td>Merge Continue slash commands + new commands + skills + plugins</td><td><code>proxy/src/services/commandRegistry.ts</code> — loads all sources, dedupes, sorts</td></tr>
+</tbody></table>
+
+<h4 style="margin-top:14px">Data Flow: User Input → Tool Execution → Response</h4>
+<pre>
+User types in GUI (React)
+  → Redux dispatch: submitEditorAndInitAtIndex
+  → streamResponseThunk (gui/src/redux/thunks/)
+    → ideMessenger → VsCodeExtension → Core.streamChat()
+      → Continue resolves provider (60+ LLM providers)
+      → <span style="color:var(--r)">HTTP request to localhost:8080/v1/chat/completions (PROXY)</span>
+        → <span style="color:var(--r)">Layer 1: Auth → Layer 2: Rate Limit → Layer 3: Policy Enforcer</span>
+        → <span style="color:var(--r)">Full scanner pipeline (unicode→secrets→PII→entropy→injection)</span>
+        → <span style="color:var(--r)">Token count → Cost estimate → Smart route → Credit check</span>
+        → Forward to actual LLM provider (OpenAI/Anthropic/Gemini/Ollama)
+        → <span style="color:var(--r)">Response scanner (secrets/PII in output)</span>
+        → <span style="color:var(--r)">X-AF-* headers set → Audit log → Usage record</span>
+      ← Response streams back through proxy
+    ← Core delivers to GUI via webview protocol
+  ← Redux updates: sessionSlice, securitySlice
+  ← React renders: StepContainer + ScanResultBanner + CostBadge
+
+If tool_use in response:
+  → evaluateToolPolicies (gui thunk)
+    → <span style="color:var(--p)">Permission check (toolPermissions.ts)</span>
+    → <span style="color:var(--p)">If ask → push to permissionSlice → show PermissionDialog</span>
+    → <span style="color:var(--p)">If allow → callToolById</span>
+      → Continue tool execution (readFile, grep, bash, etc.)
+      → <span style="color:var(--r)">Tool output → scan via /api/scan (preflight)</span>
+    → Result added to messages
+    → Continue streaming with tool result
+</pre>
+</div></div>
+
+<!-- =========== TAB 9: FILE-LEVEL PLAN =========== -->
+<div class="tc" id="t9">
+<div class="sec"><h3>File-Level Implementation Plan (42 New Files)</h3>
+<table><thead><tr><th>#</th><th>Target File</th><th>Source (Claude Code)</th><th>Action</th><th>Deps</th><th>Phase</th></tr></thead><tbody>
+<!-- Phase 1: Core -->
+<tr><td>1</td><td><code>proxy/src/tasks/taskTypes.ts</code></td><td><code>claude-code/src/Task.ts</code></td><td>Rebuild: TaskType union, TaskStatus, TaskStateBase</td><td>—</td><td>P1</td></tr>
+<tr><td>2</td><td><code>proxy/src/tasks/taskFramework.ts</code></td><td><code>claude-code/src/tasks/types.ts</code></td><td>Rebuild: register, update, cleanup, disk persist</td><td>#1</td><td>P1</td></tr>
+<tr><td>3</td><td><code>proxy/src/tasks/localAgentTask.ts</code></td><td><code>claude-code/src/tasks/LocalAgentTask/</code></td><td>Rebuild: agent task lifecycle, progress</td><td>#2</td><td>P1</td></tr>
+<tr><td>4</td><td><code>proxy/src/services/taskService.ts</code></td><td>—</td><td>New: CRUD for tasks table</td><td>#2, db</td><td>P1</td></tr>
+<tr><td>5</td><td><code>proxy/src/routes/task.route.ts</code></td><td>—</td><td>New: REST endpoints</td><td>#4</td><td>P1</td></tr>
+<tr><td>6</td><td><code>proxy/src/memory/memoryTypes.ts</code></td><td><code>claude-code/src/memdir/memdir.ts</code></td><td>Rebuild: user/feedback/project/reference types, frontmatter</td><td>—</td><td>P1</td></tr>
+<tr><td>7</td><td><code>proxy/src/memory/memdir.ts</code></td><td><code>claude-code/src/memdir/memdir.ts</code></td><td>Rebuild: MEMORY.md index, truncation, buildMemoryPrompt()</td><td>#6</td><td>P1</td></tr>
+<tr><td>8</td><td><code>proxy/src/memory/memoryExtractor.ts</code></td><td><code>claude-code/src/services/extractMemories/</code></td><td>Rebuild: forked agent for auto-extraction</td><td>#7</td><td>P1</td></tr>
+<tr><td>9</td><td><code>proxy/src/services/memoryService.ts</code></td><td>—</td><td>New: memory CRUD, index management</td><td>#7</td><td>P1</td></tr>
+<tr><td>10</td><td><code>proxy/src/routes/memory.route.ts</code></td><td>—</td><td>New: REST endpoints</td><td>#9</td><td>P1</td></tr>
+<tr><td>11</td><td><code>core/tools/toolPermissions.ts</code></td><td><code>claude-code/src/hooks/useCanUseTool.tsx</code></td><td>Rebuild: 3-level permission check adapted for proxy RBAC</td><td>—</td><td>P1</td></tr>
+<tr><td>12</td><td><code>core/tools/toolRegistry.ts</code></td><td><code>claude-code/src/tools.ts</code></td><td>Rebuild: assembleToolPool (built-in + MCP, deduped)</td><td>#11</td><td>P1</td></tr>
+<tr><td>13</td><td><code>proxy/src/services/agentService.ts</code></td><td><code>claude-code/src/tools/AgentTool/</code></td><td>Rebuild: spawn, kill, status, worktree mgmt</td><td>#2</td><td>P1</td></tr>
+<tr><td>14</td><td><code>proxy/src/routes/agent.route.ts</code></td><td>—</td><td>New: REST endpoints</td><td>#13</td><td>P1</td></tr>
+<tr><td>15</td><td><code>proxy/src/services/compactService.ts</code></td><td><code>claude-code/src/services/compact/</code></td><td>Adapt: microcompact algorithm for proxy</td><td>tokenCounter</td><td>P1</td></tr>
+<tr><td>16</td><td><code>gui/src/redux/slices/taskSlice.ts</code></td><td>—</td><td>New: task state management</td><td>—</td><td>P1</td></tr>
+<tr><td>17</td><td><code>gui/src/redux/slices/memorySlice.ts</code></td><td>—</td><td>New: memory state</td><td>—</td><td>P1</td></tr>
+<tr><td>18</td><td><code>gui/src/redux/slices/permissionSlice.ts</code></td><td>—</td><td>New: permission queue + rules</td><td>—</td><td>P1</td></tr>
+<tr><td>19</td><td><code>gui/src/components/permissions/PermissionDialog.tsx</code></td><td><code>claude-code/src/components/permissions/</code></td><td>Rebuild: base dialog (allow-once/always/deny)</td><td>#18</td><td>P1</td></tr>
+<tr><td>20</td><td><code>gui/src/components/tasks/TaskCard.tsx</code></td><td>—</td><td>New: progress card</td><td>#16</td><td>P1</td></tr>
+<tr><td>21</td><td><code>gui/src/components/memory/MemoryEditor.tsx</code></td><td>—</td><td>New: frontmatter + markdown editor</td><td>#17</td><td>P1</td></tr>
+<tr><td>22</td><td><code>gui/src/pages/tasks/index.tsx</code></td><td>—</td><td>New: task dashboard</td><td>#20</td><td>P1</td></tr>
+<tr><td>23</td><td><code>gui/src/pages/memory/index.tsx</code></td><td>—</td><td>New: memory browser</td><td>#21</td><td>P1</td></tr>
+<!-- Phase 2: Commands -->
+<tr><td>24</td><td><code>proxy/src/commands/commandTypes.ts</code></td><td><code>claude-code/src/types/command.ts</code></td><td>Rebuild: PromptCommand | LocalCommand</td><td>—</td><td>P2</td></tr>
+<tr><td>25</td><td><code>proxy/src/commands/commandLoader.ts</code></td><td><code>claude-code/src/commands.ts</code></td><td>Rebuild: load skills + plugins + built-in</td><td>#24</td><td>P2</td></tr>
+<tr><td>26</td><td><code>proxy/src/commands/builtinCommands.ts</code></td><td>Various <code>commands/</code> dirs</td><td>Rebuild: /doctor, /compact, /review, /diff, /stats</td><td>#24</td><td>P2</td></tr>
+<tr><td>27</td><td><code>proxy/src/skills/skillLoader.ts</code></td><td><code>claude-code/src/skills/</code></td><td>Rebuild: bundled + directory loading</td><td>—</td><td>P2</td></tr>
+<tr><td>28</td><td><code>proxy/src/plugins/pluginLoader.ts</code></td><td><code>claude-code/src/plugins/</code></td><td>Rebuild: discover, validate, lifecycle</td><td>—</td><td>P2</td></tr>
+<tr><td>29</td><td><code>proxy/src/services/hookService.ts</code></td><td><code>claude-code/src/utils/hooks/</code></td><td>Rebuild: event-driven shell hooks</td><td>—</td><td>P2</td></tr>
+<tr><td>30</td><td><code>core/tools/implementations/skillTool.ts</code></td><td><code>claude-code/src/tools/SkillTool/</code></td><td>Rebuild: skill invocation from agent</td><td>#27</td><td>P2</td></tr>
+<!-- Phase 3: Swarm -->
+<tr><td>31</td><td><code>proxy/src/agent/coordinator.ts</code></td><td><code>claude-code/src/coordinator/</code></td><td>Rebuild: multi-worker orchestration</td><td>#13</td><td>P3</td></tr>
+<tr><td>32</td><td><code>proxy/src/agent/workerPool.ts</code></td><td>—</td><td>New: managed worker lifecycle</td><td>#31</td><td>P3</td></tr>
+<tr><td>33</td><td><code>core/tools/implementations/webSearchTool.ts</code></td><td>—</td><td>Extend Continue's searchWeb.ts with domain filtering</td><td>—</td><td>P3</td></tr>
+<tr><td>34</td><td><code>core/tools/implementations/notebookEditTool.ts</code></td><td><code>claude-code/src/tools/NotebookEditTool/</code></td><td>Port + add file scan on write</td><td>—</td><td>P3</td></tr>
+<tr><td>35</td><td><code>proxy/src/services/cronService.ts</code></td><td><code>claude-code/src/tools/ScheduleCronTool/</code></td><td>Rebuild: scheduled triggers</td><td>#13, db</td><td>P3</td></tr>
+<tr><td>36</td><td><code>gui/src/components/agents/CoordinatorView.tsx</code></td><td>—</td><td>New: multi-agent dashboard</td><td>#31</td><td>P3</td></tr>
+<tr><td>37</td><td><code>gui/src/components/diff/InlineDiff.tsx</code></td><td>—</td><td>New: inline diff view</td><td>—</td><td>P3</td></tr>
+<tr><td>38</td><td><code>gui/src/components/diff/SideBySideDiff.tsx</code></td><td>—</td><td>New: side-by-side diff</td><td>—</td><td>P3</td></tr>
+<tr><td>39</td><td><code>gui/src/components/onboarding/OnboardingWizard.tsx</code></td><td>—</td><td>New: full wizard</td><td>—</td><td>P3</td></tr>
+<tr><td>40</td><td><code>proxy/src/services/featureFlagService.ts</code></td><td>—</td><td>New: simple flag system</td><td>—</td><td>P3</td></tr>
+<tr><td>41</td><td><code>proxy/src/gateway/costTracker.ts</code></td><td><code>claude-code/src/cost-tracker.ts</code></td><td>Rebuild: session-level per-model breakdown</td><td>—</td><td>P3</td></tr>
+<tr><td>42</td><td><code>gui/src/hooks/useCostTracker.ts</code></td><td>—</td><td>New: real-time cost hook</td><td>#41</td><td>P3</td></tr>
+<!-- Phase CLI: Terminal Enrichment -->
+<tr style="background:rgba(88,166,255,.06)"><td colspan="6" style="color:var(--a);font-weight:600;padding:8px 12px">CLI Terminal Enrichment (extensions/cli/)</td></tr>
+<tr><td>43</td><td><code>extensions/cli/src/commands/doctor.ts</code></td><td><code>claude-code/src/commands/doctor/</code></td><td>Rebuild: env check, proxy health, deps, config validation</td><td>#26</td><td>P2</td></tr>
+<tr><td>44</td><td><code>extensions/cli/src/commands/compact.ts</code></td><td><code>claude-code/src/commands/compact/</code></td><td>Rebuild: context compaction from CLI</td><td>#15</td><td>P2</td></tr>
+<tr><td>45</td><td><code>extensions/cli/src/commands/review.ts</code></td><td><code>claude-code/src/commands/review/</code></td><td>Rebuild: code review command (diff analysis)</td><td>#26</td><td>P2</td></tr>
+<tr><td>46</td><td><code>extensions/cli/src/commands/resume.ts</code></td><td><code>claude-code/src/commands/resume/</code></td><td>Rebuild: restore previous session from disk</td><td>#26</td><td>P2</td></tr>
+<tr><td>47</td><td><code>extensions/cli/src/commands/share.ts</code></td><td><code>claude-code/src/commands/share/</code></td><td>Rebuild: session sharing (URL/QR)</td><td>#26</td><td>P2</td></tr>
+<tr><td>48</td><td><code>extensions/cli/src/commands/memory.ts</code></td><td><code>claude-code/src/commands/memory/</code></td><td>Rebuild: view/edit MEMORY.md from terminal</td><td>#9</td><td>P2</td></tr>
+<tr><td>49</td><td><code>extensions/cli/src/ui/PermissionPrompt.tsx</code></td><td><code>claude-code/src/components/permissions/</code></td><td>Rebuild: Ink terminal permission dialog (allow/deny/always)</td><td>#11</td><td>P1</td></tr>
+<tr><td>50</td><td><code>extensions/cli/src/ui/TaskProgress.tsx</code></td><td><code>claude-code/src/components/tasks/</code></td><td>Rebuild: Ink task progress display (spinner, status, kill)</td><td>#4</td><td>P1</td></tr>
+<tr><td>51</td><td><code>extensions/cli/src/ui/MemoryBrowser.tsx</code></td><td><code>claude-code/src/components/memory/</code></td><td>Rebuild: Ink memory viewer (list types, read entries)</td><td>#9</td><td>P1</td></tr>
+<tr><td>52</td><td><code>extensions/cli/src/ui/CostDisplay.tsx</code></td><td><code>claude-code/src/costHook.ts</code></td><td>Rebuild: Ink session cost display (per-model breakdown)</td><td>#41</td><td>P3</td></tr>
+<tr><td>53</td><td><code>extensions/cli/src/ui/DiffView.tsx</code></td><td><code>claude-code/src/ink/</code> components</td><td>Rebuild: Ink colored diff display (inline, side-by-side)</td><td>—</td><td>P2</td></tr>
+<tr><td>54</td><td><code>extensions/cli/src/ui/AgentStatus.tsx</code></td><td><code>claude-code/src/tools/AgentTool/</code></td><td>Rebuild: Ink agent progress card (running agents, background tasks)</td><td>#13</td><td>P3</td></tr>
+<tr><td>55</td><td><code>extensions/cli/src/ui/ScanBanner.tsx</code></td><td>—</td><td>New: Ink firewall scan result display (our unique feature in CLI)</td><td>—</td><td>P1</td></tr>
+</tbody></table>
+</div></div>
+
+<!-- =========== TAB 10: DATA FLOW DIAGRAM =========== -->
+<div class="tc" id="t10">
+<div class="sec"><h3>Architecture Diagram — Data Flow</h3>
+<pre style="font-size:.72rem;line-height:1.6">
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    USER DEVICES                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                      │
+│  │ VS Code  │  │   CLI    │  │   Web    │  │JetBrains │  │ Mobile   │                      │
+│  │Extension │  │  (Ink)   │  │Dashboard │  │ (alpha)  │  │(planned) │                      │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘                      │
+│       │              │             │              │              │                            │
+│       └──────────────┴─────────────┴──────────────┴──────────────┘                            │
+│                                    │                                                         │
+│                            WebSocket + REST                                                  │
+└────────────────────────────────────┼─────────────────────────────────────────────────────────┘
+                                     │
+┌────────────────────────────────────▼─────────────────────────────────────────────────────────┐
+│                        <span style="color:var(--r);font-weight:700">AI FIREWALL PROXY (localhost:8080)</span>                                  │
+│                                                                                              │
+│  ┌─────────────────────────────── REQUEST PIPELINE ─────────────────────────────────────┐    │
+│  │                                                                                       │    │
+│  │  <span style="color:var(--o)">Auth</span> → <span style="color:var(--o)">Rate Limit</span> → <span style="color:var(--r)">Unicode Normalize</span> → <span style="color:var(--r)">Secret Scan (12)</span> → <span style="color:var(--r)">PII Scan (7)</span>           │    │
+│  │  → <span style="color:var(--r)">Entropy Scan</span> → <span style="color:var(--r)">Context Adjust</span> → <span style="color:var(--r)">Injection Scan (23)</span> → <span style="color:var(--r)">Policy Engine</span>          │    │
+│  │  → <span style="color:var(--y)">BLOCK(403)</span> | <span style="color:var(--y)">REDACT(sanitize)</span> | <span style="color:var(--g)">ALLOW</span> | <span style="color:var(--p)">REQUIRE_APPROVAL</span>               │    │
+│  │                                                                                       │    │
+│  │  <span style="color:var(--c)">Token Count</span> → <span style="color:var(--c)">Context Window Check</span> → <span style="color:var(--c)">Cost Estimate</span> → <span style="color:var(--c)">Smart Route</span>                │    │
+│  │  → <span style="color:var(--c)">Credit Check</span> → <span style="color:var(--a)">Provider Adapter</span> → <span style="color:var(--a)">Forward to LLM</span>                          │    │
+│  │                                                                                       │    │
+│  └───────────────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                              │
+│  ┌─────────────────────────────── RESPONSE PIPELINE ────────────────────────────────────┐    │
+│  │                                                                                       │    │
+│  │  LLM Response → <span style="color:var(--r)">Response Scanner (secrets/PII in output)</span> → <span style="color:var(--y)">REDACT/WARN</span>              │    │
+│  │  → <span style="color:var(--c)">Usage Recording</span> → <span style="color:var(--c)">Audit Log (SHA-256 hash)</span> → <span style="color:var(--g)">X-AF-* Headers</span>                │    │
+│  │                                                                                       │    │
+│  └───────────────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                              │
+│  ┌──────── SERVICES ────────┐  ┌──── NEW SERVICES ────┐  ┌──── DATABASE ─────┐              │
+│  │ approvalService          │  │ <span style="color:var(--g)">taskService</span>          │  │ SQLite (28 tables) │              │
+│  │ wsManager (WebSocket)    │  │ <span style="color:var(--g)">memoryService</span>        │  │ + pgAdapter (ent.) │              │
+│  │ notificationService      │  │ <span style="color:var(--g)">agentService</span>         │  │                    │              │
+│  │ webhookQueue             │  │ <span style="color:var(--g)">commandRegistry</span>      │  │ Vault (AES-256)    │              │
+│  │ sessionTracker           │  │ <span style="color:var(--g)">compactService</span>       │  │                    │              │
+│  │ creditService            │  │ <span style="color:var(--g)">hookService</span>          │  │ Cache (memory/     │              │
+│  │ usageService             │  │ <span style="color:var(--g)">skillService</span>         │  │   valkey)          │              │
+│  │ rbacService              │  │ <span style="color:var(--g)">pluginService</span>        │  │                    │              │
+│  │ licenseVerifier          │  │ <span style="color:var(--g)">cronService</span>          │  │                    │              │
+│  └──────────────────────────┘  └──────────────────────┘  └────────────────────┘              │
+│                                                                                              │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                           Forward to LLM
+                                     │
+┌────────────────────────────────────▼─────────────────────────────────────────────────────────┐
+│                              LLM PROVIDERS (via Continue.dev)                                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                      │
+│  │ OpenAI   │  │Anthropic │  │  Gemini  │  │  Ollama  │  │ 56 more  │                      │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+</pre>
+</div></div>
+
+<!-- =========== TAB 11: EXECUTION PLAN =========== -->
+<div class="tc" id="t11">
+<div class="sec"><h3>Step-by-Step Execution Plan</h3>
+
+<div class="ph p1"><div class="phh"><div class="phn">1</div><div><h4>Phase 1 — Core Parity (Weeks 1-5)</h4><p style="color:var(--tm);font-size:.8rem">Chat, streaming, context, tasks, memory, permissions, agents</p></div></div>
+<table><thead><tr><th>Week</th><th>Deliverable</th><th>Files</th><th>Tests</th></tr></thead><tbody>
+<tr><td>1</td><td>Task framework + DB tables</td><td>#1-5 (taskTypes, taskFramework, localAgentTask, taskService, task.route)</td><td>State machine transitions, CRUD, disk persist</td></tr>
+<tr><td>1-2</td><td>Tool permission layer</td><td>#11-12 (toolPermissions, toolRegistry)</td><td>Allow/deny/ask rules, pattern matching</td></tr>
+<tr><td>2</td><td>Memory system</td><td>#6-10 (memoryTypes, memdir, extractor, service, route)</td><td>MEMORY.md index, frontmatter, truncation</td></tr>
+<tr><td>2-3</td><td>Agent spawning</td><td>#13-14 (agentService, agent.route)</td><td>Spawn, kill, worktree isolation</td></tr>
+<tr><td>3</td><td>Context compaction</td><td>#15 (compactService)</td><td>Token savings, old message clearing</td></tr>
+<tr><td>3-4</td><td>Permission dialogs (GUI)</td><td>#18-19 (permissionSlice, PermissionDialog)</td><td>Queue, resolve, WebSocket push</td></tr>
+<tr><td>4-5</td><td>Task + Memory pages (GUI)</td><td>#16-17, #20-23 (slices, components, pages)</td><td>Component rendering, state management</td></tr>
+<tr><td>5</td><td>Wire CostBadge into StepContainer + PreflightPanel into flow</td><td>Modify existing GUI files</td><td>Integration tests</td></tr>
+<tr style="background:rgba(88,166,255,.06)"><td>4-5</td><td><strong>CLI: Permission + Task + Scan UI</strong></td><td>#49-51, #55 (PermissionPrompt, TaskProgress, MemoryBrowser, ScanBanner)</td><td>Ink component rendering, terminal interaction</td></tr>
+</tbody></table>
+</div>
+
+<div class="ph p2"><div class="phh"><div class="phn">2</div><div><h4>Phase 2 — Advanced Features (Weeks 5-9)</h4><p style="color:var(--tm);font-size:.8rem">Commands, skills, plugins, hooks, agent creation, CLI commands</p></div></div>
+<table><thead><tr><th>Week</th><th>Deliverable</th><th>Files</th><th>Tests</th></tr></thead><tbody>
+<tr><td>5-6</td><td>Command registry + built-in commands</td><td>#24-26 (commandTypes, loader, builtins)</td><td>/doctor, /compact, /review execution</td></tr>
+<tr style="background:rgba(88,166,255,.06)"><td>5-6</td><td><strong>CLI: Wire commands into terminal</strong></td><td>#43-48 (doctor, compact, review, resume, share, memory CLI commands)</td><td>CLI command execution, output formatting</td></tr>
+<tr><td>6-7</td><td>Skills system</td><td>#27, #30 (skillLoader, skillTool)</td><td>Bundled + directory loading, invocation</td></tr>
+<tr><td>7-8</td><td>Plugin system + hooks</td><td>#28-29 (pluginLoader, hookService)</td><td>Plugin lifecycle, event hooks</td></tr>
+<tr><td>8-9</td><td>GUI: plugins, skills, diff, onboarding</td><td>#36-39 (CoordinatorView, Diff, Wizard)</td><td>Component tests</td></tr>
+<tr style="background:rgba(88,166,255,.06)"><td>8-9</td><td><strong>CLI: Diff view component</strong></td><td>#53 (DiffView.tsx — colored inline/side-by-side in terminal)</td><td>Diff rendering, color output</td></tr>
+</tbody></table>
+</div>
+
+<div class="ph p3"><div class="phh"><div class="phn">3</div><div><h4>Phase 3 — Differentiation (Weeks 9-14)</h4><p style="color:var(--tm);font-size:.8rem">Security, token optimization, coordinator, MCP servers, CLI polish</p></div></div>
+<table><thead><tr><th>Week</th><th>Deliverable</th><th>Files</th><th>Tests</th></tr></thead><tbody>
+<tr><td>9-10</td><td>Coordinator mode + worker pool</td><td>#31-32 (coordinator, workerPool)</td><td>Multi-agent spawn, result aggregation, scan-per-worker</td></tr>
+<tr><td>10-11</td><td>Advanced tools (notebook, cron)</td><td>#33-35 (webSearch ext, notebook, cron)</td><td>Notebook edit + scan, cron scheduling</td></tr>
+<tr><td>11-12</td><td>Cost tracker + feature flags</td><td>#40-42 (featureFlags, costTracker, hook)</td><td>Per-model cost, flag evaluation</td></tr>
+<tr style="background:rgba(88,166,255,.06)"><td>11-12</td><td><strong>CLI: Cost display + Agent status</strong></td><td>#52, #54 (CostDisplay, AgentStatus — Ink components)</td><td>Per-model cost in terminal, running agent cards</td></tr>
+<tr><td>12-14</td><td>MCP servers (filesystem, git, terminal)</td><td>New MCP server packages</td><td>Scan I/O on every tool call</td></tr>
+</tbody></table>
+</div>
+
+<div style="margin-top:16px;padding:14px;background:var(--s);border:1px solid var(--b);border-radius:8px">
+<h4>Key Metrics</h4>
+<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>
+<tr><td>Total new files</td><td><strong>55</strong> (23 backend + 12 GUI + 7 core tools + 13 CLI)</td></tr>
+<tr><td>Modified files</td><td><strong>~17</strong> (server.ts, database.ts, App.tsx, store.ts, commands.ts, cli/index.ts, etc.)</td></tr>
+<tr><td>New DB tables</td><td><strong>8</strong> (tasks, memories, agents, commands, plugins, skills, cron_jobs, permission_rules)</td></tr>
+<tr><td>New Redux slices</td><td><strong>3</strong> (taskSlice, memorySlice, permissionSlice)</td></tr>
+<tr><td>New GUI pages</td><td><strong>5</strong> (/tasks, /memory, /plugins, /skills, /privacy)</td></tr>
+<tr><td>New GUI components</td><td><strong>~15</strong> (permissions, tasks, memory, diff, agents, onboarding)</td></tr>
+<tr><td>New CLI components</td><td><strong>13</strong> (6 commands + 7 Ink UI components)</td></tr>
+<tr><td>Continue.dev tools reused</td><td><strong>14</strong> (zero duplication)</td></tr>
+<tr><td>Firewall injection points</td><td><strong>9 layers</strong> (all new features wired)</td></tr>
+<tr><td>Time estimate</td><td><strong>15-17 weeks</strong> (with 2 developers, 30% overlap between phases)</td></tr>
+</tbody></table>
+</div>
+
+<div style="margin-top:14px;padding:14px;background:var(--s);border:1px solid var(--b);border-radius:8px">
+<h4>What Makes Us Better Than Claude Code</h4>
+<div class="g3">
+<div class="cd gl"><h4 style="color:var(--g)">More Secure</h4><p>5-layer scanner, response scanning, MCP I/O scanning, unicode defense, rule file scanning. Claude Code has ZERO pre-send scanning.</p></div>
+<div class="cd cl"><h4 style="color:var(--c)">More Token-Efficient</h4><p>Real tiktoken counting, context compaction, grep-first strategy, deferred tool schemas, advisory context window (never auto-truncate).</p></div>
+<div class="cd al"><h4 style="color:var(--a)">Same/Better UX</h4><p>All claude-code UX patterns replicated + firewall activity indicator, scan result banner, cost badge, pre-flight panel, approval workflow.</p></div>
+<div class="cd pl"><h4 style="color:var(--p)">Agent-Driven</h4><p>6 modular agents (Planner, Collector, Scanner, Reducer, Executor, Validator) with coordinator orchestration.</p></div>
+<div class="cd ol"><h4 style="color:var(--o)">Cross-Platform</h4><p>VS Code, CLI, Web Dashboard, JetBrains. 60+ LLM providers vs Claude Code's Anthropic-only.</p></div>
+<div class="cd rl"><h4 style="color:var(--r)">Enterprise-Ready</h4><p>RBAC, SSO, credit limits, audit trail, webhook delivery, license verification. Claude Code has none of this.</p></div>
+</div>
+</div>
+</div></div>
+
+</div><!-- /ctn -->
+
+<script>
+function sw(el,id){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.tc').forEach(t=>t.classList.remove('on'));el.classList.add('on');document.getElementById(id).classList.add('on')}
+function ft(tid,q){document.getElementById(tid).querySelectorAll('tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none'})}
+function fp(btn,c,tid){document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');document.getElementById(tid).querySelectorAll('tbody tr').forEach(r=>{r.style.display=(c==='all'||r.dataset.c===c)?'':'none'})}
+</script>
+</body>
+</html>

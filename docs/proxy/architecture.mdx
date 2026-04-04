@@ -65,6 +65,8 @@ Every proxied response includes these headers:
 | `X-AF-Risk-Score` | 0-100 | Aggregate risk score |
 | `X-AF-Secrets-Count` | number | Secrets detected |
 | `X-AF-PII-Count` | number | PII items detected |
+| `X-AF-Findings` | JSON array | Detected items with type, severity, category, masked value (max 20) |
+| `X-AF-Redacted-Types` | comma-separated | Types of redacted items (e.g., `AWS_KEY,EMAIL`) |
 | `X-AF-Input-Tokens` | number | Real tiktoken count |
 | `X-AF-Estimated-Cost` | number | Pre-request cost estimate |
 | `X-AF-Token-Method` | tiktoken/heuristic | Which tokenizer was used |
@@ -77,6 +79,8 @@ SQLite with WAL mode. 22 tables covering audit logs, auth, providers, credits, f
 
 <Tip>
 The proxy is designed as a **gateway, not a controller**. It informs via headers — never silently modifies your prompts, truncates your context, or blocks oversized requests. The client (extension/CLI) reads headers and lets you decide.
+
+**Exception:** File reads are actively enforced. The `readFile` tool in both CLI and core calls `POST /api/scan/file` before reading. If the proxy returns BLOCK, the file is never read. If it returns REDACT, the sanitized content is used instead. This is the one path where the proxy actively prevents access rather than just informing.
 </Tip>
 
 ## Design Principles

@@ -58,9 +58,11 @@ export interface RuleFileScanResult {
 // ── Known Rule Files ───────────────────────────────────────────────────────
 
 export const KNOWN_RULE_FILES = [
+  ".aifirewallrules",
   ".continuerules",
   ".cursorrules",
   ".windsurfrules",
+  ".ai-firewall/rules",
   ".continue/rules",
   "CLAUDE.md",
   "AGENTS.md",
@@ -79,7 +81,7 @@ export const KNOWN_RULE_FILES = [
  */
 export function scanRuleFile(
   request: RuleFileScanRequest,
-  injectionThreshold = 40
+  injectionThreshold = 40,
 ): RuleFileScanResult {
   const startTime = Date.now();
   const reasons: string[] = [];
@@ -89,7 +91,7 @@ export function scanRuleFile(
   const normalizedText = normResult.normalizedText;
   if (normResult.hasAnomalies) {
     reasons.push(
-      `Unicode anomalies: ${normResult.findings.length} (${[...new Set(normResult.findings.map((f) => f.type))].join(", ")})`
+      `Unicode anomalies: ${normResult.findings.length} (${[...new Set(normResult.findings.map((f) => f.type))].join(", ")})`,
     );
   }
 
@@ -97,7 +99,7 @@ export function scanRuleFile(
   const piResult = scanPromptInjection(normalizedText, injectionThreshold);
   if (piResult.isInjection) {
     reasons.push(
-      `Prompt injection detected (score: ${piResult.score}, patterns: ${piResult.matches.map((m) => m.pattern).join(", ")})`
+      `Prompt injection detected (score: ${piResult.score}, patterns: ${piResult.matches.map((m) => m.pattern).join(", ")})`,
     );
   }
 
@@ -119,13 +121,16 @@ export function scanRuleFile(
   let riskScore = 0;
   riskScore += piResult.score; // Direct injection score contribution
   for (const s of secretResult.secrets) {
-    riskScore += s.severity === "critical" ? 40 : s.severity === "high" ? 25 : 10;
+    riskScore +=
+      s.severity === "critical" ? 40 : s.severity === "high" ? 25 : 10;
   }
   riskScore += normResult.findings.length * 5; // Unicode anomalies add risk
   riskScore = Math.min(riskScore, 100);
 
   // Action determination
-  const hasCriticalSecret = secretResult.secrets.some((s) => s.severity === "critical");
+  const hasCriticalSecret = secretResult.secrets.some(
+    (s) => s.severity === "critical",
+  );
   let action: "ALLOW" | "BLOCK" | "WARN";
   if (piResult.isInjection || hasCriticalSecret || riskScore >= 60) {
     action = "BLOCK";
@@ -157,7 +162,7 @@ export function scanRuleFile(
  */
 export function scanRuleFiles(
   requests: RuleFileScanRequest[],
-  injectionThreshold = 40
+  injectionThreshold = 40,
 ): RuleFileScanResult[] {
   return requests.map((req) => scanRuleFile(req, injectionThreshold));
 }
@@ -174,8 +179,10 @@ function detectSource(filename: string): RuleFileSource {
   if (base === ".windsurfrules") return ".windsurfrules";
   if (base === "CLAUDE.md") return "CLAUDE.md";
   if (base === "AGENTS.md") return "AGENTS.md";
-  if (filename.endsWith(".github/copilot-instructions.md")) return ".github/copilot-instructions.md";
-  if (base === ".aifirewall.md" || base === ".ai-firewall.md") return ".aifirewall.md";
+  if (filename.endsWith(".github/copilot-instructions.md"))
+    return ".github/copilot-instructions.md";
+  if (base === ".aifirewall.md" || base === ".ai-firewall.md")
+    return ".aifirewall.md";
   return "custom";
 }
 
@@ -187,7 +194,7 @@ function detectSource(filename: string): RuleFileSource {
  */
 export function scanWorkspaceRuleFiles(
   directory: string,
-  injectionThreshold = 40
+  injectionThreshold = 40,
 ): RuleFileScanResult[] {
   const results: RuleFileScanResult[] = [];
 
@@ -201,7 +208,7 @@ export function scanWorkspaceRuleFiles(
       const content = fs.readFileSync(fullPath, "utf-8");
       const result = scanRuleFile(
         { filePath: fullPath, content, source: detectSource(rulePath) },
-        injectionThreshold
+        injectionThreshold,
       );
       results.push(result);
     } catch {

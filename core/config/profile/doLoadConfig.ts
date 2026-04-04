@@ -56,7 +56,7 @@ async function loadRules(ide: IDE) {
   rules.unshift(...yamlRules);
   errors.push(...continueRulesErrors);
 
-  // Add rules from markdown files in .continue/rules
+  // Add rules from markdown files in .ai-firewall/rules
   const { rules: markdownRules, errors: markdownRulesErrors } =
     await loadMarkdownRules(ide);
   rules.unshift(...markdownRules);

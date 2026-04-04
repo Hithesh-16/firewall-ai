@@ -1,5 +1,12 @@
 import type { Response } from "node-fetch";
 
+export interface ScanFinding {
+  type: string; // e.g. "AWS_KEY", "EMAIL", "JWT"
+  severity: string; // "critical" | "high" | "medium"
+  category: "secret" | "pii";
+  maskedValue: string; // e.g. "AKIA************7E"
+}
+
 export interface FirewallScanResult {
   action: "ALLOW" | "REDACT" | "BLOCK" | "REQUIRE_APPROVAL";
   riskScore: number;
@@ -7,8 +14,21 @@ export interface FirewallScanResult {
   piiCount: number;
   entropyCount: number;
   redactedTypes: string[];
+  findings: ScanFinding[];
   tokensUsed?: number;
   cost?: number;
+  /** Token intelligence (Phase 1) */
+  inputTokens?: number;
+  estimatedCost?: number;
+  tokenMethod?: "tiktoken" | "heuristic";
+  contextOverflow?: boolean;
+  contextTokens?: number;
+  contextMax?: number;
+  /** MCP gateway (Phase 3) */
+  mcpAction?: "ALLOW" | "BLOCK" | "REDACT";
+  mcpRiskScore?: number;
+  mcpServer?: string;
+  mcpTool?: string;
 }
 
 export type ScanResultListener = (result: FirewallScanResult) => void;
@@ -53,12 +73,42 @@ export function extractScanHeaders(
     redactedTypes: (response.headers.get("x-af-redacted-types") || "")
       .split(",")
       .filter(Boolean),
+    findings: parseFindingsHeader(response.headers.get("x-af-findings")),
     tokensUsed: response.headers.has("x-af-tokens-used")
       ? parseInt(response.headers.get("x-af-tokens-used")!, 10)
       : undefined,
     cost: response.headers.has("x-af-cost")
       ? parseFloat(response.headers.get("x-af-cost")!)
       : undefined,
+    // Token intelligence headers
+    inputTokens: response.headers.has("x-af-input-tokens")
+      ? parseInt(response.headers.get("x-af-input-tokens")!, 10)
+      : undefined,
+    estimatedCost: response.headers.has("x-af-estimated-cost")
+      ? parseFloat(response.headers.get("x-af-estimated-cost")!)
+      : undefined,
+    tokenMethod:
+      (response.headers.get(
+        "x-af-token-method",
+      ) as FirewallScanResult["tokenMethod"]) ?? undefined,
+    contextOverflow:
+      response.headers.get("x-af-context-overflow") === "true" || undefined,
+    contextTokens: response.headers.has("x-af-context-tokens")
+      ? parseInt(response.headers.get("x-af-context-tokens")!, 10)
+      : undefined,
+    contextMax: response.headers.has("x-af-context-max")
+      ? parseInt(response.headers.get("x-af-context-max")!, 10)
+      : undefined,
+    // MCP gateway headers
+    mcpAction:
+      (response.headers.get(
+        "x-af-mcp-action",
+      ) as FirewallScanResult["mcpAction"]) ?? undefined,
+    mcpRiskScore: response.headers.has("x-af-mcp-risk-score")
+      ? parseInt(response.headers.get("x-af-mcp-risk-score")!, 10)
+      : undefined,
+    mcpServer: response.headers.get("x-af-mcp-server") ?? undefined,
+    mcpTool: response.headers.get("x-af-mcp-tool") ?? undefined,
   };
 
   // Notify all listeners
@@ -71,6 +121,23 @@ export function extractScanHeaders(
   }
 
   return result;
+}
+
+/** Parse the compact X-AF-Findings JSON header into ScanFinding[] */
+function parseFindingsHeader(header: string | null): ScanFinding[] {
+  if (!header) return [];
+  try {
+    const parsed = JSON.parse(header);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((f: { t: string; s: string; c: string; v: string }) => ({
+      type: f.t,
+      severity: f.s,
+      category: f.c as "secret" | "pii",
+      maskedValue: f.v,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -93,6 +160,7 @@ export function extractFirewallMeta(
     piiCount: meta.pii_found ?? 0,
     entropyCount: meta.entropy_found ?? 0,
     redactedTypes: [],
+    findings: Array.isArray(meta.findings) ? meta.findings : [],
     tokensUsed: meta.tokens_used,
     cost: meta.cost_estimate,
   };

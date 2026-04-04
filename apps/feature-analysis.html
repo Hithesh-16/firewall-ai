@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Firewall — Complete Implementation Plan vs Claude Code</title>
+<style>
+:root {
+  --bg: #0d1117; --surface: #161b22; --surface2: #21262d; --surface3: #30363d;
+  --border: #30363d; --text: #c9d1d9; --text-muted: #8b949e; --text-dim: #484f58;
+  --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149;
+  --purple: #bc8cff; --orange: #f0883e; --cyan: #39d2c0; --pink: #f778ba;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;font-size:14px}
+.container{max-width:1500px;margin:0 auto;padding:20px}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+
+/* Header */
+.header{text-align:center;padding:40px 0 24px;border-bottom:1px solid var(--border);margin-bottom:24px}
+.header h1{font-size:2rem;margin-bottom:4px}.header h1 .vs{color:var(--text-muted);font-weight:400}
+.header .sub{color:var(--text-muted);font-size:.95rem}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.stat .n{font-size:1.8rem;font-weight:700}.stat .l{color:var(--text-muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.5px}
+.stat.r .n{color:var(--red)}.stat.g .n{color:var(--green)}.stat.y .n{color:var(--yellow)}.stat.p .n{color:var(--purple)}.stat.c .n{color:var(--cyan)}.stat.o .n{color:var(--orange)}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{padding:10px 16px;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;font-size:.85rem;white-space:nowrap;transition:all .15s;margin-bottom:-2px}
+.tab:hover{color:var(--text)}.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.tc{display:none;padding-top:20px}.tc.active{display:block}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+thead th{background:var(--surface2);padding:10px 14px;text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}
+tbody td{padding:8px 14px;border-bottom:1px solid var(--border);font-size:.85rem;vertical-align:top}
+tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:rgba(88,166,255,.04)}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:600;white-space:nowrap}
+.b-miss{background:rgba(248,81,73,.12);color:var(--red)}.b-part{background:rgba(210,153,34,.12);color:var(--yellow)}
+.b-done{background:rgba(63,185,80,.12);color:var(--green)}.b-cc{background:rgba(88,166,255,.12);color:var(--accent)}
+.b-new{background:rgba(188,140,255,.12);color:var(--purple)}
+.pri{display:inline-block;padding:1px 7px;border-radius:3px;font-size:.65rem;font-weight:700;text-transform:uppercase}
+.pri-c{background:var(--red);color:#fff}.pri-h{background:var(--orange);color:#000}
+.pri-m{background:var(--yellow);color:#000}.pri-l{background:var(--purple);color:#fff}
+.cat{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.65rem;background:var(--surface2);color:var(--text-muted);border:1px solid var(--border)}
+
+/* Cards */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:14px;margin-bottom:20px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:20px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+.card h4{margin-bottom:6px;font-size:.95rem}.card p,.card ul{color:var(--text-muted);font-size:.83rem}
+.card ul{padding-left:18px}.card li{margin-bottom:2px}
+.card.accent-l{border-left:3px solid var(--accent)}.card.green-l{border-left:3px solid var(--green)}
+.card.red-l{border-left:3px solid var(--red)}.card.yellow-l{border-left:3px solid var(--yellow)}
+.card.purple-l{border-left:3px solid var(--purple)}.card.orange-l{border-left:3px solid var(--orange)}
+.card.cyan-l{border-left:3px solid var(--cyan)}
+
+/* Code */
+code{background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:.8rem;font-family:'SF Mono',Menlo,monospace}
+pre{background:var(--surface2);padding:12px;border-radius:8px;overflow-x:auto;font-size:.8rem;line-height:1.5;margin:8px 0;font-family:'SF Mono',Menlo,monospace;color:var(--text-muted)}
+
+/* Tree */
+.tree{font-family:'SF Mono',Menlo,monospace;font-size:.8rem;line-height:1.8;color:var(--text-muted);background:var(--surface);padding:16px;border-radius:10px;border:1px solid var(--border);overflow-x:auto;white-space:pre}
+.tree .new{color:var(--green);font-weight:600}.tree .mod{color:var(--yellow)}.tree .exist{color:var(--text-dim)}
+
+/* Compare bars */
+.cbar{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.cbar .cl{width:160px;font-size:.8rem;text-align:right;flex-shrink:0}
+.cbar .ct{flex:1;height:22px;background:var(--surface2);border-radius:3px;overflow:hidden;position:relative}
+.cbar .cf{height:100%;border-radius:3px;display:flex;align-items:center;padding-left:6px;font-size:.65rem;font-weight:600;transition:width .4s}
+.cf-g{background:var(--green);color:#000}.cf-b{background:var(--accent);color:#000}.cf-r{background:var(--red);color:#fff}
+
+/* Sections */
+.sec{margin-bottom:28px}.sec h3{font-size:1.1rem;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.sec h4{font-size:.95rem;margin-bottom:8px;color:var(--accent)}
+
+/* Phase blocks */
+.phase{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.phase-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.phase-num{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem}
+.p1 .phase-num{background:var(--red);color:#fff}.p2 .phase-num{background:var(--orange);color:#000}
+.p3 .phase-num{background:var(--yellow);color:#000}.p4 .phase-num{background:var(--purple);color:#fff}
+.p5 .phase-num{background:var(--cyan);color:#000}.p6 .phase-num{background:var(--green);color:#000}
+
+/* Filter */
+.filter{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filter input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:.85rem;flex:1;min-width:180px}
+.filter input::placeholder{color:var(--text-dim)}
+.fbtn{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);cursor:pointer;font-size:.75rem}
+.fbtn:hover,.fbtn.on{background:var(--accent);color:#000;border-color:var(--accent)}
+
+/* Collapsible */
+details{margin-bottom:6px}details summary{cursor:pointer;padding:6px 0;color:var(--accent);font-size:.85rem;font-weight:500}
+details summary:hover{text-decoration:underline}
+.detail-box{padding:10px 14px;background:var(--surface2);border-radius:6px;margin-top:4px;font-size:.82rem;color:var(--text-muted)}
+
+/* Responsive */
+@media(max-width:768px){.container{padding:10px}.header h1{font-size:1.4rem}.stats{grid-template-columns:repeat(3,1fr)}.grid2,.grid3{grid-template-columns:1fr}.cbar .cl{width:100px;font-size:.7rem}}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <h1>AI Firewall <span class="vs">vs</span> Claude Code</h1>
+  <div class="sub">Complete Architecture Analysis, Code Gap Report &amp; Phase-by-Phase Implementation Plan</div>
+  <div style="color:var(--text-dim);font-size:.8rem;margin-top:6px">Generated April 1, 2026 &mdash; claude-code/ (1,902 files, 60+ tools, 130+ commands) vs AI Firewall (118 files, 33 routes, 20 tables)</div>
+</div>
+
+<div class="stats">
+  <div class="stat r"><div class="n">68</div><div class="l">Missing Features</div></div>
+  <div class="stat y"><div class="n">11</div><div class="l">Partially Built</div></div>
+  <div class="stat g"><div class="n">18</div><div class="l">Our Advantages</div></div>
+  <div class="stat p"><div class="n">42</div><div class="l">New Files Needed</div></div>
+  <div class="stat o"><div class="n">6</div><div class="l">Phases</div></div>
+  <div class="stat c"><div class="n">~31</div><div class="l">Weeks Total</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="sw(this,'t1')">Architecture Comparison</div>
+  <div class="tab" onclick="sw(this,'t2')">Directory &amp; File Plan</div>
+  <div class="tab" onclick="sw(this,'t3')">Feature Gap Matrix</div>
+  <div class="tab" onclick="sw(this,'t4')">UI Comparison</div>
+  <div class="tab" onclick="sw(this,'t5')">Code Changes Map</div>
+  <div class="tab" onclick="sw(this,'t6')">Phase 1: Agent Core</div>
+  <div class="tab" onclick="sw(this,'t7')">Phase 2: Commands</div>
+  <div class="tab" onclick="sw(this,'t8')">Phase 3: Swarm</div>
+  <div class="tab" onclick="sw(this,'t9')">Phase 4: Security UX</div>
+  <div class="tab" onclick="sw(this,'t10')">Phase 5: UI/DX</div>
+  <div class="tab" onclick="sw(this,'t11')">Phase 6: Enterprise</div>
+  <div class="tab" onclick="sw(this,'t12')">Dependency Graph</div>
+</div>
+
+<!-- ============ TAB 1: ARCHITECTURE COMPARISON ============ -->
+<div class="tc active" id="t1">
+<div class="sec">
+<h3>Architectural Pattern Comparison</h3>
+<div class="grid2">
+  <div class="card accent-l">
+    <h4>Claude Code Architecture</h4>
+    <pre>
+main.tsx (entry)
+  ├─ setup.ts (bootstrap: Node check, hooks, worktree, background jobs)
+  ├─ tools.ts (getAllBaseTools → getTools → assembleToolPool)
+  │   └─ Tool.ts interface: call(), checkPermissions(), inputSchema (Zod)
+  ├─ commands.ts (getCommands: skills → plugins → built-in)
+  │   └─ types: PromptCommand | LocalCommand | LocalJSXCommand
+  ├─ context.ts (getSystemContext + getUserContext → CLAUDE.md)
+  ├─ state/AppState.tsx (immutable store: messages, tasks, mcp, permissions)
+  ├─ memdir/ (persistent memory: MEMORY.md index + typed .md files)
+  ├─ coordinator/ (multi-agent: spawn workers via AgentTool)
+  ├─ tasks/ (7 types: bash, agent, remote, teammate, workflow, monitor, dream)
+  ├─ hooks/useCanUseTool (3-level: config → classifier → dialog)
+  ├─ services/ (mcp, analytics, compact, lsp, plugins, tips, oauth)
+  ├─ plugins/ (npm packages, hot-reload, manifest)
+  ├─ skills/ (bundled + directory-loaded + dynamic)
+  └─ ink/ (96 files: terminal UI engine)</pre>
+  </div>
+  <div class="card green-l">
+    <h4>AI Firewall Architecture (Current)</h4>
+    <pre>
+proxy/src/server.ts (Fastify bootstrap)
+  ├─ routes/ (33 endpoints: ai, scan, estimate, approval, mcp, auth, rbac...)
+  ├─ middleware/ (5: policyEnforcer, rateLimiter, responseScanner, configCheck, permissionMode)
+  ├─ scanner/ (re-exports from @ai-firewall/scanner)
+  ├─ policy/ (6: policyEngine, policyChain, orgPolicy, modelPolicy, fileRestriction, projectPolicy)
+  ├─ gateway/ (13: tokenCounter, costEstimator, contextWindow, gatewayRouter, adapters...)
+  ├─ auth/ (4: authService, authMiddleware, rbacService, ssoService)
+  ├─ db/ (SQLite 20 tables, Drizzle ORM, pgAdapter)
+  ├─ mcp/ (2: mcpScanPipeline, mcpAuditLogger)
+  ├─ router/ (1: smartRouter — risk + cost routing)
+  ├─ ws/ (1: wsManager — WebSocket events)
+  ├─ notifications/ (4: service + webhook/slack/email channels)
+  ├─ cache/ (3: adapter + memory + valkey)
+  ├─ license/ (2: verifier + featureGuard)
+  └─ redactor/ (1: content sanitization)
+
+packages/scanner/ (shared: secrets, PII, entropy, injection, unicode, context)
+core/ (Continue engine: 60+ LLM providers, 26 tools, 40+ context providers)
+gui/ (React+Redux: 12 pages, 44+ components, 15+ hooks)
+extensions/vscode/ (production: 100+ commands, webview, autocomplete)
+extensions/cli/ (beta: Ink TUI, Commander.js)</pre>
+  </div>
+</div>
+</div>
+
+<div class="sec">
+<h3>Key Pattern Differences</h3>
+<table>
+<thead><tr><th>Pattern</th><th>Claude Code</th><th>AI Firewall</th><th>Gap</th></tr></thead>
+<tbody>
+<tr><td><strong>Tool Interface</strong></td><td><code>buildTool()</code> + Zod schema + <code>checkPermissions()</code> + <code>call()</code> + rendering methods</td><td>Core tools in <code>core/tools/</code> — simple name+call interface, no permission layer</td><td><span class="badge b-miss">Missing permission-aware tool wrapper</span></td></tr>
+<tr><td><strong>Command System</strong></td><td>3 types (prompt/local/local-jsx), memoized registry, dynamic loading from skills+plugins+MCP</td><td>No command registry. Slash commands in <code>core/commands/</code> but not extensible</td><td><span class="badge b-miss">Need full command registry</span></td></tr>
+<tr><td><strong>State Management</strong></td><td>Immutable store (<code>createStore</code>), file-based session persistence (JSONL)</td><td>Redux Toolkit in GUI, no CLI state management</td><td><span class="badge b-part">GUI has Redux, CLI has nothing</span></td></tr>
+<tr><td><strong>Permission Model</strong></td><td>3-level (config rules → auto-classifier → interactive dialog), per-tool granularity</td><td>Backend RBAC (capabilities), no client-side per-tool dialog</td><td><span class="badge b-miss">Need client-side permission dialogs</span></td></tr>
+<tr><td><strong>Task System</strong></td><td>7 task types, disk-persisted output, progress tracking, background execution</td><td>No task system</td><td><span class="badge b-miss">Need full task framework</span></td></tr>
+<tr><td><strong>Memory</strong></td><td>Typed memories (user/feedback/project/reference), MEMORY.md index, team sync</td><td>No persistent memory system</td><td><span class="badge b-miss">Need memdir equivalent</span></td></tr>
+<tr><td><strong>Plugin System</strong></td><td>npm packages, hot-reload, manifest, bundled + user plugins</td><td>No plugin system</td><td><span class="badge b-miss">Need plugin framework</span></td></tr>
+<tr><td><strong>Multi-Agent</strong></td><td>Coordinator mode (spawn workers, SendMessage, TaskStop), swarm utilities</td><td>No multi-agent capability</td><td><span class="badge b-miss">Need coordinator mode</span></td></tr>
+<tr><td><strong>Security Scanning</strong></td><td>Minimal (sandbox mode, OS keychain)</td><td>5-layer pipeline, 23 categories, MCP scanning, response scanning, unicode defense</td><td><span class="badge b-done">We lead significantly</span></td></tr>
+<tr><td><strong>Token Intelligence</strong></td><td>Basic cost-tracker per model</td><td>Full: tiktoken WASM, cost estimation, context window advisory, smart routing</td><td><span class="badge b-done">We lead</span></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- ============ TAB 2: DIRECTORY & FILE PLAN ============ -->
+<div class="tc" id="t2">
+<div class="sec">
+<h3>Repository Structure — New Files &amp; Modifications</h3>
+<p style="color:var(--text-muted);margin-bottom:12px"><span style="color:var(--green)">green = new file</span> &bull; <span style="color:var(--yellow)">yellow = modify existing</span> &bull; <span style="color:var(--text-dim)">dim = exists, no change</span></p>
+
+<div class="tree">
+<span class="exist">proxy/src/</span>
+<span class="exist">├── server.ts</span>                          <span class="mod">← register new routes (task, command, memory, agent)</span>
+<span class="exist">├── routes/</span>
+<span class="exist">│   ├── ai.route.ts</span>                    <span class="mod">← wire permission enforcement middleware</span>
+<span class="new">│   ├── task.route.ts</span>                  <span class="new">← NEW: CRUD for tasks (list, get, create, update, stop)</span>
+<span class="new">│   ├── command.route.ts</span>               <span class="new">← NEW: command registry endpoint (list, execute)</span>
+<span class="new">│   ├── memory.route.ts</span>                <span class="new">← NEW: memory CRUD (list, read, write, delete)</span>
+<span class="new">│   ├── agent.route.ts</span>                 <span class="new">← NEW: agent spawn, status, kill, send-message</span>
+<span class="new">│   ├── plugin.route.ts</span>                <span class="new">← NEW: plugin registry, enable/disable</span>
+<span class="new">│   ├── skill.route.ts</span>                 <span class="new">← NEW: skill listing, invocation</span>
+<span class="new">│   ├── cron.route.ts</span>                  <span class="new">← NEW: scheduled agent triggers</span>
+<span class="exist">│   └── ... (existing routes unchanged)</span>
+<span class="exist">├── middleware/</span>
+<span class="new">│   ├── permissionDialog.ts</span>            <span class="new">← NEW: per-tool permission enforcement + dialog push</span>
+<span class="exist">│   └── ... (existing middleware unchanged)</span>
+<span class="exist">├── services/</span>
+<span class="new">│   ├── taskService.ts</span>                 <span class="new">← NEW: task CRUD, lifecycle, disk persistence</span>
+<span class="new">│   ├── commandRegistry.ts</span>             <span class="new">← NEW: command loading (built-in + skills + plugins)</span>
+<span class="new">│   ├── memoryService.ts</span>               <span class="new">← NEW: memory read/write/index (MEMORY.md pattern)</span>
+<span class="new">│   ├── agentService.ts</span>                <span class="new">← NEW: agent spawn, coordinator mode, worker pool</span>
+<span class="new">│   ├── pluginService.ts</span>               <span class="new">← NEW: plugin loading, lifecycle, registry</span>
+<span class="new">│   ├── skillService.ts</span>                <span class="new">← NEW: skill discovery, bundled + directory loading</span>
+<span class="new">│   ├── compactService.ts</span>              <span class="new">← NEW: context compaction (compress conversation)</span>
+<span class="new">│   ├── hookService.ts</span>                 <span class="new">← NEW: event-driven hook system</span>
+<span class="new">│   ├── cronService.ts</span>                 <span class="new">← NEW: scheduled agent triggers</span>
+<span class="new">│   ├── featureFlagService.ts</span>          <span class="new">← NEW: feature flag system (GrowthBook-style)</span>
+<span class="exist">│   ├── approvalService.ts</span>             <span class="mod">← extend with permission dialog integration</span>
+<span class="exist">│   └── ... (existing services unchanged)</span>
+<span class="exist">├── gateway/</span>
+<span class="new">│   └── costTracker.ts</span>                 <span class="new">← NEW: session-level cost hooks (per-model breakdown)</span>
+<span class="exist">├── db/</span>
+<span class="exist">│   ├── database.ts</span>                    <span class="mod">← add tables: tasks, memories, agents, plugins, skills, cron_jobs</span>
+<span class="exist">│   └── schema.ts</span>                      <span class="mod">← add Drizzle schemas for new tables</span>
+<span class="new">├── agent/</span>
+<span class="new">│   ├── coordinator.ts</span>                 <span class="new">← NEW: coordinator mode (spawn workers, aggregate results)</span>
+<span class="new">│   ├── workerPool.ts</span>                  <span class="new">← NEW: managed worker lifecycle</span>
+<span class="new">│   └── agentTypes.ts</span>                  <span class="new">← NEW: LocalAgent, RemoteAgent, DreamAgent types</span>
+<span class="new">├── tasks/</span>
+<span class="new">│   ├── taskFramework.ts</span>               <span class="new">← NEW: task registration, state machine, cleanup</span>
+<span class="new">│   ├── localAgentTask.ts</span>              <span class="new">← NEW: in-process agent task</span>
+<span class="new">│   ├── backgroundTask.ts</span>              <span class="new">← NEW: background execution with notifications</span>
+<span class="new">│   └── taskTypes.ts</span>                   <span class="new">← NEW: TaskType, TaskStatus, TaskState unions</span>
+<span class="new">├── memory/</span>
+<span class="new">│   ├── memdir.ts</span>                      <span class="new">← NEW: memory system (MEMORY.md index + typed .md files)</span>
+<span class="new">│   ├── memoryTypes.ts</span>                 <span class="new">← NEW: user/feedback/project/reference types</span>
+<span class="new">│   └── memoryExtractor.ts</span>             <span class="new">← NEW: auto-extract memories from conversations</span>
+<span class="new">├── commands/</span>
+<span class="new">│   ├── commandTypes.ts</span>                <span class="new">← NEW: PromptCommand | LocalCommand interfaces</span>
+<span class="new">│   ├── builtinCommands.ts</span>             <span class="new">← NEW: /doctor, /compact, /review, /diff, /stats, /share</span>
+<span class="new">│   └── commandLoader.ts</span>               <span class="new">← NEW: load from skills/ + plugins/ + built-in</span>
+<span class="new">├── plugins/</span>
+<span class="new">│   ├── pluginLoader.ts</span>                <span class="new">← NEW: discover, load, validate plugins</span>
+<span class="new">│   ├── pluginTypes.ts</span>                 <span class="new">← NEW: plugin manifest, lifecycle interface</span>
+<span class="new">│   └── bundled/</span>                       <span class="new">← NEW: first-party bundled plugins</span>
+<span class="new">├── skills/</span>
+<span class="new">│   ├── skillLoader.ts</span>                 <span class="new">← NEW: load skills from directory + bundled</span>
+<span class="new">│   ├── skillTypes.ts</span>                  <span class="new">← NEW: skill definition interface</span>
+<span class="new">│   └── bundled/</span>                       <span class="new">← NEW: bundled skills (commit, review, loop, etc.)</span>
+<span class="exist">└── ... (scanner, policy, auth, etc. unchanged)</span>
+
+<span class="exist">core/</span>
+<span class="exist">├── tools/implementations/</span>
+<span class="new">│   ├── agentTool.ts</span>                   <span class="new">← NEW: spawn sub-agents with worktree isolation</span>
+<span class="new">│   ├── taskCreateTool.ts</span>              <span class="new">← NEW: create tracked tasks</span>
+<span class="new">│   ├── taskListTool.ts</span>                <span class="new">← NEW: list tasks with status</span>
+<span class="new">│   ├── taskUpdateTool.ts</span>              <span class="new">← NEW: update task status/metadata</span>
+<span class="new">│   ├── taskStopTool.ts</span>                <span class="new">← NEW: kill running tasks</span>
+<span class="new">│   ├── planModeTool.ts</span>                <span class="new">← NEW: enter/exit planning mode</span>
+<span class="new">│   ├── worktreeTool.ts</span>                <span class="new">← NEW: git worktree create/delete</span>
+<span class="new">│   ├── webSearchTool.ts</span>               <span class="new">← NEW: web search integration</span>
+<span class="new">│   ├── webFetchTool.ts</span>                <span class="new">← NEW: fetch URL content</span>
+<span class="new">│   ├── notebookEditTool.ts</span>            <span class="new">← NEW: Jupyter notebook cell editing</span>
+<span class="new">│   ├── askUserTool.ts</span>                 <span class="new">← NEW: explicit user question mid-task</span>
+<span class="new">│   ├── sendMessageTool.ts</span>             <span class="new">← NEW: continue existing agent conversation</span>
+<span class="new">│   ├── skillTool.ts</span>                   <span class="new">← NEW: invoke registered skills</span>
+<span class="new">│   ├── cronTool.ts</span>                    <span class="new">← NEW: create/list/delete cron triggers</span>
+<span class="exist">│   └── ... (existing 26 tools unchanged)</span>
+<span class="exist">├── tools/</span>
+<span class="new">│   ├── toolPermissions.ts</span>             <span class="new">← NEW: permission checking layer for all tools</span>
+<span class="new">│   └── toolRegistry.ts</span>                <span class="new">← NEW: tool assembly pool (built-in + MCP, deduped, sorted)</span>
+<span class="exist">└── ... (llm, context, indexing unchanged)</span>
+
+<span class="exist">gui/src/</span>
+<span class="exist">├── pages/</span>
+<span class="new">│   ├── tasks/</span>                         <span class="new">← NEW: task dashboard (list, progress, kill)</span>
+<span class="new">│   ├── memory/</span>                        <span class="new">← NEW: memory browser/editor</span>
+<span class="new">│   ├── plugins/</span>                       <span class="new">← NEW: plugin marketplace/manager</span>
+<span class="new">│   ├── skills/</span>                        <span class="new">← NEW: skill browser</span>
+<span class="exist">│   └── ... (existing pages unchanged)</span>
+<span class="exist">├── components/</span>
+<span class="new">│   ├── permissions/</span>                   <span class="new">← NEW: per-tool permission dialogs</span>
+<span class="new">│   │   ├── PermissionDialog.tsx</span>       <span class="new">← NEW: base dialog (allow-once/always/deny)</span>
+<span class="new">│   │   ├── BashPermission.tsx</span>         <span class="new">← NEW: shell command approval</span>
+<span class="new">│   │   ├── FileEditPermission.tsx</span>     <span class="new">← NEW: file edit approval with diff preview</span>
+<span class="new">│   │   ├── WebFetchPermission.tsx</span>     <span class="new">← NEW: URL fetch approval</span>
+<span class="new">│   │   └── McpPermission.tsx</span>          <span class="new">← NEW: MCP tool approval</span>
+<span class="new">│   ├── tasks/</span>                         <span class="new">← NEW: task UI components</span>
+<span class="new">│   │   ├── TaskCard.tsx</span>               <span class="new">← NEW: task progress card</span>
+<span class="new">│   │   ├── TaskList.tsx</span>               <span class="new">← NEW: task list view</span>
+<span class="new">│   │   └── TaskOutput.tsx</span>             <span class="new">← NEW: task output viewer</span>
+<span class="new">│   ├── agents/</span>                        <span class="new">← NEW: agent management UI</span>
+<span class="new">│   │   ├── AgentCard.tsx</span>              <span class="new">← NEW: running agent card</span>
+<span class="new">│   │   ├── AgentWizard.tsx</span>            <span class="new">← NEW: agent creation wizard</span>
+<span class="new">│   │   └── CoordinatorView.tsx</span>        <span class="new">← NEW: multi-agent coordination view</span>
+<span class="new">│   ├── memory/</span>                        <span class="new">← NEW: memory UI components</span>
+<span class="new">│   │   ├── MemoryEditor.tsx</span>           <span class="new">← NEW: memory file editor</span>
+<span class="new">│   │   └── MemoryIndex.tsx</span>            <span class="new">← NEW: MEMORY.md browser</span>
+<span class="new">│   ├── diff/</span>                          <span class="new">← NEW: diff visualization</span>
+<span class="new">│   │   ├── InlineDiff.tsx</span>             <span class="new">← NEW: inline diff view</span>
+<span class="new">│   │   └── SideBySideDiff.tsx</span>         <span class="new">← NEW: side-by-side diff view</span>
+<span class="new">│   ├── onboarding/</span>                    <span class="new">← NEW: onboarding wizard</span>
+<span class="new">│   │   └── OnboardingWizard.tsx</span>       <span class="new">← NEW: step-by-step setup flow</span>
+<span class="exist">│   └── ... (existing components unchanged)</span>
+<span class="exist">├── redux/slices/</span>
+<span class="new">│   ├── taskSlice.ts</span>                   <span class="new">← NEW: task state management</span>
+<span class="new">│   ├── memorySlice.ts</span>                 <span class="new">← NEW: memory state management</span>
+<span class="new">│   ├── permissionSlice.ts</span>             <span class="new">← NEW: permission dialog queue</span>
+<span class="exist">│   └── ... (existing slices unchanged)</span>
+<span class="exist">├── hooks/</span>
+<span class="new">│   ├── useTasks.ts</span>                    <span class="new">← NEW: task polling/WebSocket hook</span>
+<span class="new">│   ├── usePermissions.ts</span>              <span class="new">← NEW: permission dialog hook</span>
+<span class="new">│   ├── useCostTracker.ts</span>              <span class="new">← NEW: real-time cost monitoring</span>
+<span class="exist">│   └── ... (existing hooks unchanged)</span>
+<span class="exist">└── ... (styles, util unchanged)</span>
+
+<span class="exist">extensions/vscode/src/</span>
+<span class="exist">├── commands.ts</span>                        <span class="mod">← register missing: openPolicy, approveAction, denyAction</span>
+<span class="new">├── permissions/</span>                       <span class="new">← NEW: VS Code permission UI (quick picks, notifications)</span>
+<span class="new">│   ├── permissionQuickPick.ts</span>         <span class="new">← NEW: native VS Code approval dialog</span>
+<span class="new">│   └── permissionStatusBar.ts</span>         <span class="new">← NEW: status bar permission indicator</span>
+<span class="exist">└── ... (existing extension unchanged)</span>
+
+<span class="exist">extensions/cli/src/</span>
+<span class="new">├── commands/</span>                          <span class="new">← NEW: CLI command implementations</span>
+<span class="new">│   ├── doctor.ts</span>                      <span class="new">← NEW: diagnostic health check</span>
+<span class="new">│   ├── compact.ts</span>                     <span class="new">← NEW: context compaction</span>
+<span class="new">│   ├── review.ts</span>                      <span class="new">← NEW: code review</span>
+<span class="new">│   └── share.ts</span>                       <span class="new">← NEW: session sharing</span>
+<span class="new">├── permissions/</span>                       <span class="new">← NEW: CLI permission prompts (Ink components)</span>
+<span class="new">│   └── PermissionPrompt.tsx</span>           <span class="new">← NEW: terminal permission dialog</span>
+<span class="exist">└── ... (existing CLI unchanged)</span>
+</div>
+</div>
+
+<div class="sec">
+<h3>New Database Tables</h3>
+<table>
+<thead><tr><th>Table</th><th>Phase</th><th>Purpose</th><th>Key Columns</th></tr></thead>
+<tbody>
+<tr><td><code>tasks</code></td><td>1</td><td>Task state machine</td><td>id (prefixed), type, status, description, outputFile, startTime, endTime, userId, agentId</td></tr>
+<tr><td><code>memories</code></td><td>1</td><td>Memory metadata index</td><td>id, type (user/feedback/project/reference), name, filePath, description, createdAt, updatedAt</td></tr>
+<tr><td><code>agents</code></td><td>1</td><td>Running/completed agents</td><td>id, parentId, type, model, prompt, status, worktreePath, startedAt, completedAt</td></tr>
+<tr><td><code>commands</code></td><td>2</td><td>Command registry (dynamic)</td><td>id, name, type, source, description, enabled, loadedFrom</td></tr>
+<tr><td><code>plugins</code></td><td>2</td><td>Plugin registry</td><td>id, name, version, manifestJson, enabled, installedAt</td></tr>
+<tr><td><code>skills</code></td><td>2</td><td>Skill registry</td><td>id, name, type, source, promptTemplate, paths, createdAt</td></tr>
+<tr><td><code>cron_jobs</code></td><td>3</td><td>Scheduled agent triggers</td><td>id, schedule, agentConfig, lastRunAt, nextRunAt, enabled</td></tr>
+<tr><td><code>permission_rules</code></td><td>4</td><td>Per-tool permission decisions</td><td>id, userId, toolName, pattern, decision (allow/deny/ask), source, createdAt</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- ============ TAB 3: FEATURE GAP MATRIX ============ -->
+<div class="tc" id="t3">
+<div class="sec">
+<h3>Complete Feature Gap Matrix</h3>
+<div class="filter">
+  <input type="text" id="fs" placeholder="Search features..." oninput="ft('ftbl',this.value)">
+  <button class="fbtn on" onclick="fp(this,'all')">All (68)</button>
+  <button class="fbtn" onclick="fp(this,'c')">Critical (12)</button>
+  <button class="fbtn" onclick="fp(this,'h')">High (18)</button>
+  <button class="fbtn" onclick="fp(this,'m')">Medium (24)</button>
+  <button class="fbtn" onclick="fp(this,'l')">Low (14)</button>
+</div>
+
+<table id="ftbl">
+<thead><tr><th>#</th><th>Feature</th><th>Category</th><th>Claude Code Reference</th><th>Our Status</th><th>Phase</th><th>Priority</th><th>New Files</th></tr></thead>
+<tbody>
+<!-- CRITICAL -->
+<tr data-p="c"><td>1</td><td><strong>Task Management Framework</strong><br><span style="color:var(--text-muted)">7 task types, state machine, disk-persisted output, progress tracking</span></td><td><span class="cat">Core</span></td><td><code>Task.ts</code>, <code>tasks/</code></td><td><span class="badge b-miss">Missing</span></td><td>1</td><td><span class="pri pri-c">Critical</span></td><td>4</td></tr>
+<tr data-p="c"><td>2</td><td><strong>Agent Sub-Spawning (AgentTool)</strong><br><span style="color:var(--text-muted)">Spawn isolated sub-agents with worktree support, background execution, model override</span></td><td><span class="cat">Core</span></td><td><code>tools/AgentTool/</code></td><td><span class="badge b-miss">Missing</span></td><td>1</td><td><span class="pri pri-c">Critical</span></td><td>3</td></tr>
+<tr data-p="c"><td>3</td><td><strong>Persistent Memory System</strong><br><span style="color:var(--text-muted)">MEMORY.md index, typed .md files (user/feedback/project/reference), cross-session</span></td><td><span class="cat">Core</span></td><td><code>memdir/</code> (8 files)</td><td><span class="badge b-miss">Missing</span></td><td>1</td><td><span class="pri pri-c">Critical</span></td><td>3</td></tr>
+<tr data-p="c"><td>4</td><td><strong>Plan Mode (Enter/Exit)</strong><br><span style="color:var(--text-muted)">Dedicated planning mode — agent designs before implementing</span></td><td><span class="cat">Core</span></td><td><code>EnterPlanModeTool</code></td><td><span class="badge b-miss">Missing</span></td><td>1</td><td><span class="pri pri-c">Critical</span></td><td>1</td></tr>
+<tr data-p="c"><td>5</td><td><strong>Command Registry &amp; Loader</strong><br><span style="color:var(--text-muted)">130+ commands, 3 types (prompt/local/jsx), dynamic loading from skills+plugins</span></td><td><span class="cat">Commands</span></td><td><code>commands.ts</code>, <code>commands/</code></td><td><span class="badge b-miss">Missing</span></td><td>2</td><td><span class="pri pri-c">Critical</span></td><td>3</td></tr>
+<tr data-p="c"><td>6</td><td><strong>Skills System</strong><br><span style="color:var(--text-muted)">Bundled + directory-loaded + dynamic skills, skill invocation tool</span></td><td><span class="cat">Commands</span></td><td><code>skills/</code></td><td><span class="badge b-miss">Missing</span></td><td>2</td><td><span class="pri pri-c">Critical</span></td><td>3</td></tr>
+<tr data-p="c"><td>7</td><td><strong>Plugin System</strong><br><span style="color:var(--text-muted)">npm packages, hot-reload, manifest, bundled + user plugins</span></td><td><span class="cat">Commands</span></td><td><code>plugins/</code></td><td><span class="badge b-miss">Missing</span></td><td>2</td><td><span class="pri pri-c">Critical</span></td><td>3</td></tr>
+<tr data-p="c"><td>8</td><td><strong>Coordinator / Swarm Mode</strong><br><span style="color:var(--text-muted)">Multi-agent coordination — spawn workers, aggregate results, SendMessage</span></td><td><span class="cat">Agents</span></td><td><code>coordinator/</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-c">Critical</span></td><td>2</td></tr>
+<tr data-p="c"><td>9</td><td><strong>Granular Permission Dialogs</strong><br><span style="color:var(--text-muted)">Per-tool: FileEdit, Bash, WebFetch, MCP — allow-once/always/deny with pattern rules</span></td><td><span class="cat">Security UX</span></td><td><code>components/permissions/</code></td><td><span class="badge b-miss">Missing</span></td><td>4</td><td><span class="pri pri-c">Critical</span></td><td>6</td></tr>
+<tr data-p="c"><td>10</td><td><strong>Tool Permission Layer</strong><br><span style="color:var(--text-muted)">3-level: config rules → auto-classifier → interactive dialog for every tool call</span></td><td><span class="cat">Security UX</span></td><td><code>hooks/useCanUseTool</code></td><td><span class="badge b-miss">Missing</span></td><td>4</td><td><span class="pri pri-c">Critical</span></td><td>2</td></tr>
+<tr data-p="c"><td>11</td><td><strong>Diff Visualization</strong><br><span style="color:var(--text-muted)">Side-by-side and inline diff views for all code changes</span></td><td><span class="cat">UI</span></td><td><code>components/diff/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-c">Critical</span></td><td>2</td></tr>
+<tr data-p="c"><td>12</td><td><strong>Onboarding Wizard</strong><br><span style="color:var(--text-muted)">Step-by-step project onboarding with environment detection, provider setup</span></td><td><span class="cat">UI</span></td><td><code>components/wizard/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-c">Critical</span></td><td>1</td></tr>
+
+<!-- HIGH -->
+<tr data-p="h"><td>13</td><td><strong>Context Compaction Service</strong><br><span style="color:var(--text-muted)">Intelligently compress conversation context when approaching limits</span></td><td><span class="cat">Core</span></td><td><code>services/compact/</code></td><td><span class="badge b-part">Partial (reducer route exists)</span></td><td>1</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>14</td><td><strong>Memory Extraction</strong><br><span style="color:var(--text-muted)">Auto-extract important info from conversations into typed memory files</span></td><td><span class="cat">Core</span></td><td><code>services/extractMemories/</code></td><td><span class="badge b-miss">Missing</span></td><td>1</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>15</td><td><strong>AskUserQuestion Tool</strong><br><span style="color:var(--text-muted)">Agent explicitly asks user for clarification mid-task</span></td><td><span class="cat">Core</span></td><td><code>AskUserQuestionTool.tsx</code></td><td><span class="badge b-miss">Missing</span></td><td>1</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>16</td><td><strong>/doctor Command</strong><br><span style="color:var(--text-muted)">Diagnostic health check for environment, deps, config, proxy connectivity</span></td><td><span class="cat">Commands</span></td><td><code>commands/doctor/</code></td><td><span class="badge b-miss">Missing</span></td><td>2</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>17</td><td><strong>/compact, /review, /diff, /stats, /share Commands</strong><br><span style="color:var(--text-muted)">Core slash commands for daily workflow</span></td><td><span class="cat">Commands</span></td><td>5 command dirs</td><td><span class="badge b-miss">Missing</span></td><td>2</td><td><span class="pri pri-h">High</span></td><td>5</td></tr>
+<tr data-p="h"><td>18</td><td><strong>Hook System</strong><br><span style="color:var(--text-muted)">Shell commands triggered by events (tool calls, messages), user-configurable</span></td><td><span class="cat">Commands</span></td><td><code>utils/hooks/</code></td><td><span class="badge b-miss">Missing</span></td><td>2</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>19</td><td><strong>Specialized Agent Types</strong><br><span style="color:var(--text-muted)">DreamTask (memory consolidation), LocalAgent, RemoteAgent, Teammate</span></td><td><span class="cat">Agents</span></td><td><code>tasks/</code> (5 types)</td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-h">High</span></td><td>3</td></tr>
+<tr data-p="h"><td>20</td><td><strong>Background Agent Processing</strong><br><span style="color:var(--text-muted)">Agents run in background, notify on completion, output persisted to disk</span></td><td><span class="cat">Agents</span></td><td><code>services/autoDream/</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>21</td><td><strong>WebSearch &amp; WebFetch Tools</strong><br><span style="color:var(--text-muted)">Search web and fetch URLs from agent context</span></td><td><span class="cat">Tools</span></td><td>2 tools</td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-h">High</span></td><td>2</td></tr>
+<tr data-p="h"><td>22</td><td><strong>Worktree Tool</strong><br><span style="color:var(--text-muted)">Git worktree isolation for agents — work on isolated repo copies</span></td><td><span class="cat">Tools</span></td><td><code>EnterWorktreeTool</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>23</td><td><strong>Sandbox Mode</strong><br><span style="color:var(--text-muted)">Restricted execution environment (filesystem + network restrictions)</span></td><td><span class="cat">Security UX</span></td><td><code>utils/sandbox/</code></td><td><span class="badge b-miss">Missing</span></td><td>4</td><td><span class="pri pri-h">High</span></td><td>2</td></tr>
+<tr data-p="h"><td>24</td><td><strong>Privacy Settings UI</strong><br><span style="color:var(--text-muted)">User-facing privacy controls, telemetry opt-out, data retention</span></td><td><span class="cat">Security UX</span></td><td><code>commands/privacy-settings/</code></td><td><span class="badge b-miss">Missing</span></td><td>4</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>25</td><td><strong>Cost Tracking Hooks (Real-time)</strong><br><span style="color:var(--text-muted)">React hooks for live cost monitoring per session, per model breakdown</span></td><td><span class="cat">Analytics</span></td><td><code>costHook.ts</code></td><td><span class="badge b-part">Backend exists, no hooks</span></td><td>5</td><td><span class="pri pri-h">High</span></td><td>2</td></tr>
+<tr data-p="h"><td>26</td><td><strong>Agent Creation Wizard UI</strong><br><span style="color:var(--text-muted)">Visual wizard to configure and create custom agents</span></td><td><span class="cat">UI</span></td><td><code>components/agents/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-h">High</span></td><td>3</td></tr>
+<tr data-p="h"><td>27</td><td><strong>Feature Flags System</strong><br><span style="color:var(--text-muted)">Feature flags for gradual rollouts, A/B testing (GrowthBook-style)</span></td><td><span class="cat">Enterprise</span></td><td><code>services/analytics/</code></td><td><span class="badge b-miss">Missing</span></td><td>6</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+<tr data-p="h"><td>28</td><td><strong>OAuth Multi-Provider</strong><br><span style="color:var(--text-muted)">OAuth login for GitHub, Google with token refresh</span></td><td><span class="cat">Enterprise</span></td><td><code>services/oauth/</code></td><td><span class="badge b-part">SSO exists, no multi-provider OAuth</span></td><td>6</td><td><span class="pri pri-h">High</span></td><td>2</td></tr>
+<tr data-p="h"><td>29</td><td><strong>GitHub App Integration</strong><br><span style="color:var(--text-muted)">Install GitHub app for repo access, PR automation</span></td><td><span class="cat">Enterprise</span></td><td><code>commands/install-github-app/</code></td><td><span class="badge b-miss">Missing</span></td><td>6</td><td><span class="pri pri-h">High</span></td><td>2</td></tr>
+<tr data-p="h"><td>30</td><td><strong>Session Resume</strong><br><span style="color:var(--text-muted)">Resume previous conversations with full context restoration</span></td><td><span class="cat">Core</span></td><td><code>commands/resume/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-h">High</span></td><td>1</td></tr>
+
+<!-- MEDIUM (sampling) -->
+<tr data-p="m"><td>31</td><td><strong>Team Memory Sync</strong></td><td><span class="cat">Memory</span></td><td><code>teamMemorySync/</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-m">Medium</span></td><td>2</td></tr>
+<tr data-p="m"><td>32</td><td><strong>Memory Age Tracking</strong></td><td><span class="cat">Memory</span></td><td><code>memoryAge.ts</code></td><td><span class="badge b-miss">Missing</span></td><td>1</td><td><span class="pri pri-m">Medium</span></td><td>0 (in memdir.ts)</td></tr>
+<tr data-p="m"><td>33</td><td><strong>LSP Tool</strong></td><td><span class="cat">Tools</span></td><td><code>LSPTool.ts</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>34</td><td><strong>NotebookEdit Tool</strong></td><td><span class="cat">Tools</span></td><td><code>NotebookEditTool.ts</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>35</td><td><strong>Cron / Scheduled Triggers</strong></td><td><span class="cat">Tools</span></td><td><code>ScheduleCronTool/</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-m">Medium</span></td><td>2</td></tr>
+<tr data-p="m"><td>36</td><td><strong>Customizable Keybindings</strong></td><td><span class="cat">UI</span></td><td><code>keybindings/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>37</td><td><strong>Output Style Options</strong></td><td><span class="cat">UI</span></td><td><code>outputStyles/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>38</td><td><strong>Secure Storage (OS Keychain)</strong></td><td><span class="cat">Security</span></td><td><code>utils/secureStorage/</code></td><td><span class="badge b-part">Vault exists (AES-256)</span></td><td>4</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>39</td><td><strong>Tool Usage Summary Service</strong></td><td><span class="cat">Analytics</span></td><td><code>services/toolUseSummary/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>40</td><td><strong>Structured Telemetry (Protobuf)</strong></td><td><span class="cat">Analytics</span></td><td><code>utils/telemetry/</code></td><td><span class="badge b-miss">Missing</span></td><td>6</td><td><span class="pri pri-m">Medium</span></td><td>2</td></tr>
+<tr data-p="m"><td>41</td><td><strong>Suggestions Engine</strong></td><td><span class="cat">AI</span></td><td><code>utils/suggestions/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>42</td><td><strong>Tips System</strong></td><td><span class="cat">UI</span></td><td><code>services/tips/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>43</td><td><strong>Settings Sync Service</strong></td><td><span class="cat">Enterprise</span></td><td><code>services/settingsSync/</code></td><td><span class="badge b-miss">Missing</span></td><td>6</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>44</td><td><strong>Deep Linking</strong></td><td><span class="cat">UI</span></td><td><code>utils/deepLink/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>45</td><td><strong>Bridge API (Cross-Device)</strong></td><td><span class="cat">Remote</span></td><td><code>bridge/</code> (31 files)</td><td><span class="badge b-part">WebSocket exists</span></td><td>6</td><td><span class="pri pri-m">Medium</span></td><td>3</td></tr>
+<tr data-p="m"><td>46</td><td><strong>Slack App Integration</strong></td><td><span class="cat">Enterprise</span></td><td><code>install-slack-app/</code></td><td><span class="badge b-part">Slack notification channel exists</span></td><td>6</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>47</td><td><strong>Remote Managed Settings</strong></td><td><span class="cat">Enterprise</span></td><td><code>remoteManagedSettings/</code></td><td><span class="badge b-miss">Missing</span></td><td>6</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>48</td><td><strong>Ultraplan (Multi-Step Planning)</strong></td><td><span class="cat">AI</span></td><td><code>utils/ultraplan/</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-m">Medium</span></td><td>1</td></tr>
+<tr data-p="m"><td>49-54</td><td><strong>/resume, /share, /export, /env, /rename, /branch</strong></td><td><span class="cat">Commands</span></td><td>6 commands</td><td><span class="badge b-miss">Missing</span></td><td>2</td><td><span class="pri pri-m">Medium</span></td><td>6</td></tr>
+
+<!-- LOW -->
+<tr data-p="l"><td>55</td><td><strong>Vim Mode</strong></td><td><span class="cat">UI</span></td><td><code>vim/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-l">Low</span></td><td>1</td></tr>
+<tr data-p="l"><td>56</td><td><strong>Voice Input/Output</strong></td><td><span class="cat">UI</span></td><td><code>voice/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-l">Low</span></td><td>1</td></tr>
+<tr data-p="l"><td>57</td><td><strong>Buddy / Companion Sprite</strong></td><td><span class="cat">Fun</span></td><td><code>buddy/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-l">Low</span></td><td>1</td></tr>
+<tr data-p="l"><td>58</td><td><strong>Stickers</strong></td><td><span class="cat">Fun</span></td><td><code>stickers/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-l">Low</span></td><td>1</td></tr>
+<tr data-p="l"><td>59</td><td><strong>PowerShell Tool</strong></td><td><span class="cat">Tools</span></td><td><code>PowerShellTool.tsx</code></td><td><span class="badge b-miss">Missing</span></td><td>3</td><td><span class="pri pri-l">Low</span></td><td>1</td></tr>
+<tr data-p="l"><td>60</td><td><strong>Computer Use Automation</strong></td><td><span class="cat">Advanced</span></td><td><code>utils/computerUse/</code></td><td><span class="badge b-miss">Missing</span></td><td>5</td><td><span class="pri pri-l">Low</span></td><td>1</td></tr>
+<tr data-p="l"><td>61</td><td><strong>Native Performance Layer</strong></td><td><span class="cat">Perf</span></td><td><code>native-ts/</code></td><td><span class="badge b-miss">Missing</span></td><td>6</td><td><span class="pri pri-l">Low</span></td><td>2</td></tr>
+<tr data-p="l"><td>62</td><td><strong>Config Migrations</strong></td><td><span class="cat">DX</span></td><td><code>migrations/</code></td><td><span class="badge b-miss">Missing</span></td><td>6</td><td><span class="pri pri-l">Low</span></td><td>1</td></tr>
+<tr data-p="l"><td>63-68</td><td><strong>Teleport, REPL Tool, Monitor Tool, Workflow Tool, Snip Tool, Color Theme</strong></td><td><span class="cat">Various</span></td><td>6 feature-gated</td><td><span class="badge b-miss">Missing</span></td><td>5-6</td><td><span class="pri pri-l">Low</span></td><td>6</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- ============ TAB 4: UI COMPARISON ============ -->
+<div class="tc" id="t4">
+<div class="sec">
+<h3>UI Component Comparison: Claude Code vs AI Firewall</h3>
+
+<div class="grid2">
+<div class="card accent-l">
+  <h4>Claude Code UI Components (389 files)</h4>
+  <ul>
+    <li><strong>permissions/</strong> — 8+ dialogs: FileEdit, Bash, PowerShell, WebFetch, MCP, generic</li>
+    <li><strong>agents/</strong> — Agent wizard, AgentsList, AgentCard</li>
+    <li><strong>tasks/</strong> — TaskCard, TaskList, TaskOutput, BackgroundTaskPanel</li>
+    <li><strong>memory/</strong> — MemoryEditor, MemoryIndex, MemoryViewer</li>
+    <li><strong>diff/</strong> — InlineDiff, SideBySideDiff, DiffActions</li>
+    <li><strong>design-system/</strong> — Tokens, Colors, Typography, Spacing</li>
+    <li><strong>mcp/</strong> — McpServerConfig, McpToolList, McpAuthFlow</li>
+    <li><strong>skills/</strong> — SkillBrowser, SkillCard, SkillInvoker</li>
+    <li><strong>sandbox/</strong> — SandboxToggle, SandboxStatus</li>
+    <li><strong>wizard/</strong> — OnboardingWizard, StepProgress</li>
+    <li><strong>shell/</strong> — ShellInput, ShellOutput, ShellHistory</li>
+    <li><strong>teams/</strong> — TeamView, TeamSettings</li>
+    <li><strong>messages/</strong> — MessageBubble, ToolCallDisplay, ThinkingIndicator</li>
+    <li><strong>ui/</strong> — Button, Box, Tree, Select, Input (full design system)</li>
+  </ul>
+</div>
+<div class="card green-l">
+  <h4>AI Firewall UI Components (44+ files)</h4>
+  <ul>
+    <li><strong>security/</strong> — PerimeterStatus, RiskGauge, ShieldStatus, FirewallActivityIndicator, CostBadge, ScanResultBanner, PreflightPanel, ContextLimitWarning, PermissionModeSelector</li>
+    <li><strong>ui/</strong> — Button, Toggle, StatCard, RoleBadge, ConfirmDialog, LoadingSpinner, ErrorBanner, EmptyState, UnderlineTabs, TabButton, Card, Popover, Divider</li>
+    <li><strong>chat/</strong> — ScreenshotDropzone, StickyPromptHeader</li>
+    <li><strong>StyledMarkdownPreview/</strong> — ApplyActions, CopyButton, SyntaxHighlightedPre, MermaidBlock</li>
+    <li><strong>modelSelection/</strong> — ModelSelect, ModelCard</li>
+    <li><strong>config/</strong> — ModelsSection, ToolsSection, RulesSection</li>
+    <li><strong>BackgroundMode/</strong> — BackgroundModeView, AgentsList</li>
+    <li><strong>History/</strong> — HistorySidebar</li>
+    <li><span style="color:var(--red)">Missing: permissions/, tasks/, memory/, diff/, agents/, wizard/, sandbox/, skills/</span></li>
+  </ul>
+</div>
+</div>
+
+<h4 style="margin-top:20px">Component Gap — What to Build</h4>
+<table>
+<thead><tr><th>Component Group</th><th>Claude Code Has</th><th>We Have</th><th>To Build</th><th>Phase</th></tr></thead>
+<tbody>
+<tr><td><strong>permissions/</strong></td><td>8+ dialogs with allow-once/always/deny</td><td>None (backend RBAC only)</td><td>PermissionDialog, BashPermission, FileEditPermission, WebFetchPermission, McpPermission</td><td>4</td></tr>
+<tr><td><strong>tasks/</strong></td><td>TaskCard, TaskList, TaskOutput, BackgroundPanel</td><td>None</td><td>TaskCard, TaskList, TaskOutput (connect via WebSocket)</td><td>1</td></tr>
+<tr><td><strong>agents/</strong></td><td>AgentWizard, AgentCard, AgentsList, CoordinatorView</td><td>ApprovalCard (partial)</td><td>AgentCard, AgentWizard, CoordinatorView</td><td>3</td></tr>
+<tr><td><strong>memory/</strong></td><td>MemoryEditor, MemoryIndex, MemoryViewer</td><td>None</td><td>MemoryEditor, MemoryIndex</td><td>1</td></tr>
+<tr><td><strong>diff/</strong></td><td>InlineDiff, SideBySideDiff, DiffActions</td><td>None</td><td>InlineDiff, SideBySideDiff</td><td>5</td></tr>
+<tr><td><strong>wizard/</strong></td><td>OnboardingWizard with step progress</td><td>FirstLookPage (security only)</td><td>Full OnboardingWizard (env detect, provider setup, security config)</td><td>5</td></tr>
+<tr><td><strong>sandbox/</strong></td><td>SandboxToggle, SandboxStatus</td><td>None</td><td>SandboxToggle, SandboxStatus</td><td>4</td></tr>
+<tr><td><strong>skills/</strong></td><td>SkillBrowser, SkillCard</td><td>None</td><td>SkillBrowser, SkillCard</td><td>2</td></tr>
+</tbody>
+</table>
+
+<h4 style="margin-top:20px">GUI Pages — What to Add</h4>
+<table>
+<thead><tr><th>Page</th><th>Route</th><th>Exists?</th><th>Action</th><th>Phase</th></tr></thead>
+<tbody>
+<tr><td>Tasks Dashboard</td><td><code>/tasks</code></td><td><span class="badge b-miss">No</span></td><td>New page: task list, progress, kill, output viewer</td><td>1</td></tr>
+<tr><td>Memory Browser</td><td><code>/memory</code></td><td><span class="badge b-miss">No</span></td><td>New page: MEMORY.md index, per-file editor, type filter</td><td>1</td></tr>
+<tr><td>Plugin Manager</td><td><code>/plugins</code></td><td><span class="badge b-miss">No</span></td><td>New page: installed plugins, enable/disable, marketplace</td><td>2</td></tr>
+<tr><td>Skills Browser</td><td><code>/skills</code></td><td><span class="badge b-miss">No</span></td><td>New page: bundled + custom skills, invocation</td><td>2</td></tr>
+<tr><td>Privacy Settings</td><td><code>/privacy</code></td><td><span class="badge b-miss">No</span></td><td>New page: telemetry, data retention, export, delete</td><td>4</td></tr>
+<tr><td>Chat (existing)</td><td><code>/</code></td><td><span class="badge b-done">Yes</span></td><td>Add: permission dialogs, task sidebar, cost badge, diff preview</td><td>1-5</td></tr>
+<tr><td>Security (existing)</td><td><code>/security</code></td><td><span class="badge b-done">Yes</span></td><td>Add: sandbox toggle, enhanced permission mode</td><td>4</td></tr>
+<tr><td>Agents (existing)</td><td><code>/agents</code></td><td><span class="badge b-done">Yes</span></td><td>Add: coordinator view, agent wizard, background tasks</td><td>3</td></tr>
+</tbody>
+</table>
+
+<h4 style="margin-top:20px">Redux State — New Slices Needed</h4>
+<table>
+<thead><tr><th>Slice</th><th>State Shape</th><th>Thunks</th><th>Phase</th></tr></thead>
+<tbody>
+<tr><td><code>taskSlice</code></td><td><code>{ tasks: Map&lt;id, TaskState&gt;, activeCount: number }</code></td><td>fetchTasks, createTask, updateTask, stopTask</td><td>1</td></tr>
+<tr><td><code>memorySlice</code></td><td><code>{ memories: MemoryEntry[], index: string }</code></td><td>loadMemories, saveMemory, deleteMemory</td><td>1</td></tr>
+<tr><td><code>permissionSlice</code></td><td><code>{ queue: PermissionRequest[], rules: PermissionRule[] }</code></td><td>resolvePermission, addRule, removeRule</td><td>4</td></tr>
+<tr><td><code>pluginSlice</code></td><td><code>{ plugins: Plugin[], loading: boolean }</code></td><td>loadPlugins, togglePlugin</td><td>2</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- ============ TAB 5: CODE CHANGES MAP ============ -->
+<div class="tc" id="t5">
+<div class="sec">
+<h3>Exact Code Changes — Files to Create &amp; Modify</h3>
+
+<table>
+<thead><tr><th>Action</th><th>File Path</th><th>What to Do</th><th>Depends On</th><th>Phase</th></tr></thead>
+<tbody>
+<!-- Phase 1 -->
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/tasks/taskTypes.ts</code></td><td>Define TaskType, TaskStatus, TaskStateBase (match claude-code Task.ts pattern)</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/tasks/taskFramework.ts</code></td><td>registerTask, updateTaskState, getTaskByType, disk persistence, cleanup</td><td>taskTypes</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/tasks/localAgentTask.ts</code></td><td>Agent task lifecycle: spawn, progress tracking, completion/failure</td><td>taskFramework</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/tasks/backgroundTask.ts</code></td><td>Background execution with WebSocket notifications</td><td>taskFramework, wsManager</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/services/taskService.ts</code></td><td>CRUD operations on tasks table, expose to routes</td><td>taskFramework, db</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/routes/task.route.ts</code></td><td>GET/POST/PUT/DELETE /api/tasks endpoints</td><td>taskService</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/memory/memdir.ts</code></td><td>Memory system: MEMORY.md index, file read/write, truncation, type taxonomy</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/memory/memoryTypes.ts</code></td><td>Memory types: user/feedback/project/reference, frontmatter schema</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/memory/memoryExtractor.ts</code></td><td>Auto-extract memories from conversation text</td><td>memdir</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/services/memoryService.ts</code></td><td>Memory CRUD, index management, search</td><td>memdir</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/routes/memory.route.ts</code></td><td>GET/POST/PUT/DELETE /api/memory endpoints</td><td>memoryService</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/services/agentService.ts</code></td><td>Agent spawn, kill, status, worktree management</td><td>taskFramework</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/routes/agent.route.ts</code></td><td>POST /api/agents/spawn, GET /api/agents, DELETE /api/agents/:id</td><td>agentService</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>proxy/src/services/compactService.ts</code></td><td>Context compaction: summarize old messages, preserve recent</td><td>tokenCounter</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/implementations/agentTool.ts</code></td><td>Spawn sub-agent with isolated context, model override, worktree</td><td>agentService</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/implementations/taskCreateTool.ts</code></td><td>Create task with description and type</td><td>taskService</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/implementations/taskListTool.ts</code></td><td>List tasks with optional status filter</td><td>taskService</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/implementations/taskUpdateTool.ts</code></td><td>Update task status/description</td><td>taskService</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/implementations/taskStopTool.ts</code></td><td>Kill running task by ID</td><td>taskService</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/implementations/planModeTool.ts</code></td><td>Enter/exit plan mode (toggle state, restrict tools to read-only)</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/implementations/askUserTool.ts</code></td><td>Prompt user for clarification mid-task</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/toolPermissions.ts</code></td><td>Permission checking layer: config rules → auto → dialog</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>core/tools/toolRegistry.ts</code></td><td>Tool pool assembly: built-in + MCP, deduped, sorted</td><td>toolPermissions</td><td>1</td></tr>
+<tr><td><span class="badge b-cc">MODIFY</span></td><td><code>proxy/src/db/database.ts</code></td><td>Add tables: tasks, memories, agents</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-cc">MODIFY</span></td><td><code>proxy/src/server.ts</code></td><td>Register task, memory, agent routes</td><td>new routes</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>gui/src/pages/tasks/index.tsx</code></td><td>Task dashboard page</td><td>taskSlice</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>gui/src/pages/memory/index.tsx</code></td><td>Memory browser page</td><td>memorySlice</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>gui/src/components/tasks/TaskCard.tsx</code></td><td>Task progress card component</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>gui/src/components/tasks/TaskList.tsx</code></td><td>Task list component</td><td>TaskCard</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>gui/src/components/memory/MemoryEditor.tsx</code></td><td>Memory file editor with frontmatter</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>gui/src/redux/slices/taskSlice.ts</code></td><td>Task state management</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>gui/src/redux/slices/memorySlice.ts</code></td><td>Memory state management</td><td>—</td><td>1</td></tr>
+<tr><td><span class="badge b-new">CREATE</span></td><td><code>gui/src/hooks/useTasks.ts</code></td><td>Task polling + WebSocket hook</td><td>taskSlice</td><td>1</td></tr>
+
+<!-- Phase 2-6 abbreviated for space -->
+<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:12px"><em>Phase 2-6 files follow same pattern. See Phase tabs for full details.</em></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- ============ TAB 6: PHASE 1 ============ -->
+<div class="tc" id="t6">
+<div class="phase p1">
+<div class="phase-header"><div class="phase-num">1</div><div><h3>Phase 1: Agent Core Intelligence</h3><div style="color:var(--text-muted);font-size:.85rem">4-5 weeks &bull; 23 new files &bull; 2 modified &bull; 3 new DB tables</div></div></div>
+
+<p style="color:var(--text-muted);margin-bottom:16px"><strong>Goal:</strong> Match claude-code's core agent capabilities — task management, sub-agent spawning, persistent memory, plan mode, context compaction. These are table-stakes for a modern AI coding agent.</p>
+
+<div class="grid3">
+<div class="card cyan-l">
+  <h4>1A. Task Framework (Week 1)</h4>
+  <p><strong>What:</strong> Task state machine with 7 types, disk persistence, progress tracking.</p>
+  <ul>
+    <li>Create <code>proxy/src/tasks/taskTypes.ts</code> — TaskType union, TaskStatus enum, TaskStateBase interface</li>
+    <li>Create <code>proxy/src/tasks/taskFramework.ts</code> — registerTask(), updateTaskState(), cleanup()</li>
+    <li>Create <code>proxy/src/tasks/localAgentTask.ts</code> — Agent task lifecycle</li>
+    <li>Create <code>proxy/src/tasks/backgroundTask.ts</code> — Background execution + WS notifications</li>
+    <li>Create <code>proxy/src/services/taskService.ts</code> — CRUD for tasks table</li>
+    <li>Create <code>proxy/src/routes/task.route.ts</code> — REST endpoints</li>
+    <li>Add <code>tasks</code> table to <code>proxy/src/db/database.ts</code></li>
+  </ul>
+  <details><summary>Pattern Reference (from claude-code)</summary>
+  <div class="detail-box">
+    <strong>Task.ts interface:</strong><br>
+    <code>TaskType = 'local_bash' | 'local_agent' | 'remote_agent' | 'dream' | ...</code><br>
+    <code>TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'killed'</code><br>
+    <code>TaskStateBase = { id, type, status, description, outputFile, startTime, endTime, notified }</code><br>
+    IDs are prefixed: b* (bash), a* (agent), r* (remote), d* (dream).<br>
+    Output persisted to disk (JSONL). Progress tracked via ProgressTracker {toolUseCount, tokenCounts, recentActivities}.
+  </div></details>
+</div>
+
+<div class="card cyan-l">
+  <h4>1B. Tool Permission Layer (Week 1-2)</h4>
+  <p><strong>What:</strong> Permission checking for every tool call — config rules, auto-classify, interactive dialog.</p>
+  <ul>
+    <li>Create <code>core/tools/toolPermissions.ts</code> — hasPermissionsToUseTool(), 3-level decision</li>
+    <li>Create <code>core/tools/toolRegistry.ts</code> — assembleToolPool() (built-in + MCP, deduped)</li>
+    <li>Modify existing tools to add <code>isReadOnly()</code>, <code>isDestructive()</code> flags</li>
+  </ul>
+  <details><summary>Pattern Reference (from claude-code)</summary>
+  <div class="detail-box">
+    <strong>Decision flow:</strong><br>
+    1. Check deny rules (blanket deny, pattern: <code>Bash(rm *)</code>)<br>
+    2. Check allow rules (blanket allow, pattern: <code>Read(**)</code>)<br>
+    3. Auto-mode classifier (Bash commands classified as safe/unsafe)<br>
+    4. Interactive dialog (ask user: allow-once, allow-always, deny)<br>
+    <strong>PermissionContext:</strong> mode, alwaysAllowRules, alwaysDenyRules, alwaysAskRules
+  </div></details>
+</div>
+
+<div class="card cyan-l">
+  <h4>1C. Persistent Memory (Week 2)</h4>
+  <p><strong>What:</strong> File-based memory system with typed entries (user/feedback/project/reference).</p>
+  <ul>
+    <li>Create <code>proxy/src/memory/memdir.ts</code> — MEMORY.md index, truncation, buildMemoryPrompt()</li>
+    <li>Create <code>proxy/src/memory/memoryTypes.ts</code> — Type definitions, frontmatter schema</li>
+    <li>Create <code>proxy/src/memory/memoryExtractor.ts</code> — Auto-extract from conversations</li>
+    <li>Create <code>proxy/src/services/memoryService.ts</code> — CRUD</li>
+    <li>Create <code>proxy/src/routes/memory.route.ts</code> — REST endpoints</li>
+  </ul>
+  <details><summary>Pattern Reference (from claude-code)</summary>
+  <div class="detail-box">
+    <strong>Memory types:</strong> user (role/prefs), feedback (corrections+confirmations), project (goals/deadlines), reference (external pointers)<br>
+    <strong>File format:</strong> Frontmatter (name, description, type) + markdown body<br>
+    <strong>Index:</strong> MEMORY.md — one line per memory, &lt;150 chars, max 200 lines<br>
+    <strong>Storage:</strong> <code>~/.ai-firewall/projects/&lt;slug&gt;/memory/</code><br>
+    <strong>Key rule:</strong> Don't save what can be derived from code/git. Only save surprising/non-obvious info.
+  </div></details>
+</div>
+
+<div class="card cyan-l">
+  <h4>1D. Agent Spawning (Week 2-3)</h4>
+  <p><strong>What:</strong> Spawn sub-agents with worktree isolation, model override, background execution.</p>
+  <ul>
+    <li>Create <code>proxy/src/services/agentService.ts</code> — spawn, kill, status, worktree mgmt</li>
+    <li>Create <code>proxy/src/routes/agent.route.ts</code> — REST endpoints</li>
+    <li>Create <code>core/tools/implementations/agentTool.ts</code> — AgentTool implementation</li>
+    <li>Create <code>core/tools/implementations/sendMessageTool.ts</code> — Continue existing agent</li>
+    <li>Add <code>agents</code> table to database</li>
+  </ul>
+</div>
+
+<div class="card cyan-l">
+  <h4>1E. Plan Mode + Core Tools (Week 3)</h4>
+  <ul>
+    <li>Create <code>core/tools/implementations/planModeTool.ts</code> — Enter/exit planning</li>
+    <li>Create <code>core/tools/implementations/askUserTool.ts</code> — Explicit user question</li>
+    <li>Create <code>core/tools/implementations/taskCreateTool.ts</code></li>
+    <li>Create <code>core/tools/implementations/taskListTool.ts</code></li>
+    <li>Create <code>core/tools/implementations/taskUpdateTool.ts</code></li>
+    <li>Create <code>core/tools/implementations/taskStopTool.ts</code></li>
+  </ul>
+</div>
+
+<div class="card cyan-l">
+  <h4>1F. Context Compaction (Week 3-4)</h4>
+  <ul>
+    <li>Create <code>proxy/src/services/compactService.ts</code> — Summarize old messages, preserve recent</li>
+    <li>Wire into existing <code>/api/reduce</code> route</li>
+    <li>Add <code>X-AF-Compacted: true</code> header when context was compacted</li>
+  </ul>
+</div>
+
+<div class="card cyan-l">
+  <h4>1G. GUI — Task &amp; Memory Pages (Week 4-5)</h4>
+  <ul>
+    <li>Create <code>gui/src/pages/tasks/index.tsx</code> — Task dashboard</li>
+    <li>Create <code>gui/src/pages/memory/index.tsx</code> — Memory browser</li>
+    <li>Create <code>gui/src/components/tasks/TaskCard.tsx</code></li>
+    <li>Create <code>gui/src/components/tasks/TaskList.tsx</code></li>
+    <li>Create <code>gui/src/components/memory/MemoryEditor.tsx</code></li>
+    <li>Create <code>gui/src/components/memory/MemoryIndex.tsx</code></li>
+    <li>Create <code>gui/src/redux/slices/taskSlice.ts</code></li>
+    <li>Create <code>gui/src/redux/slices/memorySlice.ts</code></li>
+    <li>Create <code>gui/src/hooks/useTasks.ts</code></li>
+    <li>Modify <code>gui/src/App.tsx</code> — add /tasks and /memory routes</li>
+  </ul>
+</div>
+</div>
+
+<div style="margin-top:16px;padding:14px;background:var(--surface2);border-radius:8px">
+<strong>Tests Required (Phase 1):</strong>
+<ul style="color:var(--text-muted);font-size:.85rem;padding-left:18px;margin-top:6px">
+<li>Task framework: state machine transitions, disk persistence, cleanup</li>
+<li>Tool permissions: allow/deny/ask rules, pattern matching, auto-classifier</li>
+<li>Memory: CRUD, index generation, truncation, frontmatter parsing</li>
+<li>Agent spawning: lifecycle, worktree creation/cleanup, kill</li>
+<li>Plan mode: tool restriction in plan mode, exit behavior</li>
+<li>Context compaction: token savings, message preservation</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ============ TAB 7: PHASE 2 ============ -->
+<div class="tc" id="t7">
+<div class="phase p2">
+<div class="phase-header"><div class="phase-num">2</div><div><h3>Phase 2: Command System &amp; Extensibility</h3><div style="color:var(--text-muted);font-size:.85rem">3-4 weeks &bull; 16 new files &bull; 3 new DB tables</div></div></div>
+
+<p style="color:var(--text-muted);margin-bottom:16px"><strong>Goal:</strong> Rich command system with skills, plugins, and hooks. Commands are the primary interface for power users.</p>
+
+<div class="grid3">
+<div class="card orange-l">
+  <h4>2A. Command Registry (Week 1)</h4>
+  <ul>
+    <li>Create <code>proxy/src/commands/commandTypes.ts</code> — PromptCommand | LocalCommand interfaces</li>
+    <li>Create <code>proxy/src/commands/commandLoader.ts</code> — Load from skills + plugins + built-in</li>
+    <li>Create <code>proxy/src/services/commandRegistry.ts</code> — Memoized registry, dynamic loading</li>
+    <li>Create <code>proxy/src/routes/command.route.ts</code> — GET /api/commands, POST /api/commands/:name/execute</li>
+    <li>Add <code>commands</code> table to database</li>
+  </ul>
+</div>
+<div class="card orange-l">
+  <h4>2B. Built-in Commands (Week 1-2)</h4>
+  <ul>
+    <li>Create <code>proxy/src/commands/builtinCommands.ts</code></li>
+    <li>Implement: /doctor (health check), /compact (context reduction), /review (code review), /diff (git diff), /stats (usage stats), /share (session sharing), /resume (session restore), /cost (cost display)</li>
+    <li>Create <code>extensions/cli/src/commands/doctor.ts</code> — CLI diagnostic</li>
+    <li>Create <code>extensions/cli/src/commands/compact.ts</code> — CLI context compaction</li>
+  </ul>
+</div>
+<div class="card orange-l">
+  <h4>2C. Skills System (Week 2-3)</h4>
+  <ul>
+    <li>Create <code>proxy/src/skills/skillTypes.ts</code> — Skill definition interface</li>
+    <li>Create <code>proxy/src/skills/skillLoader.ts</code> — Load bundled + directory skills</li>
+    <li>Create <code>proxy/src/skills/bundled/</code> — Bundled skills (commit, review, loop)</li>
+    <li>Create <code>proxy/src/services/skillService.ts</code> — Skill discovery + invocation</li>
+    <li>Create <code>proxy/src/routes/skill.route.ts</code> — REST endpoints</li>
+    <li>Create <code>core/tools/implementations/skillTool.ts</code> — Invoke skills from agent</li>
+    <li>Add <code>skills</code> table to database</li>
+  </ul>
+</div>
+<div class="card orange-l">
+  <h4>2D. Plugin System (Week 3)</h4>
+  <ul>
+    <li>Create <code>proxy/src/plugins/pluginTypes.ts</code> — Plugin manifest, lifecycle</li>
+    <li>Create <code>proxy/src/plugins/pluginLoader.ts</code> — Discover, load, validate</li>
+    <li>Create <code>proxy/src/plugins/bundled/</code> — First-party bundled plugins</li>
+    <li>Create <code>proxy/src/services/pluginService.ts</code> — Plugin registry, enable/disable</li>
+    <li>Create <code>proxy/src/routes/plugin.route.ts</code> — REST endpoints</li>
+    <li>Add <code>plugins</code> table to database</li>
+  </ul>
+</div>
+<div class="card orange-l">
+  <h4>2E. Hook System (Week 3-4)</h4>
+  <ul>
+    <li>Create <code>proxy/src/services/hookService.ts</code> — Event-driven hook execution</li>
+    <li>Events: tool_call, message_sent, scan_complete, approval_needed</li>
+    <li>Shell command hooks configured in settings.json</li>
+  </ul>
+</div>
+<div class="card orange-l">
+  <h4>2F. GUI — Plugins &amp; Skills Pages (Week 4)</h4>
+  <ul>
+    <li>Create <code>gui/src/pages/plugins/index.tsx</code></li>
+    <li>Create <code>gui/src/pages/skills/index.tsx</code></li>
+    <li>Create <code>gui/src/components/skills/SkillCard.tsx</code></li>
+    <li>Create <code>gui/src/redux/slices/pluginSlice.ts</code></li>
+    <li>Modify <code>gui/src/App.tsx</code> — add routes</li>
+  </ul>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ TAB 8: PHASE 3 ============ -->
+<div class="tc" id="t8">
+<div class="phase p3">
+<div class="phase-header"><div class="phase-num">3</div><div><h3>Phase 3: Multi-Agent Swarm &amp; Advanced Tools</h3><div style="color:var(--text-muted);font-size:.85rem">3-4 weeks &bull; 12 new files &bull; 1 new DB table</div></div></div>
+
+<p style="color:var(--text-muted);margin-bottom:16px"><strong>Goal:</strong> Multi-agent coordination and advanced tool capabilities. This is claude-code's biggest differentiator.</p>
+
+<div class="grid3">
+<div class="card yellow-l">
+  <h4>3A. Coordinator Mode (Week 1-2)</h4>
+  <ul>
+    <li>Create <code>proxy/src/agent/coordinator.ts</code> — Coordinator orchestration (spawn workers, aggregate)</li>
+    <li>Create <code>proxy/src/agent/workerPool.ts</code> — Managed worker lifecycle</li>
+    <li>Create <code>proxy/src/agent/agentTypes.ts</code> — LocalAgent, RemoteAgent, DreamAgent types</li>
+    <li>Wire into agentService: coordinator mode flag, worker tool filtering</li>
+  </ul>
+  <details><summary>Pattern Reference (from claude-code)</summary>
+  <div class="detail-box">
+    Coordinator spawns workers via AgentTool. Workers call SendMessageTool to continue (async).
+    Results arrive as task-notification XML. TaskStopTool kills workers.
+    Workers get limited tool set (no TeamCreate, TeamDelete, SendMessage, SyntheticOutput).
+    Optional scratchpad directory for cross-worker durable knowledge.
+  </div></details>
+</div>
+<div class="card yellow-l">
+  <h4>3B. Advanced Tools (Week 2-3)</h4>
+  <ul>
+    <li>Create <code>core/tools/implementations/webSearchTool.ts</code></li>
+    <li>Create <code>core/tools/implementations/webFetchTool.ts</code></li>
+    <li>Create <code>core/tools/implementations/worktreeTool.ts</code></li>
+    <li>Create <code>core/tools/implementations/notebookEditTool.ts</code></li>
+    <li>Create <code>core/tools/implementations/cronTool.ts</code></li>
+    <li>Create <code>proxy/src/services/cronService.ts</code> — Scheduled triggers</li>
+    <li>Create <code>proxy/src/routes/cron.route.ts</code></li>
+    <li>Add <code>cron_jobs</code> table</li>
+  </ul>
+</div>
+<div class="card yellow-l">
+  <h4>3C. Team Memory &amp; DreamTask (Week 3-4)</h4>
+  <ul>
+    <li>Extend memdir with team memory sync (shared team/ directory)</li>
+    <li>Implement DreamTask agent type (memory consolidation during idle)</li>
+    <li>Create <code>gui/src/components/agents/AgentCard.tsx</code></li>
+    <li>Create <code>gui/src/components/agents/CoordinatorView.tsx</code></li>
+    <li>Enhance agents page with coordinator dashboard</li>
+  </ul>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ TAB 9: PHASE 4 ============ -->
+<div class="tc" id="t9">
+<div class="phase p4">
+<div class="phase-header"><div class="phase-num">4</div><div><h3>Phase 4: Security UX &amp; Permissions</h3><div style="color:var(--text-muted);font-size:.85rem">2-3 weeks &bull; 10 new files &bull; 1 new DB table</div></div></div>
+
+<p style="color:var(--text-muted);margin-bottom:16px"><strong>Goal:</strong> Match claude-code's granular permission system. We have the backend; need the UX.</p>
+
+<div class="grid3">
+<div class="card purple-l">
+  <h4>4A. Permission Dialogs (Week 1-2)</h4>
+  <ul>
+    <li>Create <code>gui/src/components/permissions/PermissionDialog.tsx</code> — Base dialog</li>
+    <li>Create <code>gui/src/components/permissions/BashPermission.tsx</code> — Shell approval</li>
+    <li>Create <code>gui/src/components/permissions/FileEditPermission.tsx</code> — Edit with diff preview</li>
+    <li>Create <code>gui/src/components/permissions/WebFetchPermission.tsx</code> — URL approval</li>
+    <li>Create <code>gui/src/components/permissions/McpPermission.tsx</code> — MCP tool approval</li>
+    <li>Create <code>gui/src/redux/slices/permissionSlice.ts</code> — Permission queue</li>
+    <li>Create <code>gui/src/hooks/usePermissions.ts</code> — Permission dialog hook</li>
+    <li>Create <code>proxy/src/middleware/permissionDialog.ts</code> — Push permission request via WS</li>
+    <li>Add <code>permission_rules</code> table (allow-always, deny-always per tool+pattern)</li>
+  </ul>
+</div>
+<div class="card purple-l">
+  <h4>4B. Sandbox Mode (Week 2)</h4>
+  <ul>
+    <li>Create sandbox toggle in security settings</li>
+    <li>Restrict filesystem access, network access in sandbox</li>
+    <li>Add sandbox status indicator to UI</li>
+  </ul>
+</div>
+<div class="card purple-l">
+  <h4>4C. Privacy &amp; VS Code Commands (Week 2-3)</h4>
+  <ul>
+    <li>Create privacy settings page in GUI</li>
+    <li>Register missing VS Code commands: openPolicy, approveAction, denyAction</li>
+    <li>Create VS Code permission quick picks</li>
+    <li>Wire CostBadge into StepContainer (existing gap)</li>
+  </ul>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ TAB 10: PHASE 5 ============ -->
+<div class="tc" id="t10">
+<div class="phase p5">
+<div class="phase-header"><div class="phase-num">5</div><div><h3>Phase 5: UI/DX Polish</h3><div style="color:var(--text-muted);font-size:.85rem">3-4 weeks &bull; 10+ new files</div></div></div>
+
+<div class="grid3">
+<div class="card cyan-l">
+  <h4>5A. Diff Visualization (Week 1)</h4>
+  <ul>
+    <li>Create <code>gui/src/components/diff/InlineDiff.tsx</code></li>
+    <li>Create <code>gui/src/components/diff/SideBySideDiff.tsx</code></li>
+    <li>Wire into StepContainer for code changes</li>
+  </ul>
+</div>
+<div class="card cyan-l">
+  <h4>5B. Onboarding Wizard (Week 1-2)</h4>
+  <ul>
+    <li>Create <code>gui/src/components/onboarding/OnboardingWizard.tsx</code></li>
+    <li>Steps: env detection, provider setup, security config, first scan</li>
+  </ul>
+</div>
+<div class="card cyan-l">
+  <h4>5C. Cost Tracking Hooks (Week 2)</h4>
+  <ul>
+    <li>Create <code>gui/src/hooks/useCostTracker.ts</code></li>
+    <li>Create <code>proxy/src/gateway/costTracker.ts</code> — Session-level per-model breakdown</li>
+    <li>Wire CostBadge into chat interface</li>
+  </ul>
+</div>
+<div class="card cyan-l">
+  <h4>5D. Agent Wizard + Session Resume (Week 2-3)</h4>
+  <ul>
+    <li>Create <code>gui/src/components/agents/AgentWizard.tsx</code></li>
+    <li>Implement session resume via stored conversation state</li>
+  </ul>
+</div>
+<div class="card cyan-l">
+  <h4>5E. DX Improvements (Week 3-4)</h4>
+  <ul>
+    <li>Suggestions engine</li>
+    <li>Tips system</li>
+    <li>Deep linking</li>
+    <li>Customizable keybindings</li>
+    <li>Output style options</li>
+  </ul>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ TAB 11: PHASE 6 ============ -->
+<div class="tc" id="t11">
+<div class="phase p6">
+<div class="phase-header"><div class="phase-num">6</div><div><h3>Phase 6: Enterprise &amp; Integrations</h3><div style="color:var(--text-muted);font-size:.85rem">4-5 weeks &bull; 12+ new files</div></div></div>
+
+<div class="grid3">
+<div class="card green-l">
+  <h4>6A. Feature Flags (Week 1)</h4>
+  <ul>
+    <li>Create feature flag service with GrowthBook-style API</li>
+    <li>Per-user, per-org, percentage rollouts</li>
+  </ul>
+</div>
+<div class="card green-l">
+  <h4>6B. OAuth + GitHub/Slack (Week 1-2)</h4>
+  <ul>
+    <li>Multi-provider OAuth (GitHub, Google)</li>
+    <li>GitHub App installation flow</li>
+    <li>Slack App installation flow</li>
+  </ul>
+</div>
+<div class="card green-l">
+  <h4>6C. Telemetry &amp; Analytics (Week 2-3)</h4>
+  <ul>
+    <li>Structured telemetry with Protobuf events</li>
+    <li>Tool usage summary dashboard</li>
+    <li>Settings sync across devices</li>
+  </ul>
+</div>
+<div class="card green-l">
+  <h4>6D. Cross-Device Bridge (Week 3-4)</h4>
+  <ul>
+    <li>Bridge API for CLI ↔ Desktop ↔ IDE</li>
+    <li>Remote managed settings (MDM)</li>
+    <li>Session teleport between devices</li>
+  </ul>
+</div>
+<div class="card green-l">
+  <h4>6E. Config Migrations + Polish (Week 4-5)</h4>
+  <ul>
+    <li>Automatic config version migrations</li>
+    <li>Native performance layer (optional)</li>
+    <li>Voice, vim mode, stickers (nice-to-have)</li>
+  </ul>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ============ TAB 12: DEPENDENCY GRAPH ============ -->
+<div class="tc" id="t12">
+<div class="sec">
+<h3>Dependency Graph — Build Order</h3>
+<p style="color:var(--text-muted);margin-bottom:16px">Arrow = "depends on". Build bottom-up.</p>
+
+<pre style="font-size:.8rem;line-height:2">
+<span style="color:var(--text-dim)">┌──────────────────────────────────────────────────────────────────────────────────┐</span>
+<span style="color:var(--text-dim)">│</span>  <span style="color:var(--red);font-weight:700">PHASE 1: FOUNDATIONS</span>                                                          <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                                                                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">taskTypes.ts</span> ──→ <span style="color:var(--green)">taskFramework.ts</span> ──→ <span style="color:var(--green)">taskService.ts</span> ──→ <span style="color:var(--green)">task.route.ts</span>       <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                       │                    │                                     <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                       ├──→ <span style="color:var(--green)">localAgentTask</span>  ├──→ <span style="color:var(--green)">taskCreateTool</span>                <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                       └──→ <span style="color:var(--green)">backgroundTask</span>  ├──→ <span style="color:var(--green)">taskListTool</span>                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                              ├──→ <span style="color:var(--green)">taskUpdateTool</span>                <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                              └──→ <span style="color:var(--green)">taskStopTool</span>                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                                                                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">memoryTypes.ts</span> ──→ <span style="color:var(--green)">memdir.ts</span> ──→ <span style="color:var(--green)">memoryService.ts</span> ──→ <span style="color:var(--green)">memory.route.ts</span>   <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                   └──→ <span style="color:var(--green)">memoryExtractor.ts</span>                       <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                                                                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">toolPermissions.ts</span> ──→ <span style="color:var(--green)">toolRegistry.ts</span>                                     <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">agentService.ts</span> ──→ <span style="color:var(--green)">agent.route.ts</span> + <span style="color:var(--green)">agentTool.ts</span>                         <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">planModeTool.ts</span>   <span style="color:var(--green)">askUserTool.ts</span>   <span style="color:var(--green)">compactService.ts</span>                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                                                                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--accent)">GUI: taskSlice + memorySlice + TaskCard + MemoryEditor + pages</span>                <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">├──────────────────────────────────────────────────────────────────────────────────┤</span>
+<span style="color:var(--text-dim)">│</span>  <span style="color:var(--orange);font-weight:700">PHASE 2: COMMANDS</span> (depends on Phase 1 taskService, memoryService)              <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                                                                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">commandTypes.ts</span> ──→ <span style="color:var(--green)">commandLoader.ts</span> ──→ <span style="color:var(--green)">commandRegistry.ts</span>               <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">skillTypes.ts</span> ──→ <span style="color:var(--green)">skillLoader.ts</span> ──→ <span style="color:var(--green)">skillService.ts</span> ──→ commandRegistry  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">pluginTypes.ts</span> ──→ <span style="color:var(--green)">pluginLoader.ts</span> ──→ <span style="color:var(--green)">pluginService.ts</span> ──→ commandRegistry<span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">hookService.ts</span>   <span style="color:var(--green)">builtinCommands.ts</span>                                      <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">├──────────────────────────────────────────────────────────────────────────────────┤</span>
+<span style="color:var(--text-dim)">│</span>  <span style="color:var(--yellow);font-weight:700">PHASE 3: SWARM</span> (depends on Phase 1 agentService + Phase 2 commands)            <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                                                                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">coordinator.ts</span> ──→ <span style="color:var(--green)">workerPool.ts</span>                                           <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">webSearchTool</span> <span style="color:var(--green)">webFetchTool</span> <span style="color:var(--green)">worktreeTool</span> <span style="color:var(--green)">notebookEditTool</span> <span style="color:var(--green)">cronTool</span>       <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">├──────────────────────────────────────────────────────────────────────────────────┤</span>
+<span style="color:var(--text-dim)">│</span>  <span style="color:var(--purple);font-weight:700">PHASE 4: SECURITY UX</span> (depends on Phase 1 toolPermissions)                     <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>                                                                                  <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   <span style="color:var(--green)">PermissionDialog.tsx</span> + per-tool dialogs + permissionSlice                    <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>   Sandbox mode + Privacy settings + VS Code commands                             <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">├──────────────────────────────────────────────────────────────────────────────────┤</span>
+<span style="color:var(--text-dim)">│</span>  <span style="color:var(--cyan);font-weight:700">PHASE 5: UI/DX</span> (independent, can start after Phase 1)                         <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">│</span>  <span style="color:var(--green);font-weight:700">PHASE 6: ENTERPRISE</span> (independent, can start after Phase 2)                     <span style="color:var(--text-dim)">│</span>
+<span style="color:var(--text-dim)">└──────────────────────────────────────────────────────────────────────────────────┘</span>
+</pre>
+
+<h4 style="margin-top:20px">Critical Path</h4>
+<div class="cbar"><div class="cl">Phase 1</div><div class="ct"><div class="cf cf-r" style="width:100%">Weeks 1-5 (BLOCKING)</div></div></div>
+<div class="cbar"><div class="cl">Phase 2</div><div class="ct"><div class="cf cf-r" style="width:80%;margin-left:20%">Weeks 3-8 (overlap with P1 end)</div></div></div>
+<div class="cbar"><div class="cl">Phase 3</div><div class="ct"><div class="cf cf-b" style="width:60%;margin-left:35%">Weeks 6-11</div></div></div>
+<div class="cbar"><div class="cl">Phase 4</div><div class="ct"><div class="cf cf-b" style="width:40%;margin-left:40%">Weeks 8-11</div></div></div>
+<div class="cbar"><div class="cl">Phase 5</div><div class="ct"><div class="cf cf-g" style="width:50%;margin-left:45%">Weeks 9-14</div></div></div>
+<div class="cbar"><div class="cl">Phase 6</div><div class="ct"><div class="cf cf-g" style="width:60%;margin-left:40%">Weeks 10-16</div></div></div>
+
+<div style="margin-top:20px">
+<table>
+<thead><tr><th>Phase</th><th>New Files</th><th>Modified Files</th><th>New DB Tables</th><th>New Tools</th><th>New Routes</th><th>New GUI Components</th><th>Weeks</th></tr></thead>
+<tbody>
+<tr><td><strong>1: Agent Core</strong></td><td>23</td><td>3</td><td>3</td><td>7</td><td>3</td><td>6</td><td>4-5</td></tr>
+<tr><td><strong>2: Commands</strong></td><td>16</td><td>2</td><td>3</td><td>1</td><td>4</td><td>3</td><td>3-4</td></tr>
+<tr><td><strong>3: Swarm</strong></td><td>12</td><td>2</td><td>1</td><td>5</td><td>1</td><td>2</td><td>3-4</td></tr>
+<tr><td><strong>4: Security UX</strong></td><td>10</td><td>3</td><td>1</td><td>0</td><td>0</td><td>6</td><td>2-3</td></tr>
+<tr><td><strong>5: UI/DX</strong></td><td>10</td><td>3</td><td>0</td><td>0</td><td>0</td><td>5</td><td>3-4</td></tr>
+<tr><td><strong>6: Enterprise</strong></td><td>12</td><td>2</td><td>0</td><td>0</td><td>2</td><td>2</td><td>4-5</td></tr>
+<tr style="font-weight:700;border-top:2px solid var(--border)"><td>TOTAL</td><td>83</td><td>15</td><td>8</td><td>13</td><td>10</td><td>24</td><td>~20-25 (with overlap)</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+function sw(el,id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+function ft(tid,q){
+  const t=document.getElementById(tid);if(!t)return;
+  t.querySelectorAll('tbody tr').forEach(r=>{
+    r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';
+  });
+}
+function fp(btn,p){
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('ftbl').querySelectorAll('tbody tr').forEach(r=>{
+    r.style.display=(p==='all'||r.dataset.p===p)?'':'none';
+  });
+}
+</script>
+</body>
+</html>

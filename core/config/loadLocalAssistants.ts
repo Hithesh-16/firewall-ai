@@ -23,8 +23,10 @@ export function isContinueConfigRelatedUri(uri: string): boolean {
       (uri.endsWith(".yaml") ||
         uri.endsWith(".yml") ||
         uri.endsWith(".json"))) ||
-    [...BLOCK_TYPES, "agents", "assistants"].some((blockType) =>
-      uri.includes(`.continue/${blockType}`),
+    [...BLOCK_TYPES, "agents", "assistants"].some(
+      (blockType) =>
+        uri.includes(`.ai-firewall/${blockType}`) ||
+        uri.includes(`.continue/${blockType}`),
     )
   );
 }
@@ -108,7 +110,7 @@ export function getDotContinueSubDirs(
 ): string[] {
   let fullDirs: string[] = [];
 
-  // Workspace .continue/<subDirName>
+  // Workspace .ai-firewall/<subDirName>
   if (options.includeWorkspace) {
     fullDirs = workspaceDirs.map((dir) =>
       joinPathsToUri(dir, ".ai-firewall", subDirName),
@@ -125,7 +127,7 @@ export function getDotContinueSubDirs(
 
 /**
  * This method searches in both ~/.ai-firewall and workspace .continue
- * for all YAML/Markdown files in the specified subdirectory, for example .continue/assistants or .continue/prompts
+ * for all YAML/Markdown files in the specified subdirectory, for example .ai-firewall/assistants or .ai-firewall/prompts
  */
 export async function getAllDotContinueDefinitionFiles(
   ide: IDE,

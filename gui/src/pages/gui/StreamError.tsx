@@ -304,7 +304,7 @@ ${parsedError}
 **Additional Context**
 Please add any additional context about the error here
 `;
-              const url = `https://github.com/continuedev/continue/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
+              const url = `https://github.com/ai-firewall/ai-firewall/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}`;
               ideMessenger.post("openUrl", url);
             }}
           >

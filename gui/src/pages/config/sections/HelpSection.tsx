@@ -195,7 +195,7 @@ export function HelpSection() {
                 onClick={() =>
                   ideMessenger.post(
                     "openUrl",
-                    "https://github.com/continuedev/continue/issues/new/choose",
+                    "https://github.com/ai-firewall/ai-firewall/issues/new/choose",
                   )
                 }
               />
@@ -207,7 +207,7 @@ export function HelpSection() {
                 onClick={() =>
                   ideMessenger.post(
                     "openUrl",
-                    "https://github.com/continuedev/continue/discussions",
+                    "https://github.com/ai-firewall/ai-firewall/discussions",
                   )
                 }
               />
@@ -278,7 +278,7 @@ export function HelpSection() {
         <div>
           <h3 className="mb-3 text-base font-medium">Keyboard Shortcuts</h3>
           <Card className="!p-0">
-            <div className="overflow-hidden rounded-md border border-border">
+            <div className="border-border overflow-hidden rounded-md border">
               {shortcuts.map((shortcut, i) => {
                 return (
                   <KeyboardShortcut

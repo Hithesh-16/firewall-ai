@@ -10,7 +10,14 @@ import { dismissBanner } from "../../redux/slices/securitySlice";
 // Color configs per action — uses semantic colors with alpha for the glow effect
 const BANNER_STYLES: Record<
   string,
-  { borderColor: string; glowColor: string; icon: string; title: string; titleColor: string; linkColor: string }
+  {
+    borderColor: string;
+    glowColor: string;
+    icon: string;
+    title: string;
+    titleColor: string;
+    linkColor: string;
+  }
 > = {
   BLOCK: {
     borderColor: "border-error/40",
@@ -63,10 +70,14 @@ export function ScanResultBanner() {
   // Build detail string
   const parts: string[] = [];
   if (lastScan.secretsCount > 0) {
-    parts.push(`${lastScan.secretsCount} secret${lastScan.secretsCount > 1 ? "s" : ""}`);
+    parts.push(
+      `${lastScan.secretsCount} secret${lastScan.secretsCount > 1 ? "s" : ""}`,
+    );
   }
   if (lastScan.piiCount > 0) {
-    parts.push(`${lastScan.piiCount} PII item${lastScan.piiCount > 1 ? "s" : ""}`);
+    parts.push(
+      `${lastScan.piiCount} PII item${lastScan.piiCount > 1 ? "s" : ""}`,
+    );
   }
   if (lastScan.redactedTypes.length > 0) {
     parts.push(lastScan.redactedTypes.join(", "));
@@ -75,32 +86,23 @@ export function ScanResultBanner() {
 
   return (
     <div
-      className={`
-        mx-2 mb-2
-        flex items-center gap-3
-        rounded-xl border
-        bg-editor
-        px-4 py-2.5
-        ${style.borderColor}
-        ${style.glowColor}
-        animate-in fade-in slide-in-from-top-2 duration-300
-      `}
+      className={`bg-editor mx-2 mb-2 flex items-center gap-3 rounded-xl border px-4 py-2.5 ${style.borderColor} ${style.glowColor} animate-in fade-in slide-in-from-top-2 duration-300`}
     >
       {/* Icon + Text */}
-      <span className="text-base flex-shrink-0">{style.icon}</span>
+      <span className="flex-shrink-0 text-base">{style.icon}</span>
 
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <span className={`text-sm font-semibold ${style.titleColor}`}>
           {style.title}
         </span>
         {detailText && (
           <>
             <span className="text-description mx-1.5">{"\u00B7"}</span>
-            <span className="text-xs text-description">{detailText}</span>
+            <span className="text-description text-xs">{detailText}</span>
           </>
         )}
         <span className="text-description mx-1.5">{"\u00B7"}</span>
-        <span className="text-xs text-description font-mono">
+        <span className="text-description font-mono text-xs">
           Risk {lastScan.riskScore}
         </span>
       </div>
@@ -108,11 +110,34 @@ export function ScanResultBanner() {
       {/* Close button — matches the "x" from the screenshot */}
       <button
         onClick={onDismiss}
-        className={`flex-shrink-0 ${style.linkColor} hover:text-foreground text-base leading-none transition-colors focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:outline-none`}
+        className={`flex-shrink-0 ${style.linkColor} hover:text-foreground focus-visible:ring-border-focus text-base leading-none transition-colors focus-visible:outline-none focus-visible:ring-2`}
         title="Dismiss"
       >
         {"\u00D7"}
       </button>
+
+      {/* Findings detail — show each detected item in red */}
+      {lastScan.findings && lastScan.findings.length > 0 && (
+        <div className="border-border/30 mt-1.5 w-full border-t pt-1.5">
+          {lastScan.findings.map((f, i) => (
+            <div key={i} className="flex items-center gap-2 py-0.5">
+              <span
+                className={`rounded px-1 font-mono text-xs ${
+                  f.severity === "critical" || f.severity === "high"
+                    ? "bg-error/10 text-error"
+                    : "bg-warning/10 text-warning"
+                }`}
+              >
+                {f.severity.toUpperCase()}
+              </span>
+              <span className="text-description text-xs">{f.type}</span>
+              <code className="text-error font-mono text-xs font-bold">
+                {f.maskedValue}
+              </code>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,230 @@
+---
+title: "Multi-Agent Coordinator"
+description: "Orchestrate parallel worker agents with the coordinator pattern"
+---
+
+## Overview
+
+The coordinator pattern enables a single orchestrator agent to decompose complex tasks into parallel work items, spawn worker agents for each, and aggregate results. Each worker executes independently with its own scan context, respecting all firewall policies.
+
+## Architecture
+
+The coordinator system is composed of three modules:
+
+| Module | Location | Responsibility |
+|--------|----------|----------------|
+| `coordinator.ts` | `proxy/src/agent/` | Session management, worker spawning, result aggregation |
+| `workerPool.ts` | `proxy/src/agent/` | Concurrency limits, pool status, result collection |
+| `agentTypes.ts` | `proxy/src/agent/` | Agent mode definitions, worker constraints, built-in agents |
+
+## Session Lifecycle
+
+```
+User request
+  → Coordinator receives task
+  → Decompose into work items
+  → Spawn workers via agentService (up to MAX_CONCURRENT_WORKERS)
+  → Workers execute independently (each gets own scan context)
+  → Worker results arrive via WebSocket (task_event)
+  → Coordinator aggregates results
+  → Session completes or fails
+```
+
+Session statuses: `active` → `completed` | `failed`
+
+## Agent Modes
+
+| Mode | Description | Timeout |
+|------|-------------|---------|
+| `local` | Synchronous, blocks until result | 5 min |
+| `background` | Async, notifies via WebSocket on completion | 10 min |
+| `coordinator` | Orchestrator that spawns workers | — |
+| `worker` | Spawned by coordinator, limited tool set | — |
+| `dream` | Memory consolidation during idle time (future) | — |
+
+### Built-in Agent Definitions
+
+- **general-purpose** — Complex multi-step tasks (all tools, 5 min timeout)
+- **explore** — Codebase exploration (read-only tools: `glob`, `grep`, `read`, `web_search`, `web_fetch`)
+- **plan** — Designs implementation strategy (read-only tools, 3 min timeout)
+- **background** — Async tasks with WebSocket notification (10 min timeout)
+
+## Worker Constraints
+
+Workers spawned by a coordinator are restricted from using these tools:
+
+```typescript
+WORKER_DENIED_TOOLS = ["agent", "send_message", "task_stop", "coordinator"]
+```
+
+This prevents recursive spawning and meta-operations. Only the coordinator can spawn agents, send messages, and stop tasks.
+
+### Concurrency
+
+```typescript
+MAX_CONCURRENT_WORKERS = 5
+AUTO_BACKGROUND_MS = 120_000  // 2 minutes
+```
+
+If a worker hasn't completed within `AUTO_BACKGROUND_MS`, it automatically backgrounds.
+
+## API Reference
+
+All endpoints require `Authorization: Bearer afw_...`.
+
+### Spawn an agent
+
+```http
+POST /api/agents/spawn
+```
+
+```json
+{
+  "description": "Refactor auth module",
+  "prompt": "Extract the auth logic from server.ts into a separate module...",
+  "model": "claude-sonnet-4-20250514",
+  "parentTaskId": "task_abc123",
+  "background": false,
+  "isolation": "worktree",
+  "worktreeSlug": "auth-refactor",
+  "cwd": "/path/to/project"
+}
+```
+
+**Response (201):**
+
+```json
+{
+  "taskId": "task_xyz789",
+  "agentId": "agent_abc",
+  "worktreePath": "/tmp/worktrees/auth-refactor",
+  "worktreeBranch": "agent/auth-refactor",
+  "background": false
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `description` | Yes | Short description (1-500 chars) |
+| `prompt` | Yes | Agent prompt (1-200K chars) |
+| `model` | No | Model override |
+| `parentTaskId` | No | Parent task ID for coordinator-worker relationship |
+| `background` | No | Run as background agent |
+| `isolation` | No | `"worktree"` for git worktree isolation, `"none"` for in-place |
+| `worktreeSlug` | No | Custom worktree branch name (alphanumeric, dots, hyphens, underscores) |
+| `cwd` | No | Working directory |
+
+### List agents
+
+```http
+GET /api/agents
+GET /api/agents?active=false
+```
+
+Returns running agents by default. Pass `active=false` to include completed/failed agents.
+
+**Response:**
+
+```json
+{
+  "agents": [...],
+  "runningCount": 2,
+  "total": 5
+}
+```
+
+### Get agent status
+
+```http
+GET /api/agents/:taskId
+```
+
+Returns task details, running state, and worktree info. Returns 404 if not found.
+
+### Kill an agent
+
+```http
+DELETE /api/agents/:taskId
+```
+
+Aborts the agent's execution and cleans up worktree if applicable.
+
+### Send message to agent
+
+```http
+POST /api/agents/:taskId/message
+```
+
+```json
+{
+  "message": "Focus on the login function first"
+}
+```
+
+Delivers a message to a running agent. Returns 409 if the agent is not running.
+
+### Complete an agent
+
+```http
+POST /api/agents/:taskId/complete
+```
+
+```json
+{
+  "resultSummary": "Refactored auth into 3 modules: authMiddleware, tokenVault, sessionTracker"
+}
+```
+
+### Fail an agent
+
+```http
+POST /api/agents/:taskId/fail
+```
+
+```json
+{
+  "error": "Could not access the target file — permission denied"
+}
+```
+
+### Report progress
+
+```http
+POST /api/agents/:taskId/progress
+```
+
+```json
+{
+  "toolUseCount": 12,
+  "inputTokens": 45000,
+  "outputTokens": 8000,
+  "recentActivities": [
+    {
+      "toolName": "read",
+      "input": { "file_path": "src/auth.ts" },
+      "timestamp": 1712000000000,
+      "isReadOnly": true
+    }
+  ]
+}
+```
+
+### Kill all agents
+
+```http
+POST /api/agents/kill-all
+```
+
+Kills all running agents for the authenticated user.
+
+## Security
+
+<Warning>
+Agent prompts are **not** scanned by the agent routes. Callers must use `POST /api/scan` (preflight) before spawning. The agent route manages lifecycle only.
+</Warning>
+
+- Each worker gets an **independent scan context** (no shared state between workers)
+- Workers respect rate limits independently
+- Workers cannot spawn sub-workers (`WORKER_DENIED_TOOLS` enforced)
+- Worktree isolation creates a separate git branch per agent
+- All agent events are broadcast via WebSocket (`task_event` type)

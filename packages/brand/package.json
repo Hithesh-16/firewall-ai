@@ -1,0 +1,16 @@
+{
+  "name": "@ai-firewall/brand",
+  "version": "1.0.0",
+  "description": "Centralized brand constants for AI Firewall — single source of truth for all brand strings",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "Apache-2.0"
+}

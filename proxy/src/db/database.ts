@@ -320,6 +320,30 @@ CREATE TABLE IF NOT EXISTS file_scan_cache (
 );
 CREATE INDEX IF NOT EXISTS idx_fsc_path ON file_scan_cache(file_path);
 CREATE INDEX IF NOT EXISTS idx_fsc_hash ON file_scan_cache(file_hash);
+
+-- Phase 1 (Agent Core): task state machine
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK(type IN ('local_agent','background_agent','bash','scan','dream','cron','workflow')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','completed','failed','killed','expired')),
+  description TEXT NOT NULL,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  agent_id TEXT,
+  parent_task_id TEXT,
+  model TEXT,
+  prompt TEXT,
+  worktree_path TEXT,
+  progress_json TEXT,
+  error TEXT,
+  result_summary TEXT,
+  started_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  notified INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_started ON tasks(started_at);
 `);
 
 // Migrations: add missing columns to api_tokens if they don't exist
@@ -331,7 +355,9 @@ try {
 try {
   db.prepare("SELECT org_id FROM api_tokens LIMIT 1").get();
 } catch {
-  db.exec("ALTER TABLE api_tokens ADD COLUMN org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE");
+  db.exec(
+    "ALTER TABLE api_tokens ADD COLUMN org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
+  );
 }
 try {
   db.prepare("SELECT team_id FROM api_tokens LIMIT 1").get();
@@ -362,7 +388,9 @@ try {
 try {
   db.prepare("SELECT user_id FROM usage_logs LIMIT 1").get();
 } catch {
-  db.exec("ALTER TABLE usage_logs ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL");
+  db.exec(
+    "ALTER TABLE usage_logs ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL",
+  );
   db.exec("CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_logs(user_id)");
 }
 
@@ -394,12 +422,16 @@ CREATE INDEX IF NOT EXISTS idx_tm_user ON team_members(user_id);
 try {
   db.prepare("SELECT team_id FROM usage_logs LIMIT 1").get();
 } catch {
-  db.exec("ALTER TABLE usage_logs ADD COLUMN team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL");
+  db.exec(
+    "ALTER TABLE usage_logs ADD COLUMN team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL",
+  );
 }
 try {
   db.prepare("SELECT team_id FROM logs LIMIT 1").get();
 } catch {
-  db.exec("ALTER TABLE logs ADD COLUMN team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL");
+  db.exec(
+    "ALTER TABLE logs ADD COLUMN team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL",
+  );
 }
 
 // ── Configurable RBAC ─────────────────────────────────────────────────
@@ -511,79 +543,278 @@ CREATE INDEX IF NOT EXISTS idx_pal_cap ON permission_audit_log(capability_name, 
 
 // Seed system roles (idempotent)
 const seedRole = db.prepare(
-  "INSERT OR IGNORE INTO roles (org_id, name, display_name, description, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)"
+  "INSERT OR IGNORE INTO roles (org_id, name, display_name, description, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
 );
 const now = Date.now();
-seedRole.run(null, "admin",         "Admin",         "Full org control",                          now, now);
-seedRole.run(null, "security_lead", "Security Lead", "Policy, approvals, scanner config",         now, now);
-seedRole.run(null, "developer",     "Developer",     "AI coding tools, own logs",                 now, now);
-seedRole.run(null, "auditor",       "Auditor",       "Read-everything, write-nothing, no tools",  now, now);
+seedRole.run(null, "admin", "Admin", "Full org control", now, now);
+seedRole.run(
+  null,
+  "security_lead",
+  "Security Lead",
+  "Policy, approvals, scanner config",
+  now,
+  now,
+);
+seedRole.run(
+  null,
+  "developer",
+  "Developer",
+  "AI coding tools, own logs",
+  now,
+  now,
+);
+seedRole.run(
+  null,
+  "auditor",
+  "Auditor",
+  "Read-everything, write-nothing, no tools",
+  now,
+  now,
+);
 
 // Seed capabilities (idempotent)
 const seedCap = db.prepare(
-  "INSERT OR IGNORE INTO capabilities (name, resource, action, description, category, risk_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  "INSERT OR IGNORE INTO capabilities (name, resource, action, description, category, risk_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 );
 const caps: Array<[string, string, string, string, string, string]> = [
   // Org & billing
-  ["org:read",             "org",          "read",      "View org settings",                       "Organisation", "low"],
-  ["org:write",            "org",          "write",     "Modify org settings",                     "Organisation", "critical"],
-  ["billing:read",         "billing",      "read",      "View billing and credit usage",           "Organisation", "low"],
-  ["billing:write",        "billing",      "write",     "Manage billing, adjust credits",          "Organisation", "critical"],
+  ["org:read", "org", "read", "View org settings", "Organisation", "low"],
+  [
+    "org:write",
+    "org",
+    "write",
+    "Modify org settings",
+    "Organisation",
+    "critical",
+  ],
+  [
+    "billing:read",
+    "billing",
+    "read",
+    "View billing and credit usage",
+    "Organisation",
+    "low",
+  ],
+  [
+    "billing:write",
+    "billing",
+    "write",
+    "Manage billing, adjust credits",
+    "Organisation",
+    "critical",
+  ],
   // Teams
-  ["team:create",          "team",         "create",    "Create teams",                            "Teams",        "high"],
-  ["team:read",            "team",         "read",      "View team details",                       "Teams",        "low"],
-  ["team:write",           "team",         "write",     "Edit team settings",                      "Teams",        "medium"],
-  ["team:delete",          "team",         "delete",    "Delete teams",                            "Teams",        "high"],
+  ["team:create", "team", "create", "Create teams", "Teams", "high"],
+  ["team:read", "team", "read", "View team details", "Teams", "low"],
+  ["team:write", "team", "write", "Edit team settings", "Teams", "medium"],
+  ["team:delete", "team", "delete", "Delete teams", "Teams", "high"],
   // User & access
-  ["user:invite",          "user",         "invite",    "Invite users to org",                     "Identity",     "high"],
-  ["user:remove",          "user",         "remove",    "Remove users from org",                   "Identity",     "high"],
-  ["user:read",            "user",         "read",      "View user list and profiles",             "Identity",     "low"],
-  ["role:assign",          "role",         "assign",    "Assign and change user roles",            "Identity",     "critical"],
-  ["role:manage",          "role",         "manage",    "Create and edit custom roles",            "Identity",     "critical"],
+  ["user:invite", "user", "invite", "Invite users to org", "Identity", "high"],
+  [
+    "user:remove",
+    "user",
+    "remove",
+    "Remove users from org",
+    "Identity",
+    "high",
+  ],
+  [
+    "user:read",
+    "user",
+    "read",
+    "View user list and profiles",
+    "Identity",
+    "low",
+  ],
+  [
+    "role:assign",
+    "role",
+    "assign",
+    "Assign and change user roles",
+    "Identity",
+    "critical",
+  ],
+  [
+    "role:manage",
+    "role",
+    "manage",
+    "Create and edit custom roles",
+    "Identity",
+    "critical",
+  ],
   // Tokens
-  ["token:create",         "token",        "create",    "Create API tokens",                       "Identity",     "high"],
-  ["token:revoke",         "token",        "revoke",    "Revoke any API token",                    "Identity",     "high"],
-  ["token:read",           "token",        "read",      "View token list (masked)",                "Identity",     "low"],
+  ["token:create", "token", "create", "Create API tokens", "Identity", "high"],
+  [
+    "token:revoke",
+    "token",
+    "revoke",
+    "Revoke any API token",
+    "Identity",
+    "high",
+  ],
+  [
+    "token:read",
+    "token",
+    "read",
+    "View token list (masked)",
+    "Identity",
+    "low",
+  ],
   // Policy & scanner
-  ["policy:read",          "policy",       "read",      "Read global policy",                      "Security",     "low"],
-  ["policy:write",         "policy",       "write",     "Modify global policy",                    "Security",     "critical"],
-  ["scanner:configure",    "scanner",      "configure", "Configure scanner thresholds",            "Security",     "critical"],
-  ["scanner:read",         "scanner",      "read",      "View scanner config",                     "Security",     "low"],
-  ["file_restrictions:manage", "file_restrictions", "manage", "Manage file restrictions",          "Security",     "high"],
+  ["policy:read", "policy", "read", "Read global policy", "Security", "low"],
+  [
+    "policy:write",
+    "policy",
+    "write",
+    "Modify global policy",
+    "Security",
+    "critical",
+  ],
+  [
+    "scanner:configure",
+    "scanner",
+    "configure",
+    "Configure scanner thresholds",
+    "Security",
+    "critical",
+  ],
+  ["scanner:read", "scanner", "read", "View scanner config", "Security", "low"],
+  [
+    "file_restrictions:manage",
+    "file_restrictions",
+    "manage",
+    "Manage file restrictions",
+    "Security",
+    "high",
+  ],
   // Approvals
-  ["approval:resolve",     "approval",     "approve",   "Resolve approval requests",               "Security",     "high"],
-  ["approval:read",        "approval",     "read",      "View approval history",                   "Security",     "low"],
+  [
+    "approval:resolve",
+    "approval",
+    "approve",
+    "Resolve approval requests",
+    "Security",
+    "high",
+  ],
+  [
+    "approval:read",
+    "approval",
+    "read",
+    "View approval history",
+    "Security",
+    "low",
+  ],
   // Providers & vault
-  ["provider:manage",      "provider",     "manage",    "Add and remove BYOK providers",           "Vault",        "critical"],
-  ["provider:read",        "provider",     "read",      "View available providers (masked)",        "Vault",        "low"],
+  [
+    "provider:manage",
+    "provider",
+    "manage",
+    "Add and remove BYOK providers",
+    "Vault",
+    "critical",
+  ],
+  [
+    "provider:read",
+    "provider",
+    "read",
+    "View available providers (masked)",
+    "Vault",
+    "low",
+  ],
   // Logs & audit
-  ["log:read_all",         "log",          "read",      "View all request logs",                   "Audit",        "medium"],
-  ["log:read_own",         "log",          "read",      "View own request logs only",              "Audit",        "low"],
-  ["log:export",           "log",          "export",    "Export logs as JSON/CSV",                 "Audit",        "high"],
-  ["audit:read",           "admin_audit",  "read",      "View admin audit log",                    "Audit",        "high"],
+  ["log:read_all", "log", "read", "View all request logs", "Audit", "medium"],
+  ["log:read_own", "log", "read", "View own request logs only", "Audit", "low"],
+  ["log:export", "log", "export", "Export logs as JSON/CSV", "Audit", "high"],
+  [
+    "audit:read",
+    "admin_audit",
+    "read",
+    "View admin audit log",
+    "Audit",
+    "high",
+  ],
   // Developer tools
-  ["agent:use",            "agent",        "execute",   "Use chat and agent in IDE",               "Developer",    "low"],
-  ["terminal:execute",     "terminal",     "execute",   "Run terminal commands",                   "Developer",    "high"],
-  ["subagent:spawn",       "subagent",     "execute",   "Spawn sub-agents",                        "Developer",    "high"],
-  ["mcp:use",              "mcp",          "execute",   "Use MCP servers",                         "Developer",    "medium"],
-  ["web_search:use",       "web_search",   "execute",   "Use web search tool",                     "Developer",    "low"],
-  ["autocomplete:use",     "autocomplete", "execute",   "Use autocomplete",                        "Developer",    "low"],
+  [
+    "agent:use",
+    "agent",
+    "execute",
+    "Use chat and agent in IDE",
+    "Developer",
+    "low",
+  ],
+  [
+    "terminal:execute",
+    "terminal",
+    "execute",
+    "Run terminal commands",
+    "Developer",
+    "high",
+  ],
+  [
+    "subagent:spawn",
+    "subagent",
+    "execute",
+    "Spawn sub-agents",
+    "Developer",
+    "high",
+  ],
+  ["mcp:use", "mcp", "execute", "Use MCP servers", "Developer", "medium"],
+  [
+    "web_search:use",
+    "web_search",
+    "execute",
+    "Use web search tool",
+    "Developer",
+    "low",
+  ],
+  [
+    "autocomplete:use",
+    "autocomplete",
+    "execute",
+    "Use autocomplete",
+    "Developer",
+    "low",
+  ],
   // Stats
-  ["credit:read",          "credit",       "read",      "View credit usage and limits",            "Organisation", "low"],
-  ["stats:read",           "stats",        "read",      "View usage analytics",                    "Organisation", "low"],
+  [
+    "credit:read",
+    "credit",
+    "read",
+    "View credit usage and limits",
+    "Organisation",
+    "low",
+  ],
+  [
+    "stats:read",
+    "stats",
+    "read",
+    "View usage analytics",
+    "Organisation",
+    "low",
+  ],
 ];
 for (const [name, resource, action, desc, category, risk] of caps) {
   seedCap.run(name, resource, action, desc, category, risk, now);
 }
 
 // Seed role_capabilities for built-in roles
-const adminRole = db.prepare("SELECT id FROM roles WHERE name = 'admin' AND org_id IS NULL").get() as { id: number } | undefined;
-const secLeadRole = db.prepare("SELECT id FROM roles WHERE name = 'security_lead' AND org_id IS NULL").get() as { id: number } | undefined;
-const devRole = db.prepare("SELECT id FROM roles WHERE name = 'developer' AND org_id IS NULL").get() as { id: number } | undefined;
-const auditorRole = db.prepare("SELECT id FROM roles WHERE name = 'auditor' AND org_id IS NULL").get() as { id: number } | undefined;
+const adminRole = db
+  .prepare("SELECT id FROM roles WHERE name = 'admin' AND org_id IS NULL")
+  .get() as { id: number } | undefined;
+const secLeadRole = db
+  .prepare(
+    "SELECT id FROM roles WHERE name = 'security_lead' AND org_id IS NULL",
+  )
+  .get() as { id: number } | undefined;
+const devRole = db
+  .prepare("SELECT id FROM roles WHERE name = 'developer' AND org_id IS NULL")
+  .get() as { id: number } | undefined;
+const auditorRole = db
+  .prepare("SELECT id FROM roles WHERE name = 'auditor' AND org_id IS NULL")
+  .get() as { id: number } | undefined;
 
 const seedRoleCap = db.prepare(
-  "INSERT OR IGNORE INTO role_capabilities (role_id, capability_name, scope, granted, created_at) VALUES (?, ?, ?, 1, ?)"
+  "INSERT OR IGNORE INTO role_capabilities (role_id, capability_name, scope, granted, created_at) VALUES (?, ?, ?, 1, ?)",
 );
 
 // Admin gets everything
@@ -595,8 +826,17 @@ if (adminRole) {
 
 // Security lead: security + read + tools, no org:write/billing:write
 if (secLeadRole) {
-  const secLeadCaps = caps.filter(([n]) =>
-    !["org:write", "billing:write", "user:invite", "user:remove", "role:assign", "role:manage", "provider:manage"].includes(n)
+  const secLeadCaps = caps.filter(
+    ([n]) =>
+      ![
+        "org:write",
+        "billing:write",
+        "user:invite",
+        "user:remove",
+        "role:assign",
+        "role:manage",
+        "provider:manage",
+      ].includes(n),
   );
   for (const [capName] of secLeadCaps) {
     seedRoleCap.run(secLeadRole.id, capName, "org", now);
@@ -606,21 +846,39 @@ if (secLeadRole) {
 // Developer: use tools + read own
 if (devRole) {
   const devCaps = [
-    "org:read", "team:read", "user:read", "token:create", "token:read",
-    "policy:read", "scanner:read", "provider:read",
-    "approval:read", "log:read_own", "agent:use", "terminal:execute",
-    "subagent:spawn", "mcp:use", "web_search:use", "autocomplete:use",
-    "credit:read", "stats:read",
+    "org:read",
+    "team:read",
+    "user:read",
+    "token:create",
+    "token:read",
+    "policy:read",
+    "scanner:read",
+    "provider:read",
+    "approval:read",
+    "log:read_own",
+    "agent:use",
+    "terminal:execute",
+    "subagent:spawn",
+    "mcp:use",
+    "web_search:use",
+    "autocomplete:use",
+    "credit:read",
+    "stats:read",
   ];
   for (const capName of devCaps) {
-    seedRoleCap.run(devRole.id, capName, capName.endsWith("_own") ? "own" : "org", now);
+    seedRoleCap.run(
+      devRole.id,
+      capName,
+      capName.endsWith("_own") ? "own" : "org",
+      now,
+    );
   }
 }
 
 // Auditor: read everything, export, no write/execute
 if (auditorRole) {
   const auditorCaps = caps.filter(([, , action]) =>
-    ["read", "export"].includes(action)
+    ["read", "export"].includes(action),
   );
   for (const [capName] of auditorCaps) {
     seedRoleCap.run(auditorRole.id, capName, "org", now);
@@ -628,15 +886,19 @@ if (auditorRole) {
 }
 
 // Migration: seed user_org_roles from existing users.role
-const usersWithRoles = db.prepare(
-  "SELECT u.id, u.org_id, u.role FROM users u WHERE u.org_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM user_org_roles uor WHERE uor.user_id = u.id AND uor.org_id = u.org_id)"
-).all() as Array<{ id: number; org_id: number; role: string }>;
+const usersWithRoles = db
+  .prepare(
+    "SELECT u.id, u.org_id, u.role FROM users u WHERE u.org_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM user_org_roles uor WHERE uor.user_id = u.id AND uor.org_id = u.org_id)",
+  )
+  .all() as Array<{ id: number; org_id: number; role: string }>;
 
 for (const u of usersWithRoles) {
-  const role = db.prepare("SELECT id FROM roles WHERE name = ? AND org_id IS NULL").get(u.role) as { id: number } | undefined;
+  const role = db
+    .prepare("SELECT id FROM roles WHERE name = ? AND org_id IS NULL")
+    .get(u.role) as { id: number } | undefined;
   if (role) {
     db.prepare(
-      "INSERT OR IGNORE INTO user_org_roles (user_id, org_id, role_id, created_at) VALUES (?, ?, ?, ?)"
+      "INSERT OR IGNORE INTO user_org_roles (user_id, org_id, role_id, created_at) VALUES (?, ?, ?, ?)",
     ).run(u.id, u.org_id, role.id, now);
   }
 }

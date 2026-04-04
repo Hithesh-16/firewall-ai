@@ -1,0 +1,116 @@
+---
+title: "GUI Components & Pages"
+description: "React component library, Redux slices, pages, and theme system for the web dashboard"
+---
+
+## Overview
+
+The GUI is a React + Vite + Tailwind application serving as both an IDE webview and a standalone web dashboard. Environment-aware routing hides web-only pages (security, agents, tasks) inside the IDE.
+
+## Pages
+
+| Route | Page | Phase | Description |
+|-------|------|-------|-------------|
+| `/` | Chat | Core | Main chat interface |
+| `/history` | History | Core | Conversation history |
+| `/stats` | Stats | Core | Usage statistics |
+| `/config` | Config | Core | Settings (models, rules, tools) |
+| `/security` | Security | Core | Security dashboard (web only) |
+| `/agents` | Agent Manager | P1 | Active agents, approvals, coordinator |
+| `/tasks` | Task Dashboard | P1 | Task list, progress, kill controls |
+| `/memory` | Memory Browser | P1 | Memory index, editor, type filtering |
+| `/setup` | Setup Wizard | P3 | Onboarding: env, provider, security, scan |
+| `/onboarding` | Onboarding | Core | Org/team setup flow |
+| `/rbac` | RBAC | Core | Role-based access control |
+| `/team` | Team Dashboard | Core | Team management |
+
+## Security Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `SessionCostBadge` | `security/CostBadge.tsx` | Session token + cost total in chat header |
+| `MessageCostBadge` | `security/CostBadge.tsx` | Per-message token/cost on latest assistant message |
+| `ScanResultBanner` | `security/ScanResultBanner.tsx` | ALLOW/BLOCK/REDACT banner after scan |
+| `PreflightPanel` | `security/PreflightPanel.tsx` | Pre-flight scan results with Proceed/Redact/Cancel |
+| `FirewallActivityIndicator` | `security/FirewallActivityIndicator.tsx` | Pipeline step indicator during scanning |
+| `ShieldStatus` | `security/ShieldStatus.tsx` | Firewall connection status badge |
+
+## Agent Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `ActiveAgentCard` | `pages/agents/ActiveAgentCard.tsx` | Running agent with progress bar and cancel |
+| `ApprovalCard` | `pages/agents/ApprovalCard.tsx` | Pending approval with allow/deny actions |
+| `CoordinatorView` | `components/agents/CoordinatorView.tsx` | Multi-agent dashboard: sessions, workers, pool |
+
+## Task Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `TaskCard` | `components/tasks/TaskCard.tsx` | Task status, progress, kill/dismiss actions |
+| `TasksPage` | `pages/tasks/index.tsx` | Full task dashboard with filtering |
+
+## Memory Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `MemoryEditor` | `components/memory/MemoryEditor.tsx` | Frontmatter + markdown body editor |
+| `MemoryPage` | `pages/memory/index.tsx` | Memory browser with type filter |
+
+## Diff Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `InlineDiff` | `components/diff/InlineDiff.tsx` | Unified diff with red/green coloring |
+| `SideBySideDiff` | `components/diff/SideBySideDiff.tsx` | Side-by-side diff view |
+
+## Permission Components
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `PermissionDialog` | `components/permissions/PermissionDialog.tsx` | Allow Once / Always / Deny with risk display |
+
+## Onboarding
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `OnboardingWizard` | `components/onboarding/OnboardingWizard.tsx` | 5-step setup: env, provider, security, scan, done |
+
+## Redux Slices
+
+| Slice | Key State | Purpose |
+|-------|-----------|---------|
+| `sessionSlice` | `history`, `isStreaming` | Chat messages and streaming state |
+| `securitySlice` | `lastScanResult`, `sessionStats`, `preflightResult`, `firewallActivity` | Security scan state |
+| `agentSlice` | `activeAgents`, `pendingApprovals` | Agent and approval state |
+| `configSlice` | `models`, `uiConfig` | User configuration |
+| `uiSlice` | `showDialog`, `dialogMessage` | UI modals and dialogs |
+
+## Custom Hooks
+
+| Hook | File | Description |
+|------|------|-------------|
+| `useProxyApi` | `hooks/useProxyApi.ts` | REST client for proxy API (get/post/patch/del/put) |
+| `useCostTracker` | `hooks/useCostTracker.ts` | Real-time cost polling from `/api/usage/summary` |
+| `useFirewallWebSocket` | `hooks/useFirewallWebSocket.ts` | WebSocket connection for real-time events |
+
+## Theme System
+
+All components use theme-mapped Tailwind classes. No hardcoded colors.
+
+| Purpose | Class | Wrong |
+|---------|-------|-------|
+| Background | `bg-editor`, `bg-input`, `bg-secondary-background` | `bg-gray-800` |
+| Text | `text-foreground`, `text-description`, `text-description-muted` | `text-white` |
+| Semantic | `text-error`, `text-warning`, `text-success`, `text-info` | `text-red-500` |
+| Borders | `border-border`, `border-border-focus` | `border-gray-600` |
+| Buttons | `bg-primary text-primary-foreground` | `bg-blue-500 text-white` |
+
+### Design Rules
+
+1. Every async operation shows a loading state
+2. Every list shows an empty state with guidance
+3. Every error shows a user-friendly message (never raw JSON)
+4. Icon buttons have `aria-label` for accessibility
+5. All interactive elements have visible focus states
+6. Unicode in JSX uses `{"\u23CE"}` not `\u23CE`

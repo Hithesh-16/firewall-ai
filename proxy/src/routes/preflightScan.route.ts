@@ -26,22 +26,26 @@ import { adjustSeverity } from "../scanner/contextScanner";
 import { scanPromptInjection } from "../scanner/promptInjectionScanner";
 
 const scanSchema = z.object({
-  messages: z.array(
-    z.object({
-      role: z.string(),
-      content: z.string(),
-    })
-  ).min(1),
+  messages: z
+    .array(
+      z.object({
+        role: z.string(),
+        content: z.string(),
+      }),
+    )
+    .min(1),
   model: z.string().optional(),
 });
 
 export async function registerPreflightScanRoute(
-  app: FastifyInstance
+  app: FastifyInstance,
 ): Promise<void> {
   app.post("/api/scan", async (request, reply) => {
     const parsed = scanSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+      return reply
+        .status(400)
+        .send({ error: "Invalid payload", details: parsed.error.flatten() });
     }
 
     const { messages, model } = parsed.data;
@@ -65,7 +69,12 @@ export async function registerPreflightScanRoute(
         if (adj?.adjustedSeverity && adj.adjustedSeverity !== s.severity) {
           s.severity = adj.adjustedSeverity;
         }
-      } catch (e) { request.log.warn({ err: e, type: s.type }, "secret severity adjustment failed"); }
+      } catch (e) {
+        request.log.warn(
+          { err: e, type: s.type },
+          "secret severity adjustment failed",
+        );
+      }
     }
     for (const p of piiResult.pii) {
       try {
@@ -73,7 +82,12 @@ export async function registerPreflightScanRoute(
         if (adj?.adjustedSeverity && adj.adjustedSeverity !== p.severity) {
           p.severity = adj.adjustedSeverity;
         }
-      } catch (e) { request.log.warn({ err: e, type: p.type }, "pii severity adjustment failed"); }
+      } catch (e) {
+        request.log.warn(
+          { err: e, type: p.type },
+          "pii severity adjustment failed",
+        );
+      }
     }
 
     const decision = evaluatePolicy(secretResult, piiResult, policy);
@@ -85,7 +99,9 @@ export async function registerPreflightScanRoute(
       if (piResult.isInjection) {
         decision.action = "BLOCK";
         decision.riskScore = Math.max(decision.riskScore, piResult.score);
-        decision.reasons.push(`Prompt injection detected (score: ${piResult.score})`);
+        decision.reasons.push(
+          `Prompt injection detected (score: ${piResult.score})`,
+        );
       }
     }
 
@@ -105,6 +121,36 @@ export async function registerPreflightScanRoute(
       reply.header("X-AF-Redacted-Types", redactedTypes.join(","));
     }
 
+    // Build findings array with masked values for display
+    const findings = [
+      ...secretResult.secrets.map((s) => ({
+        type: s.type,
+        severity: s.severity,
+        category: "secret" as const,
+        maskedValue: maskValue(s.value, s.type),
+      })),
+      ...piiResult.pii.map((p) => ({
+        type: p.type,
+        severity: p.severity,
+        category: "pii" as const,
+        maskedValue: maskValue(p.value, p.type),
+      })),
+    ];
+
+    // Encode findings in header for extractScanHeaders
+    if (findings.length > 0) {
+      // Compact JSON array: [{t,s,c,v},...] to fit in header
+      const findingsHeader = JSON.stringify(
+        findings.slice(0, 20).map((f) => ({
+          t: f.type,
+          s: f.severity,
+          c: f.category,
+          v: f.maskedValue,
+        })),
+      );
+      reply.header("X-AF-Findings", findingsHeader);
+    }
+
     // BLOCK → 403
     if (decision.action === "BLOCK") {
       return reply.status(403).send({
@@ -113,6 +159,7 @@ export async function registerPreflightScanRoute(
         reasons: decision.reasons,
         secretsFound: secretResult.secrets.length,
         piiFound: piiResult.pii.length,
+        findings,
       });
     }
 
@@ -136,7 +183,49 @@ export async function registerPreflightScanRoute(
       secretsFound: secretResult.secrets.length,
       piiFound: piiResult.pii.length,
       entropyFound: entropyMatches.length,
-      sanitizedMessages: decision.action === "REDACT" ? sanitizedMessages : undefined,
+      findings,
+      sanitizedMessages:
+        decision.action === "REDACT" ? sanitizedMessages : undefined,
     };
   });
+}
+
+/**
+ * Mask a detected value for safe display — show enough to identify
+ * but never expose the full secret.
+ */
+function maskValue(value: string, type: string): string {
+  if (!value || value.length <= 4) return "****";
+
+  // For keys/tokens, show first 4 and last 2 chars
+  if (
+    type.includes("KEY") ||
+    type.includes("TOKEN") ||
+    type === "JWT" ||
+    type === "BEARER_TOKEN"
+  ) {
+    return `${value.slice(0, 4)}${"*".repeat(Math.min(value.length - 6, 12))}${value.slice(-2)}`;
+  }
+
+  // For emails, mask the local part
+  if (type === "EMAIL") {
+    const atIndex = value.indexOf("@");
+    if (atIndex > 1) {
+      return `${value[0]}${"*".repeat(atIndex - 1)}${value.slice(atIndex)}`;
+    }
+  }
+
+  // For phone/SSN/credit card, show last 4
+  if (
+    type === "PHONE" ||
+    type === "SSN" ||
+    type === "CREDIT_CARD" ||
+    type === "AADHAAR" ||
+    type === "PAN"
+  ) {
+    return `${"*".repeat(value.length - 4)}${value.slice(-4)}`;
+  }
+
+  // Default: show first 3, mask rest
+  return `${value.slice(0, 3)}${"*".repeat(Math.min(value.length - 3, 12))}`;
 }

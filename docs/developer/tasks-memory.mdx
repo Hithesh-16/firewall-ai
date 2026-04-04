@@ -1,0 +1,263 @@
+---
+title: "Task Framework & Memory System"
+description: "Agent task lifecycle, state machine, progress tracking, and persistent memory with auto-extraction"
+---
+
+## Task Framework
+
+The task framework manages agent work units with a full state machine, progress tracking, and WebSocket notifications.
+
+### Task Types
+
+7 task types supported:
+
+| Type | Description |
+|------|-------------|
+| `local_agent` | Synchronous in-process agent |
+| `bash` | Shell command execution |
+| `mcp_tool` | MCP tool invocation |
+| `file_edit` | File modification |
+| `approval_wait` | Waiting for human approval |
+| `background_agent` | Async agent with completion notification |
+| `sub_agent` | Worker spawned by coordinator |
+
+### State Machine
+
+```
+pending -> running -> completed
+                   -> failed
+                   -> killed
+pending -> expired (timeout)
+```
+
+Invalid transitions (e.g., `completed -> running`) return `409 Conflict`.
+
+### API Endpoints
+
+#### Create Task
+```http
+POST /api/tasks
+Authorization: Bearer afw_...
+Content-Type: application/json
+
+{
+  "type": "local_agent",
+  "description": "Scan authentication files"
+}
+```
+Response: `201` with task object (id starts with `a_`, status `pending`).
+
+#### List Tasks
+```http
+GET /api/tasks
+GET /api/tasks?status=running
+GET /api/tasks?type=local_agent
+```
+
+#### Get Task
+```http
+GET /api/tasks/:id
+```
+
+#### Update Task Status
+```http
+PATCH /api/tasks/:id
+Content-Type: application/json
+
+{
+  "status": "running",
+  "agentId": "agent-1"
+}
+```
+
+#### Report Progress
+```http
+POST /api/tasks/:id/progress
+Content-Type: application/json
+
+{
+  "toolUseCount": 5,
+  "inputTokens": 1200,
+  "outputTokens": 800,
+  "recentActivities": [
+    {
+      "toolName": "grep",
+      "input": {"pattern": "TODO"},
+      "timestamp": 1234567890,
+      "isReadOnly": true
+    }
+  ]
+}
+```
+
+#### Kill Task
+```http
+DELETE /api/tasks/:id
+```
+Response: `{"killed": true}`
+
+#### Kill All
+```http
+POST /api/tasks/kill-all
+```
+
+#### Acknowledge
+```http
+POST /api/tasks/:id/ack
+```
+
+### WebSocket Events
+
+Task lifecycle events are pushed via WebSocket (`task_event` type):
+
+- `task_created` — New task registered
+- `task_started` — Task began execution
+- `task_progress` — Progress update (tools, tokens)
+- `task_completed` — Task finished successfully
+- `task_killed` — Task terminated
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `proxy/src/tasks/taskTypes.ts` | Type definitions + valid state transitions |
+| `proxy/src/tasks/taskFramework.ts` | State machine, validation, progress |
+| `proxy/src/services/taskService.ts` | DB operations, event emission |
+| `proxy/src/routes/task.route.ts` | REST API endpoints |
+
+---
+
+## Memory System
+
+Persistent file-based memory with MEMORY.md index, typed taxonomy, and auto-extraction.
+
+### Memory Types
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `user` | User role, preferences, knowledge | "Senior engineer focused on security" |
+| `feedback` | Behavioral guidance (do/don't) | "Never use console.log in production" |
+| `project` | Ongoing work, goals, deadlines | "Auth rewrite driven by compliance" |
+| `reference` | Pointers to external systems | "Bugs tracked in Linear project INGEST" |
+
+### Memory File Format
+
+Each memory is a Markdown file with YAML frontmatter:
+
+```markdown
+---
+name: User Role
+description: Senior engineer working on AI security
+type: user
+---
+
+Hithesh is a senior engineer focused on AI security and firewall systems.
+```
+
+### MEMORY.md Index
+
+The index file is a concise pointer list (max 200 lines / 25KB):
+
+```markdown
+- [User Role](user_role.md) -- Senior engineer focused on security
+- [No console.log](feedback_logging.md) -- Always use structured logger
+```
+
+### API Endpoints
+
+#### List Memories
+```http
+GET /api/memory
+GET /api/memory?type=user
+```
+
+#### Create Memory
+```http
+POST /api/memory
+Content-Type: application/json
+
+{
+  "name": "User Role",
+  "description": "Senior engineer working on security",
+  "type": "user",
+  "body": "Hithesh is a senior engineer focused on AI security."
+}
+```
+
+#### Read Memory
+```http
+GET /api/memory/:fileName
+```
+
+#### Delete Memory
+```http
+DELETE /api/memory/:fileName
+```
+
+#### Read Index
+```http
+GET /api/memory/index
+```
+
+#### Update Index
+```http
+PUT /api/memory/index
+```
+
+#### Auto-Extract from Conversation
+```http
+POST /api/memory/extract
+Content-Type: application/json
+
+{
+  "conversationText": "I'm a data scientist. Don't mock the database in tests. Bugs are tracked in Linear project INGEST."
+}
+```
+Returns extracted memories (user + feedback + reference patterns detected).
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `proxy/src/memory/memoryTypes.ts` | 4 memory type definitions |
+| `proxy/src/memory/memdir.ts` | File storage + MEMORY.md index management |
+| `proxy/src/memory/memoryExtractor.ts` | Auto-extract from conversation text |
+| `proxy/src/services/memoryService.ts` | CRUD service (delegates to memdir) |
+| `proxy/src/routes/memory.route.ts` | REST API endpoints |
+
+### Security
+
+- Memory files are written ONLY to `proxy/data/projects/<project>/memory/`
+- No raw secrets stored — content is scanned before persistence
+- MEMORY.md truncated to 200 lines / 25KB to control token usage
+
+---
+
+## Tool Permissions
+
+3-level permission enforcement for all tool calls.
+
+### Permission Chain
+
+```
+1. Config Rules (pattern matching from policy.json)
+   -> If match: ALLOW/DENY/ASK
+2. Auto-Classifier (dangerous file/command detection)
+   -> Detects: rm -rf, /etc/passwd, .env, secrets/
+3. User Dialog (PermissionDialog component)
+   -> Allow Once / Allow Always / Deny / Deny Always
+```
+
+### Architecture
+
+| File | Responsibility |
+|------|---------------|
+| `core/tools/toolPermissions.ts` | Rules, pattern matching, dangerous detection |
+| `core/tools/toolRegistry.ts` | Tool registry with dedup and search |
+| `proxy/src/permissions/toolPermissions.ts` | Proxy-side enforcement |
+
+### Dangerous Patterns
+
+**Files:** `.env`, `credentials.json`, `/etc/shadow`, `~/.ssh/`, `*.pem`
+
+**Commands:** `rm -rf`, `chmod 777`, `curl | sh`, `eval()`, `sudo`

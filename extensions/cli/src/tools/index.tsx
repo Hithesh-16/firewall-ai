@@ -74,12 +74,67 @@ const BASE_BUILTIN_TOOLS: Tool[] = [
   askQuestionTool,
 ];
 
+// Essential tools for models with limited tool-calling ability (e.g., Groq)
+const ESSENTIAL_TOOLS: Tool[] = [
+  readFileTool,
+  writeFileTool,
+  listFilesTool,
+  runTerminalCommandTool,
+  askQuestionTool,
+];
+
 const BUILTIN_SEARCH_TOOLS: Tool[] = [searchCodeTool];
+
+/**
+ * Providers/models that struggle with large tool schemas.
+ * When detected, only essential tools are sent to reduce failures.
+ */
+const REDUCED_TOOL_PROVIDERS = ["groq", "ollama"];
+
+function shouldReduceTools(provider: string): boolean {
+  return REDUCED_TOOL_PROVIDERS.includes(provider.toLowerCase());
+}
 
 // Get all builtin tools including dynamic ones, with capability-based filtering
 export async function getAllAvailableTools(
   isHeadless: boolean,
 ): Promise<Tool[]> {
+  // Get model info first to check if we need reduced tools
+  const modelState = await serviceContainer.get<ModelServiceState>(
+    SERVICE_NAMES.MODEL,
+  );
+  if (!modelState.model) {
+    throw new Error("Model service is not initialized");
+  }
+
+  const { provider, name, model } = modelState.model;
+
+  // For providers with limited tool-calling (Groq, Ollama), send only essential tools
+  if (shouldReduceTools(provider)) {
+    const tools = [...ESSENTIAL_TOOLS];
+
+    // Add search if available — it's high value
+    const isRipgrepInstalled = await checkIfRipgrepIsInstalled();
+    if (isRipgrepInstalled) {
+      tools.push(searchCodeTool);
+    }
+
+    // Use simple edit tool (fewer params than multiEdit)
+    tools.push(editTool);
+
+    if (isHeadless) {
+      tools.push(exitTool);
+    }
+
+    logger.debug("Using reduced tool set for provider", {
+      provider,
+      toolCount: tools.length,
+    });
+
+    return tools;
+  }
+
+  // Full tool set for capable providers
   const tools = [...BASE_BUILTIN_TOOLS];
 
   const isRipgrepInstalled = await checkIfRipgrepIsInstalled();
@@ -100,15 +155,6 @@ export async function getAllAvailableTools(
   }
 
   // If model is capable, exclude editTool in favor of multiEditTool
-  const modelState = await serviceContainer.get<ModelServiceState>(
-    SERVICE_NAMES.MODEL,
-  );
-  if (!modelState.model) {
-    throw new Error("Model service is not initialized");
-  }
-
-  const { provider, name, model } = modelState.model;
-
   const isCapable = isModelCapable(provider, name, model);
   if (isCapable) {
     tools.push(multiEditTool);

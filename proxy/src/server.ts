@@ -47,6 +47,7 @@ import { registerSkillRoutes } from "./routes/skill.route";
 import { registerCronRoutes } from "./routes/cron.route";
 import { registerPrivacyRoutes } from "./routes/privacy.route";
 import { registerPluginRoutes } from "./routes/plugin.route";
+import { registerSecurityAuditRoutes } from "./routes/securityAudit.route";
 import { startWebhookPoller } from "./services/webhookQueue";
 import { startScheduledReports } from "./export/scheduledReports";
 import { logConfigSecurityWarnings } from "./middleware/configSecurityCheck";
@@ -189,6 +190,9 @@ async function bootstrap(): Promise<void> {
 
   // Plugin management (list, enable/disable)
   await registerPluginRoutes(app);
+
+  // Security audit (full-repo scan)
+  await registerSecurityAuditRoutes(app);
 
   // Privacy audit (opt-in, Phase X)
   await registerAuditRoutes(app);

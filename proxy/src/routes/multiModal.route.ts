@@ -14,10 +14,11 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/authMiddleware";
 import {
-  scanImageOcr,
+  scanImageText,
   scanAudioTranscript,
   scanStructuredFile,
 } from "../scanner/multiModalScanner";
+import type { StructuredFileType } from "../scanner/multiModalScanner";
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,13 @@ const audioSchema = z.object({
 
 const fileSchema = z.object({
   content: z.string().min(1),
-  fileType: z.string().min(1).max(64),
+  fileType: z.enum([
+    "pdf",
+    "docx",
+    "html",
+    "csv",
+    "json",
+  ] as const satisfies readonly StructuredFileType[]),
   source: z.string().max(1024).optional(),
 });
 
@@ -60,7 +67,7 @@ export async function registerMultiModalRoutes(
       }
 
       const { ocrText, source } = parsed.data;
-      return scanImageOcr(ocrText, source);
+      return scanImageText(ocrText, source);
     },
   );
 

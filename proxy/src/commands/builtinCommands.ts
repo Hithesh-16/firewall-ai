@@ -645,6 +645,92 @@ const resumeCommand: LocalCommand = {
   },
 };
 
+// ── /security-audit ───────────────────────────────────────────
+
+const securityAuditCommand: ActionCommand = {
+  name: "security-audit",
+  aliases: ["audit", "sec-audit"],
+  description:
+    "Full-repo security audit — secrets, vulnerabilities, weak code, attack surface",
+  type: "action",
+  source: "builtin",
+
+  async call(
+    args: string,
+    context: CommandContext,
+  ): Promise<LocalCommandResult> {
+    const { runSecurityAudit } = await import(
+      "../scanner/securityAuditScanner"
+    );
+
+    const projectPath = args.trim() || context.projectPath || process.cwd();
+
+    try {
+      const result = await runSecurityAudit(projectPath, {
+        maxFiles: 5000,
+        maxFileSize: 1024 * 1024,
+        includeInfoFindings: false,
+      });
+
+      const s = result.summary;
+
+      // Build severity breakdown
+      const severityLine = [
+        s.bySeverity.critical > 0 ? `${s.bySeverity.critical} critical` : null,
+        s.bySeverity.high > 0 ? `${s.bySeverity.high} high` : null,
+        s.bySeverity.medium > 0 ? `${s.bySeverity.medium} medium` : null,
+        s.bySeverity.low > 0 ? `${s.bySeverity.low} low` : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      // Build top findings (up to 20)
+      const topFindings = result.findings.slice(0, 20).map((f, i) => {
+        const sev = f.severity.toUpperCase();
+        const loc = f.lineNumber ? `${f.filePath}:${f.lineNumber}` : f.filePath;
+        return `  ${i + 1}. [${sev}] ${f.title}\n     ${loc}\n     ${f.recommendation}`;
+      });
+
+      const output = [
+        `Security Audit Report`,
+        `${"=".repeat(50)}`,
+        `Risk Score: ${s.riskScore}/100 (Grade: ${s.grade})`,
+        `Files scanned: ${result.filesScanned} | Skipped: ${result.filesSkipped}`,
+        `Tech stack: ${result.techStack.join(", ") || "unknown"}`,
+        `Duration: ${result.scanDuration}ms`,
+        ``,
+        `Findings: ${s.totalFindings} total (${severityLine || "none"})`,
+        ``,
+        ...(topFindings.length > 0
+          ? [`Top findings:`, ...topFindings]
+          : ["No security issues found."]),
+        ...(result.findings.length > 20
+          ? [
+              ``,
+              `... and ${result.findings.length - 20} more. Use the API (POST /api/security-audit) for full results.`,
+            ]
+          : []),
+      ];
+
+      return {
+        output: output.join("\n"),
+        success: true,
+        data: {
+          grade: s.grade,
+          riskScore: s.riskScore,
+          totalFindings: s.totalFindings,
+          bySeverity: s.bySeverity,
+          techStack: result.techStack,
+          filesScanned: result.filesScanned,
+        },
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { output: `Security audit failed: ${msg}`, success: false };
+    }
+  },
+};
+
 // ── Export all built-in commands ────────────────────────────────
 
 export const BUILTIN_COMMANDS: readonly Command[] = [
@@ -659,4 +745,5 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
   helpCommand,
   shareCommand,
   resumeCommand,
+  securityAuditCommand,
 ];

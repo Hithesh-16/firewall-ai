@@ -18,16 +18,17 @@ import {
   analyzeRequest,
   registerApprovedEndpoints,
   getDetectionStats,
-  getKnownEndpoints,
+  getKnownLlmEndpoints,
 } from "../network/shadowAiDetector";
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
 const networkRequestSchema = z.object({
-  url: z.string().min(1),
-  method: z.string().min(1),
-  headers: z.record(z.string(), z.string()).optional(),
-  body: z.string().optional(),
+  hostname: z.string().min(1),
+  path: z.string().optional(),
+  method: z.string().optional(),
+  contentType: z.string().optional(),
+  userAgent: z.string().optional(),
   sourceIp: z.string().optional(),
   timestamp: z.number().optional(),
 });
@@ -36,10 +37,8 @@ const approvedEndpointsSchema = z.object({
   endpoints: z
     .array(
       z.object({
-        url: z.string().min(1),
-        name: z.string().min(1),
-        provider: z.string().optional(),
-        approvedBy: z.string().optional(),
+        provider: z.string().min(1),
+        hostname: z.string().min(1),
       }),
     )
     .min(1)
@@ -109,6 +108,6 @@ export async function registerShadowAiRoutes(
    * Returns the list of known AI/LLM API endpoints used for detection.
    */
   app.get("/api/network/endpoints", { preHandler: requireAuth }, async () => {
-    return getKnownEndpoints();
+    return getKnownLlmEndpoints();
   });
 }

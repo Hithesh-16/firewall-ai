@@ -14,6 +14,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/authMiddleware";
 import {
+  createSignature,
   publishSignature,
   querySignatures,
   getSignatureStats,
@@ -55,7 +56,9 @@ export async function registerIntelligenceRoutes(
       }
 
       const { tenantId, text, categories, riskScore } = parsed.data;
-      return publishSignature(tenantId, text, categories, riskScore);
+      const sig = createSignature(text, categories, riskScore);
+      publishSignature(tenantId, sig);
+      return sig;
     },
   );
 

@@ -15,7 +15,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/authMiddleware";
 import {
-  recordTurn,
+  trackTurn,
   getSessionRisk,
   cleanExpiredSessions,
 } from "../scanner/multiTurnTracker";
@@ -56,7 +56,10 @@ export async function registerMultiTurnRoutes(
       }
 
       const { sessionId, text, riskScore, categories } = parsed.data;
-      return recordTurn(sessionId, text, riskScore, categories);
+      return trackTurn(sessionId, text, {
+        score: riskScore,
+        matches: (categories ?? []).map((pattern) => ({ pattern })),
+      });
     },
   );
 
@@ -72,12 +75,10 @@ export async function registerMultiTurnRoutes(
     async (request, reply) => {
       const parsed = sessionIdParamSchema.safeParse(request.params);
       if (!parsed.success) {
-        return reply
-          .status(400)
-          .send({
-            error: "Invalid sessionId",
-            details: parsed.error.flatten(),
-          });
+        return reply.status(400).send({
+          error: "Invalid sessionId",
+          details: parsed.error.flatten(),
+        });
       }
 
       const { sessionId } = parsed.data;

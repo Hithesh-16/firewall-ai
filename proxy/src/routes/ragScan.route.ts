@@ -48,8 +48,8 @@ export async function registerRagScanRoutes(
           .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
-      const { chunk, source } = parsed.data;
-      return scanRagChunk(chunk, source);
+      const { chunk } = parsed.data;
+      return scanRagChunk(chunk);
     },
   );
 

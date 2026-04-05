@@ -25,19 +25,29 @@ const parseRulesSchema = z.object({
   yaml: z.string().min(1).max(65536),
 });
 
+const ruleConditionSchema = z.object({
+  field: z.string().min(1),
+  operator: z.string().min(1),
+  value: z.union([z.string(), z.array(z.string()), z.number()]),
+  negate: z.boolean().default(false),
+});
+
 const businessRuleSchema = z.object({
-  id: z.string().min(1),
   name: z.string().min(1),
-  condition: z.string().min(1),
-  action: z.enum(["BLOCK", "REDACT", "ALLOW", "WARN"]),
-  priority: z.number().int().min(0).optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  conditions: z.array(ruleConditionSchema).min(1),
+  logicalOperator: z.enum(["AND", "OR", "NOT"]),
+  action: z.enum(["BLOCK", "REDACT", "WARN", "LOG", "ESCALATE"]),
+  message: z.string(),
+  severity: z.enum(["critical", "high", "medium", "low"]),
+  priority: z.number().int().min(0).default(0),
+  enabled: z.boolean().default(true),
 });
 
 const ruleContextSchema = z.object({
+  content: z.string().default(""),
+  role: z.string().optional(),
   model: z.string().optional(),
-  user: z.string().optional(),
-  riskScore: z.number().optional(),
+  userId: z.string().optional(),
   categories: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });

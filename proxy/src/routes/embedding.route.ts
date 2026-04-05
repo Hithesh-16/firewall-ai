@@ -15,7 +15,7 @@ import { z } from "zod";
 import { requireAuth } from "../auth/authMiddleware";
 import {
   detectInjection,
-  addTrainingExamples,
+  trainOnExamples,
   getModelStats,
 } from "../ml/embeddingDetector";
 
@@ -31,8 +31,7 @@ const trainSchema = z.object({
     .array(
       z.object({
         text: z.string().min(1),
-        label: z.enum(["injection", "benign"]),
-        category: z.string().optional(),
+        label: z.enum(["attack", "benign"]),
       }),
     )
     .min(1)
@@ -62,7 +61,7 @@ export async function registerEmbeddingRoutes(
       }
 
       const { text, threshold } = parsed.data;
-      return detectInjection(text, threshold);
+      return detectInjection(text, { threshold });
     },
   );
 
@@ -84,7 +83,8 @@ export async function registerEmbeddingRoutes(
       }
 
       const { examples } = parsed.data;
-      return addTrainingExamples(examples);
+      trainOnExamples(examples);
+      return { added: examples.length };
     },
   );
 

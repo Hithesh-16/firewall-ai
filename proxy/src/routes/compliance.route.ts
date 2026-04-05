@@ -15,18 +15,25 @@ import { z } from "zod";
 import { requireAuth } from "../auth/authMiddleware";
 import {
   mapToRegulations,
-  generateEvidence,
-  listRegulations,
+  generateEvidencePackage,
+  getSupportedRegulations,
 } from "../compliance/complianceMapper";
+import type { SecurityEventType } from "../compliance/complianceMapper";
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
 const securityEventSchema = z.object({
-  type: z.string().min(1),
+  type: z.enum([
+    "pii_detected",
+    "secret_leaked",
+    "injection_blocked",
+    "hallucination",
+    "policy_violation",
+    "unauthorized_access",
+  ] as const satisfies readonly SecurityEventType[]),
   severity: z.enum(["critical", "high", "medium", "low"]),
   timestamp: z.number(),
-  details: z.record(z.string(), z.unknown()).optional(),
-  source: z.string().optional(),
+  details: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
 const complianceMapSchema = securityEventSchema;
@@ -83,7 +90,7 @@ export async function registerComplianceRoutes(
       }
 
       const { events, timeRange } = parsed.data;
-      return generateEvidence(events, timeRange);
+      return generateEvidencePackage(events, timeRange);
     },
   );
 
@@ -96,7 +103,7 @@ export async function registerComplianceRoutes(
     "/api/compliance/regulations",
     { preHandler: requireAuth },
     async () => {
-      return { regulations: listRegulations() };
+      return { regulations: getSupportedRegulations() };
     },
   );
 }

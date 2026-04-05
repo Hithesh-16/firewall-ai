@@ -17,7 +17,9 @@ import {
   generateProbes,
   evaluateResponse,
   getProbeLibrary,
+  createRedTeamConfig,
 } from "../agents/redTeamAgent";
+import type { ProbeCategory } from "../agents/redTeamAgent";
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -30,9 +32,22 @@ const generateProbesSchema = z.object({
 const evaluateResponseSchema = z.object({
   probe: z.object({
     id: z.string().min(1),
-    text: z.string().min(1),
-    category: z.string().min(1),
-    expectedBehavior: z.string().optional(),
+    category: z.enum([
+      "injection",
+      "jailbreak",
+      "extraction",
+      "hallucination",
+      "bias",
+      "privacy",
+      "toxicity",
+      "encoding",
+      "roleplay",
+      "multilingual",
+    ] as const satisfies readonly ProbeCategory[]),
+    template: z.string(),
+    rendered: z.string(),
+    expectedVulnerable: z.boolean(),
+    severity: z.enum(["critical", "high", "medium", "low"]),
   }),
   response: z.string().min(1),
 });
@@ -60,7 +75,14 @@ export async function registerRedTeamRoutes(
       }
 
       const { targetModel, categories, maxProbes } = parsed.data;
-      return generateProbes(targetModel, categories, maxProbes);
+      const config = createRedTeamConfig({
+        ...(targetModel !== undefined ? { targetModel } : {}),
+        ...(categories !== undefined
+          ? { categories: categories as ProbeCategory[] }
+          : {}),
+        ...(maxProbes !== undefined ? { maxProbes } : {}),
+      });
+      return generateProbes(config);
     },
   );
 

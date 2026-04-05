@@ -12,7 +12,7 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/authMiddleware";
-import { checkGrounding, extractClaims } from "../scanner/groundingEngine";
+import { computeGrounding, extractClaims } from "../scanner/groundingEngine";
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ export async function registerGroundingRoutes(
       }
 
       const { output, sources } = parsed.data;
-      return checkGrounding(output, sources);
+      return computeGrounding(output, sources);
     },
   );
 

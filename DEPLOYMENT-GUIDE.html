@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Firewall — Manual Deployment Steps</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface-2: #1a2234;
+    --surface-3: #1e2a3a;
+    --border: #1e293b;
+    --border-light: #334155;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --emerald: #10b981;
+    --emerald-bg: rgba(16, 185, 129, 0.08);
+    --emerald-border: rgba(16, 185, 129, 0.2);
+    --red: #f87171;
+    --red-bg: rgba(248, 113, 113, 0.08);
+    --red-border: rgba(248, 113, 113, 0.2);
+    --amber: #fbbf24;
+    --amber-bg: rgba(251, 191, 36, 0.08);
+    --amber-border: rgba(251, 191, 36, 0.2);
+    --blue: #60a5fa;
+    --blue-bg: rgba(96, 165, 250, 0.08);
+    --blue-border: rgba(96, 165, 250, 0.2);
+    --purple: #a78bfa;
+    --purple-bg: rgba(167, 139, 250, 0.08);
+    --purple-border: rgba(167, 139, 250, 0.2);
+    --cyan: #22d3ee;
+    --cyan-bg: rgba(34, 211, 238, 0.08);
+    --cyan-border: rgba(34, 211, 238, 0.2);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 50px 24px 35px;
+    background: linear-gradient(180deg, rgba(96,165,250,0.06) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .hero h1 span { color: var(--blue); }
+  .hero p { color: var(--text-dim); font-size: 15px; max-width: 650px; margin: 0 auto; }
+  .hero-note { color: var(--amber); font-size: 13px; margin-top: 16px; font-weight: 500; }
+
+  /* Progress tracker */
+  .progress-tracker {
+    display: flex; gap: 2px; margin: 30px 0 10px;
+    background: var(--surface); border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .progress-seg {
+    flex: 1; padding: 10px 8px; text-align: center;
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .progress-seg.done { background: var(--emerald-bg); color: var(--emerald); }
+  .progress-seg.current { background: var(--amber-bg); color: var(--amber); }
+  .progress-seg.todo { background: var(--surface-2); color: var(--text-muted); }
+
+  /* Step card */
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .step-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border);
+    cursor: default;
+  }
+  .step-num {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .step-num.critical { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .step-num.high { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+  .step-num.medium { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+  .step-num.low { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-border); }
+  .step-num.done { background: var(--emerald-bg); color: var(--emerald); border: 1px solid var(--emerald-border); }
+  .step-title { font-size: 16px; font-weight: 600; }
+  .step-meta { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge.critical { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .badge.high { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+  .badge.medium { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+  .badge.low { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-border); }
+  .badge.done { background: var(--emerald-bg); color: var(--emerald); border: 1px solid var(--emerald-border); }
+  .badge.info { background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
+
+  .step-body { padding: 20px 22px; }
+
+  /* Sub-steps */
+  .substep {
+    display: flex; gap: 12px; padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .substep:last-child { border-bottom: none; }
+  .substep-check {
+    width: 22px; height: 22px; border-radius: 6px;
+    border: 2px solid var(--border-light);
+    flex-shrink: 0; margin-top: 1px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .substep-check:hover { border-color: var(--emerald); }
+  .substep-check.checked { background: var(--emerald); border-color: var(--emerald); }
+  .substep-check.checked::after { content: '\2713'; color: white; font-size: 13px; font-weight: 700; }
+  .substep-content { flex: 1; }
+  .substep-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+  .substep-desc { font-size: 13px; color: var(--text-dim); }
+  .substep-desc code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .substep-desc a { color: var(--blue); text-decoration: none; }
+  .substep-desc a:hover { text-decoration: underline; }
+
+  /* Code block */
+  .code-block {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    overflow-x: auto;
+    color: var(--text-dim);
+    margin: 10px 0;
+  }
+  .code-block .key { color: var(--blue); }
+  .code-block .val { color: var(--emerald); }
+  .code-block .comment { color: var(--text-muted); font-style: italic; }
+  .code-block .placeholder { color: var(--amber); background: var(--amber-bg); padding: 0 4px; border-radius: 3px; }
+
+  /* Info/warn boxes */
+  .callout {
+    border-radius: 10px; padding: 14px 18px;
+    display: flex; gap: 12px; align-items: flex-start;
+    margin: 12px 0; font-size: 13px;
+  }
+  .callout.warn { background: var(--red-bg); border: 1px solid var(--red-border); }
+  .callout.info { background: var(--blue-bg); border: 1px solid var(--blue-border); }
+  .callout.tip { background: var(--emerald-bg); border: 1px solid var(--emerald-border); }
+  .callout.note { background: var(--amber-bg); border: 1px solid var(--amber-border); }
+  .callout .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+  th { text-align: left; padding: 8px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  th:first-child { border-radius: 6px 0 0 0; }
+  th:last-child { border-radius: 0 6px 0 0; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+
+  /* Section divider */
+  .divider {
+    display: flex; align-items: center; gap: 16px;
+    margin: 40px 0 24px; color: var(--text-muted);
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* URL status table */
+  .url-status { margin: 12px 0; }
+  .url-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .url-row:last-child { border-bottom: none; }
+  .url-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .url-dot.live { background: var(--emerald); }
+  .url-dot.placeholder { background: var(--amber); }
+  .url-dot.none { background: var(--red); }
+  .url-label { color: var(--text-dim); min-width: 100px; }
+  .url-value { font-family: 'SF Mono', monospace; font-size: 12px; flex: 1; }
+  .url-note { color: var(--text-muted); font-size: 11px; }
+</style>
+<script>
+  // Persist checkbox state in localStorage
+  document.addEventListener('DOMContentLoaded', () => {
+    const checks = document.querySelectorAll('.substep-check');
+    const saved = JSON.parse(localStorage.getItem('af-deploy-checks') || '{}');
+    checks.forEach((el, i) => {
+      if (saved[i]) el.classList.add('checked');
+      el.addEventListener('click', () => {
+        el.classList.toggle('checked');
+        const state = {};
+        checks.forEach((c, j) => { if (c.classList.contains('checked')) state[j] = true; });
+        localStorage.setItem('af-deploy-checks', JSON.stringify(state));
+        updateProgress();
+      });
+    });
+    updateProgress();
+  });
+  function updateProgress() {
+    const total = document.querySelectorAll('.substep-check').length;
+    const done = document.querySelectorAll('.substep-check.checked').length;
+    const el = document.getElementById('progress-text');
+    if (el) el.textContent = `${done} / ${total} completed`;
+    const bar = document.getElementById('progress-bar-fill');
+    if (bar) bar.style.width = `${(done/total*100).toFixed(0)}%`;
+  }
+</script>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>&#128736; <span>Your Manual Steps</span></h1>
+  <p>Everything you need to do outside of code to deploy AI Firewall. Click checkboxes as you complete each step &mdash; progress is saved in your browser.</p>
+  <div class="hero-note">&#9888; All ai-firewall.dev URLs are currently placeholders &mdash; nothing is deployed yet</div>
+</div>
+
+<div class="container">
+
+<!-- Progress -->
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+  <span style="font-size: 13px; color: var(--text-muted);">Overall Progress</span>
+  <span id="progress-text" style="font-size: 13px; color: var(--emerald); font-weight: 600;">0 / 0 completed</span>
+</div>
+<div style="height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-bottom: 32px;">
+  <div id="progress-bar-fill" style="height: 100%; background: var(--emerald); border-radius: 3px; transition: width 0.3s; width: 0%;"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- CURRENT URL STATUS -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num medium">i</div>
+    <div class="step-title">Current URL Status in Codebase</div>
+    <div class="step-meta"><span class="badge info">160 refs</span></div>
+  </div>
+  <div class="step-body">
+    <div class="callout note">
+      <div class="icon">&#9888;</div>
+      <div>These URLs exist in your code but <strong>none are live</strong>. They're defined in <code>packages/brand/src/index.ts</code> and referenced in 66 files. Once you have a real domain, update the brand package and rebuild.</div>
+    </div>
+    <div class="url-status">
+      <div class="url-row"><div class="url-dot placeholder"></div><div class="url-label">App</div><div class="url-value">https://ai-firewall.dev</div><div class="url-note">Not deployed</div></div>
+      <div class="url-row"><div class="url-dot placeholder"></div><div class="url-label">API</div><div class="url-value">https://api.ai-firewall.dev</div><div class="url-note">Not deployed</div></div>
+      <div class="url-row"><div class="url-dot placeholder"></div><div class="url-label">Docs</div><div class="url-value">https://docs.ai-firewall.dev</div><div class="url-note">Not deployed</div></div>
+      <div class="url-row"><div class="url-dot placeholder"></div><div class="url-label">Proxy</div><div class="url-value">https://proxy.ai-firewall.dev</div><div class="url-note">Used in tests only</div></div>
+      <div class="url-row"><div class="url-dot placeholder"></div><div class="url-label">Email</div><div class="url-value">security@ai-firewall.dev</div><div class="url-note">Not set up</div></div>
+      <div class="url-row"><div class="url-dot none"></div><div class="url-label">Local</div><div class="url-value">http://localhost:8080</div><div class="url-note">Works for local dev</div></div>
+    </div>
+    <div class="callout tip">
+      <div class="icon">&#128161;</div>
+      <div>To change all URLs at once later, update <code>packages/brand/src/index.ts</code> and run <code>npm run build -w packages/brand</code>. Files that import BRAND will pick up new values on next build. Files with hardcoded URLs (160 refs) need a one-time find-and-replace &mdash; ask Claude to do this when you're ready.</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">Step 1 &mdash; Security (Do First)</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 1: ROTATE SECRETS -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num critical">1</div>
+    <div class="step-title">Rotate Exposed Secrets</div>
+    <div class="step-meta"><span class="badge critical">Security Risk</span></div>
+  </div>
+  <div class="step-body">
+    <div class="callout warn">
+      <div class="icon">&#9888;</div>
+      <div><strong>Real credentials are committed in <code>proxy/.env</code>.</strong> Even though this repo may be private, these are Continue.dev's credentials that should not be used. Rotate them now.</div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Rotate Google OAuth credentials</div>
+        <div class="substep-desc">
+          Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console &rarr; APIs &amp; Services &rarr; Credentials</a><br>
+          &bull; Create a new OAuth 2.0 Client ID (or rotate the existing one)<br>
+          &bull; Copy the new <strong>Client ID</strong> and <strong>Client Secret</strong><br>
+          &bull; Update <code>proxy/.env</code> with new values:
+          <div class="code-block">
+<span class="key">SSO_CLIENT_ID</span>=<span class="placeholder">&lt;your-new-google-client-id&gt;</span>.apps.googleusercontent.com
+<span class="key">SSO_CLIENT_SECRET</span>=<span class="placeholder">&lt;your-new-google-client-secret&gt;</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Generate new MASTER_KEY</div>
+        <div class="substep-desc">
+          Run in terminal:
+          <div class="code-block">openssl rand -hex 32</div>
+          Copy the output and update <code>proxy/.env</code>:
+          <div class="code-block"><span class="key">MASTER_KEY</span>=<span class="placeholder">&lt;paste-the-64-char-hex-string&gt;</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Ensure proxy/.env is gitignored</div>
+        <div class="substep-desc">
+          Run:
+          <div class="code-block">
+<span class="comment"># Check if .env is tracked by git</span>
+git ls-files proxy/.env
+
+<span class="comment"># If it shows output, remove from tracking (keeps the local file)</span>
+git rm --cached proxy/.env
+          </div>
+          Verify <code>.gitignore</code> has <code>proxy/.env</code> or <code>*.env</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">Step 2 &mdash; Domain &amp; Hosting</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 2: DOMAIN -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num high">2</div>
+    <div class="step-title">Register Domain &amp; Set Up DNS</div>
+    <div class="step-meta"><span class="badge high">When Deploying</span></div>
+  </div>
+  <div class="step-body">
+    <div class="callout info">
+      <div class="icon">&#9432;</div>
+      <div>Skip this until you're ready to deploy publicly. For local dev, <code>localhost:8080</code> works fine.</div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Register your domain</div>
+        <div class="substep-desc">
+          Register <code>ai-firewall.dev</code> (or your preferred domain) on Namecheap, Cloudflare, Google Domains, etc.<br>
+          <strong>If you pick a different domain</strong>, update <code>packages/brand/src/index.ts</code> and tell Claude to update all 160 hardcoded references.
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Configure DNS records</div>
+        <div class="substep-desc">
+          <table>
+            <tr><th>Type</th><th>Name</th><th>Value</th><th>Purpose</th></tr>
+            <tr><td>A / CNAME</td><td>@</td><td class="mono"><span class="placeholder">&lt;your-server-ip&gt;</span></td><td>Main app</td></tr>
+            <tr><td>A / CNAME</td><td>api</td><td class="mono"><span class="placeholder">&lt;your-server-ip&gt;</span></td><td>Proxy API server</td></tr>
+            <tr><td>A / CNAME</td><td>docs</td><td class="mono"><span class="placeholder">&lt;your-docs-host&gt;</span></td><td>Documentation site</td></tr>
+            <tr><td>MX</td><td>@</td><td class="mono"><span class="placeholder">&lt;mail-provider&gt;</span></td><td>Email (security@ address)</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Set up SSL/TLS certificates</div>
+        <div class="substep-desc">
+          Use <strong>Let's Encrypt</strong> (free) via Certbot, or Cloudflare (automatic).<br>
+          Ensure certs cover: <code>ai-firewall.dev</code>, <code>api.ai-firewall.dev</code>, <code>docs.ai-firewall.dev</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Update BRAND URLs if domain is different</div>
+        <div class="substep-desc">
+          If you chose a domain other than <code>ai-firewall.dev</code>, update <code>packages/brand/src/index.ts</code>:
+          <div class="code-block">
+<span class="key">appUrl</span>: <span class="val">"https://</span><span class="placeholder">your-domain.com</span><span class="val">"</span>,
+<span class="key">apiUrl</span>: <span class="val">"https://api.</span><span class="placeholder">your-domain.com</span><span class="val">"</span>,
+<span class="key">docsUrl</span>: <span class="val">"https://docs.</span><span class="placeholder">your-domain.com</span><span class="val">"</span>,
+          </div>
+          Then rebuild: <code>cd packages/brand && npm run build</code><br>
+          Then ask Claude to update the remaining 160 hardcoded references.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">Step 3 &mdash; Authentication Providers</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 3: WORKOS -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num critical">3</div>
+    <div class="step-title">Set Up WorkOS (Primary Auth)</div>
+    <div class="step-meta"><span class="badge critical">Required for login</span></div>
+  </div>
+  <div class="step-body">
+    <div class="callout info">
+      <div class="icon">&#9432;</div>
+      <div>WorkOS handles user authentication (login/signup). Currently hardcoded with Continue.dev's client IDs. You need your own.</div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Create WorkOS account</div>
+        <div class="substep-desc">
+          Go to <a href="https://dashboard.workos.com" target="_blank">dashboard.workos.com</a> and sign up.
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Create an OAuth application</div>
+        <div class="substep-desc">
+          In WorkOS Dashboard &rarr; Authentication &rarr; Create Application<br>
+          &bull; Set redirect URI to: <code>https://ai-firewall.dev/auth/callback</code> (or your domain)<br>
+          &bull; Also add <code>http://localhost:3000/auth/callback</code> for local dev<br>
+          &bull; Copy the <strong>Client ID</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Update hardcoded client IDs</div>
+        <div class="substep-desc">
+          Tell Claude: <em>"Replace the WorkOS client IDs in <code>core/control-plane/env.ts</code> with environment variables"</em><br><br>
+          Current hardcoded values to replace:
+          <div class="code-block">
+<span class="comment">// core/control-plane/env.ts lines 12-13</span>
+<span class="key">WORKOS_CLIENT_ID</span>: <span class="val">"client_01J0FW6XN8N2X...Y65J"</span>  <span class="comment">&larr; Replace with your Client ID</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 4: GOOGLE SSO -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num high">4</div>
+    <div class="step-title">Set Up Google OAuth (SSO)</div>
+    <div class="step-meta"><span class="badge high">For Google login</span></div>
+  </div>
+  <div class="step-body">
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Create Google OAuth 2.0 app</div>
+        <div class="substep-desc">
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> &rarr; Create Credentials &rarr; OAuth client ID<br>
+          &bull; Application type: <strong>Web application</strong><br>
+          &bull; Name: <strong>AI Firewall</strong><br>
+          &bull; Authorized redirect URIs:<br>
+          <div class="code-block">
+https://api.<span class="placeholder">your-domain</span>/api/auth/sso/callback
+http://localhost:8080/api/auth/sso/callback  <span class="comment">(for local dev)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Configure OAuth consent screen</div>
+        <div class="substep-desc">
+          In Google Cloud Console &rarr; OAuth consent screen:<br>
+          &bull; App name: <strong>AI Firewall</strong><br>
+          &bull; User support email: <strong>your email</strong><br>
+          &bull; Authorized domains: <code><span class="placeholder">your-domain.com</span></code><br>
+          &bull; Scopes: <code>email</code>, <code>profile</code>, <code>openid</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Update proxy/.env with new credentials</div>
+        <div class="substep-desc">
+          Copy Client ID and Client Secret into <code>proxy/.env</code> (you may have already done this in Step 1).
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 5: GITHUB OAUTH -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num medium">5</div>
+    <div class="step-title">Set Up GitHub OAuth (Optional SSO)</div>
+    <div class="step-meta"><span class="badge medium">Optional</span></div>
+  </div>
+  <div class="step-body">
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Create GitHub OAuth app</div>
+        <div class="substep-desc">
+          <a href="https://github.com/settings/developers" target="_blank">GitHub Developer Settings</a> &rarr; OAuth Apps &rarr; New OAuth App<br>
+          &bull; Application name: <strong>AI Firewall</strong><br>
+          &bull; Homepage URL: <code>https://<span class="placeholder">your-domain</span></code><br>
+          &bull; Authorization callback URL: <code>https://api.<span class="placeholder">your-domain</span>/api/auth/sso/github/callback</code><br>
+          &bull; Copy Client ID and Client Secret into <code>proxy/.env</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">Step 4 &mdash; Analytics &amp; Monitoring</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 6: POSTHOG -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num high">6</div>
+    <div class="step-title">Set Up PostHog (Telemetry)</div>
+    <div class="step-meta"><span class="badge high">For analytics</span></div>
+  </div>
+  <div class="step-body">
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Create PostHog project</div>
+        <div class="substep-desc">
+          Go to <a href="https://app.posthog.com/signup" target="_blank">app.posthog.com</a> and create a new project for "AI Firewall".<br>
+          Copy the <strong>Project API Key</strong> (starts with <code>phc_</code>).
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Update PostHog API key in code</div>
+        <div class="substep-desc">
+          Tell Claude: <em>"Replace the PostHog API key with my new key <code>phc_XXXX</code>"</em><br><br>
+          Files that need updating:
+          <table>
+            <tr><th>File</th><th>Line</th></tr>
+            <tr><td><code>gui/src/hooks/TelemetryProviders.tsx</code></td><td>31</td></tr>
+            <tr><td><code>extensions/cli/src/telemetry/posthogService.ts</code></td><td>91</td></tr>
+          </table>
+          <br>Current key: <code style="color: var(--red);">phc_JS6XFROuNbhJtVCEdTSYk6gl5ArRrTNMpCcguAXlSPs</code> (this is Continue.dev's key)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 7: SENTRY -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num low">7</div>
+    <div class="step-title">Set Up Sentry (Error Tracking &mdash; Optional)</div>
+    <div class="step-meta"><span class="badge low">Optional</span></div>
+  </div>
+  <div class="step-body">
+    <div class="callout tip">
+      <div class="icon">&#10003;</div>
+      <div>Sentry is currently <strong>disabled</strong> (<code>core/util/sentry/constants.ts</code> has empty DSN). You can skip this.</div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Create Sentry project (when ready)</div>
+        <div class="substep-desc">
+          Go to <a href="https://sentry.io" target="_blank">sentry.io</a> &rarr; Create Project &rarr; Node.js<br>
+          Copy the DSN and update <code>core/util/sentry/constants.ts</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">Step 5 &mdash; Publishing</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 8: NPM -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num low">8</div>
+    <div class="step-title">Claim NPM Scope (For Publishing)</div>
+    <div class="step-meta"><span class="badge low">When publishing</span></div>
+  </div>
+  <div class="step-body">
+    <div class="callout info">
+      <div class="icon">&#9432;</div>
+      <div>Only needed if you plan to publish packages publicly to npm. All <code>@ai-firewall/*</code> packages currently use <code>file:</code> references internally.</div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Create @ai-firewall npm org</div>
+        <div class="substep-desc">
+          Go to <a href="https://www.npmjs.com/org/create" target="_blank">npmjs.com/org/create</a><br>
+          &bull; Organization name: <strong>ai-firewall</strong><br>
+          &bull; This claims the <code>@ai-firewall</code> scope so nobody else can use it
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 9: VS CODE MARKETPLACE -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num low">9</div>
+    <div class="step-title">VS Code Marketplace Publisher (For Extension)</div>
+    <div class="step-meta"><span class="badge low">When publishing</span></div>
+  </div>
+  <div class="step-body">
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Create publisher on VS Code Marketplace</div>
+        <div class="substep-desc">
+          Go to <a href="https://marketplace.visualstudio.com/manage" target="_blank">VS Code Marketplace</a> &rarr; Create Publisher<br>
+          &bull; Publisher ID: <strong>ai-firewall</strong> (must match <code>extensions/vscode/package.json</code> publisher field)<br>
+          &bull; Display name: <strong>AI Firewall</strong><br>
+          &bull; You'll need an Azure DevOps Personal Access Token to publish
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">Step 6 &mdash; Infrastructure (Production Deploy)</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 10: HOSTING -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num high">10</div>
+    <div class="step-title">Deploy Server Infrastructure</div>
+    <div class="step-meta"><span class="badge high">Production</span></div>
+  </div>
+  <div class="step-body">
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Choose hosting (pick one)</div>
+        <div class="substep-desc">
+          <table>
+            <tr><th>Option</th><th>Best For</th><th>Est. Cost</th></tr>
+            <tr><td><strong>Docker + VPS</strong> (DigitalOcean, Hetzner, AWS EC2)</td><td>Full control, cheapest</td><td>$5-20/mo</td></tr>
+            <tr><td><strong>Railway / Render</strong></td><td>Easy deploy, managed</td><td>$7-25/mo</td></tr>
+            <tr><td><strong>AWS ECS / GCP Cloud Run</strong></td><td>Auto-scaling, enterprise</td><td>$20+/mo</td></tr>
+            <tr><td><strong>Fly.io</strong></td><td>Edge deployment, fast</td><td>$5-15/mo</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Deploy proxy server</div>
+        <div class="substep-desc">
+          The proxy is a Fastify Node.js server. Deploy it with these env vars:
+          <div class="code-block">
+<span class="key">PORT</span>=<span class="val">8080</span>
+<span class="key">NODE_ENV</span>=<span class="val">production</span>
+<span class="key">MASTER_KEY</span>=<span class="placeholder">&lt;your-master-key&gt;</span>
+<span class="key">SSO_CLIENT_ID</span>=<span class="placeholder">&lt;google-client-id&gt;</span>
+<span class="key">SSO_CLIENT_SECRET</span>=<span class="placeholder">&lt;google-client-secret&gt;</span>
+<span class="key">DB_PATH</span>=<span class="val">./data/firewall.db</span>
+          </div>
+          Build: <code>cd proxy && npm run build && npm start</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Deploy GUI (static site)</div>
+        <div class="substep-desc">
+          Build: <code>cd gui && npm run build</code><br>
+          Deploy the <code>gui/dist/</code> folder to any static host (Vercel, Netlify, Cloudflare Pages, or your own nginx)
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Set up reverse proxy with TLS</div>
+        <div class="substep-desc">
+          Use nginx or Caddy to route:<br>
+          &bull; <code>api.ai-firewall.dev</code> &rarr; <code>localhost:8080</code> (proxy server)<br>
+          &bull; <code>ai-firewall.dev</code> &rarr; static files (GUI)<br>
+          &bull; <code>docs.ai-firewall.dev</code> &rarr; docs hosting
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 11: CI/CD -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num medium">11</div>
+    <div class="step-title">CI/CD &amp; GitHub Secrets</div>
+    <div class="step-meta"><span class="badge medium">Automation</span></div>
+  </div>
+  <div class="step-body">
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Add secrets to GitHub Actions</div>
+        <div class="substep-desc">
+          Go to your repo &rarr; Settings &rarr; Secrets and Variables &rarr; Actions<br>
+          Add these secrets:
+          <table>
+            <tr><th>Secret Name</th><th>Value</th></tr>
+            <tr><td><code>MASTER_KEY</code></td><td>Your generated master key</td></tr>
+            <tr><td><code>SSO_CLIENT_ID</code></td><td>Google OAuth client ID</td></tr>
+            <tr><td><code>SSO_CLIENT_SECRET</code></td><td>Google OAuth client secret</td></tr>
+            <tr><td><code>WORKOS_CLIENT_ID</code></td><td>WorkOS client ID</td></tr>
+            <tr><td><code>POSTHOG_API_KEY</code></td><td>PostHog project API key</td></tr>
+            <tr><td><code>VSCE_PAT</code></td><td>VS Code marketplace publish token</td></tr>
+            <tr><td><code>NPM_TOKEN</code></td><td>npm publish token (if publishing)</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider">Step 7 &mdash; Post-Deploy Verification</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- STEP 12: VERIFICATION -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num done">12</div>
+    <div class="step-title">Verify Everything Works</div>
+    <div class="step-meta"><span class="badge info">Testing</span></div>
+  </div>
+  <div class="step-body">
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Health check</div>
+        <div class="substep-desc">
+          <code>curl https://api.your-domain/health</code> &mdash; should return <code>{"status": "ok"}</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Test Google SSO login</div>
+        <div class="substep-desc">Open the GUI, click Login with Google, verify redirect and token creation work</div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Test scanner pipeline</div>
+        <div class="substep-desc">
+          Send a chat completion with a test secret like <code>AKIAIOSFODNN7EXAMPLE</code>. Verify it gets blocked or redacted with <code>X-AF-Action: BLOCK</code> header.
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Test VS Code extension</div>
+        <div class="substep-desc">
+          Configure the extension to point to your deployed proxy URL and verify chat works end-to-end.
+        </div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Check PostHog events</div>
+        <div class="substep-desc">Open PostHog dashboard, verify events are coming in from your app.</div>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-check"></div>
+      <div class="substep-content">
+        <div class="substep-title">Review security dashboard</div>
+        <div class="substep-desc">Open the GUI security page, verify scan logs and stats are populating.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- QUICK REFERENCE -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="divider">Quick Reference</div>
+
+<div class="step">
+  <div class="step-header">
+    <div class="step-num medium">?</div>
+    <div class="step-title">What to Tell Claude After Each Step</div>
+  </div>
+  <div class="step-body">
+    <table>
+      <tr><th>After You...</th><th>Tell Claude...</th></tr>
+      <tr>
+        <td>Get new WorkOS client ID</td>
+        <td><em>"Replace WorkOS client ID in core/control-plane/env.ts with <code>client_XXXXX</code>"</em></td>
+      </tr>
+      <tr>
+        <td>Get new PostHog API key</td>
+        <td><em>"Replace the PostHog API key with <code>phc_XXXXX</code> in gui and cli"</em></td>
+      </tr>
+      <tr>
+        <td>Register a different domain</td>
+        <td><em>"Update all ai-firewall.dev URLs to <code>my-domain.com</code>"</em></td>
+      </tr>
+      <tr>
+        <td>Set up Sentry</td>
+        <td><em>"Set Sentry DSN to <code>https://xxx@sentry.io/xxx</code> in core/util/sentry/constants.ts"</em></td>
+      </tr>
+      <tr>
+        <td>Complete all manual steps</td>
+        <td><em>"Run the full rebrand: rename all Continue references to AI Firewall"</em></td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- Footer -->
+<div style="text-align: center; padding: 40px 0 20px; border-top: 1px solid var(--border); margin-top: 40px;">
+  <p style="font-size: 12px; color: var(--text-muted);">
+    AI Firewall &mdash; Deployment Guide &middot; Updated 2026-04-05 &middot; Checkboxes saved in localStorage
+  </p>
+</div>
+
+</div>
+</body>
+</html>

@@ -9,7 +9,7 @@ import { prependPrompt } from "src/util/promptProcessor.js";
 import { getAccessToken, getAssistantSlug } from "../auth/workos.js";
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
-import { setAgentId } from "../index.js";
+import { setAgentId } from "../tuiState.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import {
   getService,

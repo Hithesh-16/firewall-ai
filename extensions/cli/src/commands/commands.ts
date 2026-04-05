@@ -156,11 +156,15 @@ export function getAllSlashCommands(
 
   // Get assistant prompt commands
   const assistantCommands: SlashCommand[] =
-    assistant?.prompts?.map((prompt) => ({
-      name: prompt?.name || "",
-      description: prompt?.description || "",
-      category: "assistant" as const,
-    })) || [];
+    assistant?.prompts?.map(
+      (
+        prompt: { name?: string; description?: string; prompt?: string } | null,
+      ) => ({
+        name: prompt?.name || "",
+        description: prompt?.description || "",
+        category: "assistant" as const,
+      }),
+    ) || [];
 
   // Get invokable rule commands
   const invokableRuleCommands = getInvokableRuleSlashCommands(assistant);
@@ -175,11 +179,15 @@ export function getAssistantSlashCommands(
   assistant: AssistantConfig,
 ): SlashCommand[] {
   return (
-    assistant?.prompts?.map((prompt) => ({
-      name: prompt?.name || "",
-      description: prompt?.description || "",
-      category: "assistant" as const,
-    })) || []
+    assistant?.prompts?.map(
+      (
+        prompt: { name?: string; description?: string; prompt?: string } | null,
+      ) => ({
+        name: prompt?.name || "",
+        description: prompt?.description || "",
+        category: "assistant" as const,
+      }),
+    ) || []
   );
 }
 
@@ -194,21 +202,35 @@ export function getInvokableRuleSlashCommands(
   }
 
   return assistant.rules
-    .filter((rule) => {
-      // Handle both string rules and rule objects
-      if (!rule || typeof rule === "string") {
-        return false;
-      }
-      // Only include rules with invokable: true
-      return rule.invokable === true;
-    })
-    .map((rule) => {
-      // TypeScript now knows rule is an object with invokable: true
-      const ruleObj = rule as any;
-      return {
-        name: ruleObj.name || "",
-        description: ruleObj.description || "",
-        category: "assistant" as const,
-      };
-    });
+    .filter(
+      (
+        rule:
+          | string
+          | { invokable?: boolean; name?: string; description?: string }
+          | null,
+      ) => {
+        // Handle both string rules and rule objects
+        if (!rule || typeof rule === "string") {
+          return false;
+        }
+        // Only include rules with invokable: true
+        return rule.invokable === true;
+      },
+    )
+    .map(
+      (
+        rule:
+          | string
+          | { invokable?: boolean; name?: string; description?: string }
+          | null,
+      ) => {
+        // TypeScript now knows rule is an object with invokable: true
+        const ruleObj = rule as { name?: string; description?: string };
+        return {
+          name: ruleObj.name || "",
+          description: ruleObj.description || "",
+          category: "assistant" as const,
+        };
+      },
+    );
 }

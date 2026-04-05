@@ -104,6 +104,12 @@ export type ScanResult = {
   piiCount: number;
   entropyCount?: number;
   redactedTypes: string[];
+  findings?: {
+    type: string;
+    severity: string;
+    category: "secret" | "pii";
+    maskedValue: string;
+  }[];
   tokensUsed?: number;
   cost?: number;
 };

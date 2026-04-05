@@ -235,7 +235,8 @@ export async function handleSlashCommands(
 
   // Check for custom assistant prompts
   const assistantPrompt = assistant.prompts?.find(
-    (prompt) => prompt?.name === command,
+    (prompt: { name?: string; prompt?: string } | null) =>
+      prompt?.name === command,
   );
   if (assistantPrompt) {
     const newInput = assistantPrompt.prompt + args.join(" ");
@@ -243,16 +244,22 @@ export async function handleSlashCommands(
   }
 
   // Check for invokable rules
-  const invokableRule = assistant.rules?.find((rule) => {
-    // Handle both string rules and rule objects
-    if (!rule || typeof rule === "string") {
-      return false;
-    }
-    const ruleObj = rule as any;
-    return ruleObj.invokable === true && ruleObj.name === command;
-  });
+  const invokableRule = assistant.rules?.find(
+    (
+      rule:
+        | string
+        | { invokable?: boolean; name?: string; rule?: string }
+        | null,
+    ) => {
+      // Handle both string rules and rule objects
+      if (!rule || typeof rule === "string") {
+        return false;
+      }
+      return rule.invokable === true && rule.name === command;
+    },
+  );
   if (invokableRule) {
-    const ruleObj = invokableRule as any;
+    const ruleObj = invokableRule as { rule?: string };
     const newInput = ruleObj.rule + " " + args.join(" ");
     return { newInput };
   }

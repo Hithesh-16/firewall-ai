@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Firewall — Rebrand Strategy Plan</title>
+<title>AI Firewall — Rebrand &amp; Deployment Checklist</title>
 <style>
   :root {
     --bg: #0a0e17;
     --surface: #111827;
     --surface-2: #1a2234;
+    --surface-3: #1e2a3a;
     --border: #1e293b;
     --border-light: #334155;
     --text: #e2e8f0;
@@ -30,6 +31,9 @@
     --purple: #a78bfa;
     --purple-bg: rgba(167, 139, 250, 0.08);
     --purple-border: rgba(167, 139, 250, 0.2);
+    --cyan: #22d3ee;
+    --cyan-bg: rgba(34, 211, 238, 0.08);
+    --cyan-border: rgba(34, 211, 238, 0.2);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -68,20 +72,24 @@
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   .hero h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
   .hero h1 span { color: var(--emerald); }
-  .hero p { color: var(--text-dim); font-size: 16px; max-width: 600px; margin: 0 auto; }
+  .hero p { color: var(--text-dim); font-size: 16px; max-width: 700px; margin: 0 auto; }
 
   /* Stats row */
   .stats {
-    display: flex; justify-content: center; gap: 32px; padding: 24px 0;
+    display: flex; justify-content: center; gap: 24px; padding: 24px 0;
     flex-wrap: wrap;
   }
   .stat {
-    text-align: center; padding: 16px 24px;
+    text-align: center; padding: 16px 20px;
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    min-width: 140px;
+    min-width: 130px;
   }
-  .stat-value { font-size: 28px; font-weight: 700; color: var(--emerald); }
-  .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-value.emerald { color: var(--emerald); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.blue { color: var(--blue); }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
 
   /* Section */
   .section { margin-bottom: 48px; }
@@ -93,15 +101,17 @@
   .section-icon {
     width: 36px; height: 36px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px;
+    font-size: 18px; flex-shrink: 0;
   }
   .section-icon.emerald { background: var(--emerald-bg); border: 1px solid var(--emerald-border); }
   .section-icon.red { background: var(--red-bg); border: 1px solid var(--red-border); }
   .section-icon.amber { background: var(--amber-bg); border: 1px solid var(--amber-border); }
   .section-icon.blue { background: var(--blue-bg); border: 1px solid var(--blue-border); }
   .section-icon.purple { background: var(--purple-bg); border: 1px solid var(--purple-border); }
+  .section-icon.cyan { background: var(--cyan-bg); border: 1px solid var(--cyan-border); }
   .section-title { font-size: 20px; font-weight: 600; }
-  .section-count { font-size: 12px; color: var(--text-muted); background: var(--surface-2); padding: 2px 10px; border-radius: 99px; }
+  .section-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .section-count { font-size: 12px; color: var(--text-muted); background: var(--surface-2); padding: 2px 10px; border-radius: 99px; margin-left: auto; }
 
   /* Cards */
   .card {
@@ -113,8 +123,12 @@
     transition: border-color 0.2s;
   }
   .card:hover { border-color: var(--border-light); }
-  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .card-title { font-size: 14px; font-weight: 600; }
+  .card.critical-border { border-color: var(--red-border); }
+  .card.warn-border { border-color: var(--amber-border); }
+  .card.done-border { border-color: var(--emerald-border); }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .card-desc { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; }
   .badge {
     display: inline-flex; align-items: center; gap: 4px;
     padding: 3px 10px; border-radius: 6px;
@@ -129,10 +143,13 @@
 
   /* Table */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+  th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  th:first-child { border-radius: 8px 0 0 0; }
+  th:last-child { border-radius: 0 8px 0 0; }
   td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
   tr:last-child td { border-bottom: none; }
   .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--emerald); }
+  .mono.red { color: var(--red); }
   .strike { text-decoration: line-through; color: var(--text-muted); }
   .arrow { color: var(--text-muted); margin: 0 6px; }
 
@@ -179,6 +196,7 @@
   .code-block .key { color: var(--blue); }
   .code-block .str { color: var(--emerald); }
   .code-block .comment { color: var(--text-muted); font-style: italic; }
+  .code-block .danger { color: var(--red); }
 
   /* Progress bar */
   .progress-bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
@@ -193,7 +211,7 @@
   .checklist .pending-icon { color: var(--text-muted); flex-shrink: 0; font-size: 14px; }
   .checklist .text-done { color: var(--text-dim); }
 
-  /* Warn box */
+  /* Alert boxes */
   .warn-box {
     background: var(--red-bg); border: 1px solid var(--red-border);
     border-radius: 10px; padding: 16px 20px;
@@ -212,83 +230,501 @@
   }
   .info-box .icon { font-size: 18px; flex-shrink: 0; }
   .info-box .content { font-size: 13px; color: var(--text); }
+
+  .success-box {
+    background: var(--emerald-bg); border: 1px solid var(--emerald-border);
+    border-radius: 10px; padding: 16px 20px;
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .success-box .icon { font-size: 18px; flex-shrink: 0; }
+  .success-box .content { font-size: 13px; color: var(--text); }
+
+  /* Key-value pair */
+  .kv { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .kv:last-child { border-bottom: none; }
+  .kv-key { color: var(--text-muted); min-width: 140px; flex-shrink: 0; font-weight: 500; }
+  .kv-val { color: var(--text); }
+  .kv-val code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+
+  /* Separator */
+  .sep { border-top: 1px solid var(--border); margin: 32px 0; }
+
+  /* Tabs */
+  .tab-row { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tab { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: default; }
+  .tab.active { background: var(--emerald-bg); color: var(--emerald); border: 1px solid var(--emerald-border); }
+  .tab.inactive { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
 </style>
 </head>
 <body>
 
-<!-- ═══ HERO ═══ -->
+<!-- HERO -->
 <div class="hero">
-  <div class="hero-badge"><span class="dot"></span> Rebranding Strategy</div>
+  <div class="hero-badge"><span class="dot"></span> Rebrand &amp; Deployment Checklist</div>
   <h1>Continue &rarr; <span>AI Firewall</span></h1>
-  <p>Complete strategy plan for renaming the application from Continue.dev to AI Firewall with a centralized constant system for future-proof naming.</p>
+  <p>Complete checklist for rebranding, external service keys, environment configuration, and production deployment readiness.</p>
 </div>
 
-<!-- ═══ STATS ═══ -->
+<!-- STATS -->
 <div class="container">
 <div class="stats">
-  <div class="stat"><div class="stat-value">558</div><div class="stat-label">Total References</div></div>
-  <div class="stat"><div class="stat-value">~50</div><div class="stat-label">Already Rebranded</div></div>
-  <div class="stat"><div class="stat-value">~508</div><div class="stat-label">Remaining</div></div>
-  <div class="stat"><div class="stat-value">8</div><div class="stat-label">External Services</div></div>
+  <div class="stat"><div class="stat-value red">3</div><div class="stat-label">Critical Actions</div></div>
+  <div class="stat"><div class="stat-value amber">8</div><div class="stat-label">External Services</div></div>
+  <div class="stat"><div class="stat-value blue">~508</div><div class="stat-label">Refs Remaining</div></div>
+  <div class="stat"><div class="stat-value emerald">~50</div><div class="stat-label">Already Done</div></div>
+  <div class="stat"><div class="stat-value emerald">11</div><div class="stat-label">Packages Renamed</div></div>
 </div>
 
-<!-- ═══ SECURITY WARNING ═══ -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 1: CRITICAL SECURITY ACTIONS -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
 <div class="warn-box">
   <div class="icon">&#9888;</div>
   <div class="content">
-    <strong>Security Alert:</strong> Google OAuth client secret is exposed in <code>proxy/.env</code>. Rotate immediately regardless of rebrand timeline.
-    Master key and test API keys in the same file should also be rotated before any deployment.
+    <strong>BEFORE ANYTHING ELSE:</strong> Rotate the Google OAuth client secret exposed in <code>proxy/.env</code>.
+    The master key and test API keys in the same file must also be rotated before any public deployment.
   </div>
 </div>
 
-<!-- ═══ CENTRALIZED BRAND CONSTANT ═══ -->
 <div class="section">
   <div class="section-header">
-    <div class="section-icon emerald">&#9881;</div>
-    <div class="section-title">Core Strategy: Centralized Brand Constants</div>
-    <span class="badge done">&#10003; Created</span>
+    <div class="section-icon red">&#128274;</div>
+    <div>
+      <div class="section-title">Priority 1: Critical Security Actions</div>
+      <div class="section-subtitle">Must be done before any deployment &mdash; secrets are exposed</div>
+    </div>
   </div>
-  <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 14px;">
-    A single <code>@ai-firewall/brand</code> package is the source of truth. To rename the product in the future, change <strong>one file</strong>.
-  </p>
-  <div class="code-block">
-<span class="comment">// packages/brand/src/index.ts</span>
-<span class="key">export const</span> BRAND = {
-  <span class="key">name</span>: <span class="str">"AI Firewall"</span>,           <span class="comment">// Display name</span>
-  <span class="key">nameLower</span>: <span class="str">"ai-firewall"</span>,       <span class="comment">// File paths, package names</span>
-  <span class="key">globalDir</span>: <span class="str">".ai-firewall"</span>,       <span class="comment">// Config directory (~/.ai-firewall/)</span>
-  <span class="key">envPrefix</span>: <span class="str">"AI_FIREWALL"</span>,        <span class="comment">// Environment variables</span>
-  <span class="key">appUrl</span>: <span class="str">"https://ai-firewall.dev"</span>,
-  <span class="key">apiUrl</span>: <span class="str">"https://api.ai-firewall.dev"</span>,
-  <span class="key">docsUrl</span>: <span class="str">"https://docs.ai-firewall.dev"</span>,
-  <span class="key">repoUrl</span>: <span class="str">"https://github.com/ai-firewall/ai-firewall"</span>,
-  <span class="key">cliBin</span>: <span class="str">"afw"</span>,
-  <span class="key">tagline</span>: <span class="str">"Secure AI code agent"</span>,
-  <span class="comment">// ... 20+ more constants</span>
-} <span class="key">as const</span>;
+
+  <div class="card critical-border">
+    <div class="card-header">
+      <div class="card-title">1. Rotate Google OAuth Credentials</div>
+      <span class="badge critical">IMMEDIATE</span>
+    </div>
+    <div class="card-desc">Real Google OAuth client ID and secret are committed in <code>proxy/.env</code>. Rotate immediately in Google Cloud Console.</div>
+    <table>
+      <tr><th>Variable</th><th>File</th><th>Current Value (partial)</th><th>Action</th></tr>
+      <tr>
+        <td><code>SSO_CLIENT_ID</code></td>
+        <td><code>proxy/.env:11</code></td>
+        <td class="mono red">926281559704-j0mm...8.apps.googleusercontent.com</td>
+        <td>Rotate in Google Cloud Console</td>
+      </tr>
+      <tr>
+        <td><code>SSO_CLIENT_SECRET</code></td>
+        <td><code>proxy/.env:12</code></td>
+        <td class="mono red">GOCSPX-1Y_OWsOACcU8P...h0D</td>
+        <td>Rotate in Google Cloud Console</td>
+      </tr>
+      <tr>
+        <td><code>MASTER_KEY</code></td>
+        <td><code>proxy/.env</code></td>
+        <td class="mono red">Hardcoded master key</td>
+        <td>Generate new random key</td>
+      </tr>
+    </table>
+    <div style="margin-top: 12px;">
+      <div class="code-block">
+<span class="comment"># After rotating, use .env.example as template (never commit .env)</span>
+<span class="key">SSO_CLIENT_ID</span>=<span class="str">your-new-client-id.apps.googleusercontent.com</span>
+<span class="key">SSO_CLIENT_SECRET</span>=<span class="str">your-new-client-secret</span>
+<span class="key">MASTER_KEY</span>=<span class="str">$(openssl rand -hex 32)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card critical-border">
+    <div class="card-header">
+      <div class="card-title">2. Move WorkOS Client IDs to Environment Variables</div>
+      <span class="badge critical">DEPLOY AUTH</span>
+    </div>
+    <div class="card-desc">WorkOS OAuth client IDs are hardcoded in source code. These are Continue.dev's credentials &mdash; you need your own.</div>
+    <table>
+      <tr><th>Environment</th><th>File</th><th>Current Value (partial)</th><th>Action</th></tr>
+      <tr>
+        <td>Production</td>
+        <td><code>core/control-plane/env.ts:12</code></td>
+        <td class="mono red">client_01J0FW6XN8N2X...Y65J</td>
+        <td>Create new WorkOS app &rarr; env var</td>
+      </tr>
+      <tr>
+        <td>Staging</td>
+        <td><code>core/control-plane/env.ts:13</code></td>
+        <td class="mono red">client_01J0FW6XCPMJM...HBZQ</td>
+        <td>Create new WorkOS app &rarr; env var</td>
+      </tr>
+    </table>
+    <div style="margin-top: 12px;">
+      <div class="code-block">
+<span class="comment"># What you need from WorkOS (https://dashboard.workos.com)</span>
+<span class="key">1.</span> Create new WorkOS organization for "AI Firewall"
+<span class="key">2.</span> Create OAuth application &rarr; get Client ID
+<span class="key">3.</span> Set redirect URIs for your domain
+<span class="key">4.</span> Export as environment variables:
+   <span class="key">WORKOS_CLIENT_ID_PROD</span>=<span class="str">client_01XXXX...</span>
+   <span class="key">WORKOS_CLIENT_ID_STAGING</span>=<span class="str">client_01YYYY...</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card critical-border">
+    <div class="card-header">
+      <div class="card-title">3. Verify .env Is Gitignored</div>
+      <span class="badge critical">SECURITY</span>
+    </div>
+    <div class="card-desc">Ensure <code>proxy/.env</code> is never committed. Currently tracked &mdash; must be removed from git tracking.</div>
+    <div class="code-block">
+<span class="comment"># Check if .env is tracked</span>
+git ls-files proxy/.env
+
+<span class="comment"># If tracked, remove from tracking (keeps local file)</span>
+git rm --cached proxy/.env
+echo "proxy/.env" >> .gitignore
+    </div>
   </div>
 </div>
 
-<!-- ═══ IMPLEMENTATION PHASES ═══ -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 2: EXTERNAL SERVICES & KEYS -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
 <div class="section">
   <div class="section-header">
-    <div class="section-icon blue">&#9654;</div>
-    <div class="section-title">Implementation Phases</div>
+    <div class="section-icon amber">&#128273;</div>
+    <div>
+      <div class="section-title">External Services &mdash; Keys Required at Deployment</div>
+      <div class="section-subtitle">8 services need your own credentials. Current values are Continue.dev's keys.</div>
+    </div>
+    <span class="section-count">8 services</span>
+  </div>
+
+  <div class="info-box">
+    <div class="icon">&#9432;</div>
+    <div class="content">
+      These services use Continue.dev's credentials by default. For production deployment under "AI Firewall", you must create your own accounts and keys for each service. None are needed for local development.
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <tr>
+        <th style="width: 130px;">Service</th>
+        <th>What You Need</th>
+        <th>Where to Create</th>
+        <th>Files to Update</th>
+        <th style="width: 90px;">Priority</th>
+      </tr>
+      <tr>
+        <td><strong>WorkOS</strong></td>
+        <td>New OAuth application &rarr; 2 client IDs (prod + staging)</td>
+        <td><a href="https://dashboard.workos.com" style="color: var(--blue);">dashboard.workos.com</a></td>
+        <td>
+          <code>core/control-plane/env.ts</code><br>
+          <code>extensions/cli/src/env.ts</code>
+        </td>
+        <td><span class="badge critical">Auth</span></td>
+      </tr>
+      <tr>
+        <td><strong>Google OAuth</strong></td>
+        <td>New OAuth 2.0 app &rarr; Client ID + Client Secret</td>
+        <td><a href="https://console.cloud.google.com/apis/credentials" style="color: var(--blue);">Google Cloud Console</a></td>
+        <td>
+          <code>proxy/.env</code><br>
+          <code>proxy/src/auth/ssoService.ts</code>
+        </td>
+        <td><span class="badge critical">SSO</span></td>
+      </tr>
+      <tr>
+        <td><strong>Domain DNS</strong></td>
+        <td>A/CNAME records for <code>ai-firewall.dev</code></td>
+        <td>Your DNS provider</td>
+        <td>
+          <code>packages/brand/src/index.ts</code><br>
+          <code>core/control-plane/env.ts</code>
+        </td>
+        <td><span class="badge critical">Deploy</span></td>
+      </tr>
+      <tr>
+        <td><strong>PostHog</strong></td>
+        <td>New project &rarr; Public API key (<code>phc_...</code>)</td>
+        <td><a href="https://app.posthog.com" style="color: var(--blue);">app.posthog.com</a></td>
+        <td>
+          <code>gui/src/hooks/TelemetryProviders.tsx:31</code><br>
+          <code>extensions/cli/src/telemetry/posthogService.ts:91</code>
+        </td>
+        <td><span class="badge high">Analytics</span></td>
+      </tr>
+      <tr>
+        <td><strong>GitHub OAuth</strong></td>
+        <td>New OAuth app &rarr; Client ID + Client Secret</td>
+        <td><a href="https://github.com/settings/developers" style="color: var(--blue);">GitHub Developer Settings</a></td>
+        <td>
+          <code>proxy/src/auth/ssoService.ts</code>
+        </td>
+        <td><span class="badge high">SSO</span></td>
+      </tr>
+      <tr>
+        <td><strong>Sentry</strong></td>
+        <td>New project &rarr; DSN string (currently disabled)</td>
+        <td><a href="https://sentry.io" style="color: var(--blue);">sentry.io</a></td>
+        <td>
+          <code>core/util/sentry/constants.ts</code>
+        </td>
+        <td><span class="badge medium">Errors</span></td>
+      </tr>
+      <tr>
+        <td><strong>Microsoft OAuth</strong></td>
+        <td>New Azure AD app &rarr; Client ID + Secret</td>
+        <td><a href="https://portal.azure.com" style="color: var(--blue);">Azure Portal</a></td>
+        <td>
+          <code>proxy/src/auth/ssoService.ts</code>
+        </td>
+        <td><span class="badge medium">SSO</span></td>
+      </tr>
+      <tr>
+        <td><strong>NPM Registry</strong></td>
+        <td>Claim <code>@ai-firewall</code> scope on npmjs.com</td>
+        <td><a href="https://www.npmjs.com" style="color: var(--blue);">npmjs.com</a></td>
+        <td>
+          All <code>package.json</code> files
+        </td>
+        <td><span class="badge low">Publish</span></td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 3: ENVIRONMENT VARIABLES -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon cyan">&#9881;</div>
+    <div>
+      <div class="section-title">Environment Variables &mdash; What to Set Per Environment</div>
+      <div class="section-subtitle">All env vars needed for a working deployment, organized by service</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Proxy Server (<code>proxy/.env</code>)</div>
+        <span class="badge critical">Required</span>
+      </div>
+      <div class="code-block">
+<span class="comment"># Authentication</span>
+<span class="key">MASTER_KEY</span>=<span class="str">&lt;random-32-byte-hex&gt;</span>
+<span class="key">JWT_SECRET</span>=<span class="str">&lt;random-32-byte-hex&gt;</span>
+
+<span class="comment"># Google SSO</span>
+<span class="key">SSO_CLIENT_ID</span>=<span class="str">&lt;your-google-client-id&gt;.apps.googleusercontent.com</span>
+<span class="key">SSO_CLIENT_SECRET</span>=<span class="str">&lt;your-google-client-secret&gt;</span>
+
+<span class="comment"># Server</span>
+<span class="key">PORT</span>=<span class="str">8080</span>
+<span class="key">NODE_ENV</span>=<span class="str">production</span>
+
+<span class="comment"># Database (defaults to ./data/firewall.db)</span>
+<span class="key">DB_PATH</span>=<span class="str">./data/firewall.db</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Core / Extensions</div>
+        <span class="badge high">Required</span>
+      </div>
+      <div class="code-block">
+<span class="comment"># WorkOS (authentication)</span>
+<span class="key">WORKOS_CLIENT_ID</span>=<span class="str">&lt;your-workos-client-id&gt;</span>
+
+<span class="comment"># Proxy URL</span>
+<span class="key">AF_PROXY_URL</span>=<span class="str">http://localhost:8080</span>
+
+<span class="comment"># API (when using cloud features)</span>
+<span class="key">AI_FIREWALL_API_KEY</span>=<span class="str">&lt;your-api-key&gt;</span>
+<span class="key">AI_FIREWALL_API_BASE</span>=<span class="str">https://api.ai-firewall.dev</span>
+
+<span class="comment"># Telemetry (optional)</span>
+<span class="key">AI_FIREWALL_TELEMETRY_ENABLED</span>=<span class="str">true</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Environment Variable Migration: <code>CONTINUE_*</code> &rarr; <code>AI_FIREWALL_*</code></div>
+      <span class="badge high">~50+ refs</span>
+    </div>
+    <div class="card-desc">These environment variable names still reference "Continue" and must be renamed across the codebase.</div>
+    <table>
+      <tr><th>Old Variable</th><th></th><th>New Variable</th><th>Files Affected</th></tr>
+      <tr>
+        <td class="mono strike">CONTINUE_API_KEY</td>
+        <td class="arrow">&rarr;</td>
+        <td class="mono">AI_FIREWALL_API_KEY</td>
+        <td><code>extensions/cli/src/auth/workos.ts</code>, SDK, docs (50+ refs)</td>
+      </tr>
+      <tr>
+        <td class="mono strike">CONTINUE_API_BASE</td>
+        <td class="arrow">&rarr;</td>
+        <td class="mono">AI_FIREWALL_API_BASE</td>
+        <td><code>packages/continue-sdk/</code>, docs</td>
+      </tr>
+      <tr>
+        <td class="mono strike">CONTINUE_TELEMETRY_ENABLED</td>
+        <td class="arrow">&rarr;</td>
+        <td class="mono">AI_FIREWALL_TELEMETRY_ENABLED</td>
+        <td><code>extensions/cli/src/telemetry/posthogService.ts</code></td>
+      </tr>
+      <tr>
+        <td class="mono strike">CONTINUE_ALLOW_ANONYMOUS_TELEMETRY</td>
+        <td class="arrow">&rarr;</td>
+        <td class="mono">AI_FIREWALL_ALLOW_ANONYMOUS_TELEMETRY</td>
+        <td><code>extensions/cli/src/telemetry/posthogService.ts</code></td>
+      </tr>
+      <tr>
+        <td class="mono strike">CONTINUE_WORKSPACE_KEY</td>
+        <td class="arrow">&rarr;</td>
+        <td class="mono">AI_FIREWALL_WORKSPACE_KEY</td>
+        <td><code>extensions/vscode/src/util/workspaceConfig.ts</code></td>
+      </tr>
+      <tr>
+        <td class="mono strike">CONTINUE_ORG</td>
+        <td class="arrow">&rarr;</td>
+        <td class="mono">AI_FIREWALL_ORG</td>
+        <td><code>core/</code>, docs</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 4: DEPLOYMENT URLS -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon blue">&#127760;</div>
+    <div>
+      <div class="section-title">URLs &amp; Domains &mdash; What to Configure</div>
+      <div class="section-subtitle">All domains referenced in code that need DNS + hosting setup</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Production URLs (defined in <code>packages/brand/src/index.ts</code>)</div>
+    </div>
+    <table>
+      <tr><th>Purpose</th><th>Domain</th><th>Needs</th><th>Status</th></tr>
+      <tr>
+        <td>Main App</td>
+        <td class="mono">ai-firewall.dev</td>
+        <td>DNS A/CNAME record + hosting</td>
+        <td><span class="badge critical">Setup</span></td>
+      </tr>
+      <tr>
+        <td>API Server</td>
+        <td class="mono">api.ai-firewall.dev</td>
+        <td>DNS + API server deployment</td>
+        <td><span class="badge critical">Setup</span></td>
+      </tr>
+      <tr>
+        <td>Documentation</td>
+        <td class="mono">docs.ai-firewall.dev</td>
+        <td>DNS + docs hosting (Docusaurus/Vercel)</td>
+        <td><span class="badge medium">Setup</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Per-Environment API URLs (<code>core/control-plane/env.ts</code>)</div>
+    </div>
+    <table>
+      <tr><th>Environment</th><th>Proxy URL</th><th>App URL</th><th>Status</th></tr>
+      <tr>
+        <td>Production</td>
+        <td class="mono">https://api.ai-firewall.dev/</td>
+        <td class="mono">https://app.ai-firewall.dev/</td>
+        <td><span class="badge critical">Configure</span></td>
+      </tr>
+      <tr>
+        <td>Staging</td>
+        <td class="mono">https://api-staging.ai-firewall.dev/</td>
+        <td class="mono">https://app-staging.ai-firewall.dev/</td>
+        <td><span class="badge medium">Configure</span></td>
+      </tr>
+      <tr>
+        <td>Test</td>
+        <td class="mono">https://api-test.ai-firewall.dev/</td>
+        <td class="mono">https://app-test.ai-firewall.dev/</td>
+        <td><span class="badge done">Already set</span></td>
+      </tr>
+      <tr>
+        <td>Local</td>
+        <td class="mono">http://localhost:8080/</td>
+        <td class="mono">http://localhost:3000/</td>
+        <td><span class="badge done">Works</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">OAuth Redirect URIs to Register</div>
+      <span class="badge high">Per provider</span>
+    </div>
+    <div class="card-desc">When creating OAuth apps, register these callback URLs:</div>
+    <div class="code-block">
+<span class="comment"># WorkOS</span>
+<span class="str">https://app.ai-firewall.dev/auth/callback</span>
+<span class="str">http://localhost:3000/auth/callback</span>  <span class="comment">(dev)</span>
+
+<span class="comment"># Google OAuth (proxy SSO)</span>
+<span class="str">https://api.ai-firewall.dev/api/auth/sso/callback</span>
+<span class="str">http://localhost:8080/api/auth/sso/callback</span>  <span class="comment">(dev)</span>
+
+<span class="comment"># GitHub OAuth</span>
+<span class="str">https://api.ai-firewall.dev/api/auth/sso/github/callback</span>
+<span class="str">http://localhost:8080/api/auth/sso/github/callback</span>  <span class="comment">(dev)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 5: REBRAND PROGRESS -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon purple">&#9654;</div>
+    <div>
+      <div class="section-title">Rebrand Implementation Phases</div>
+      <div class="section-subtitle">Renaming "Continue" to "AI Firewall" across the codebase</div>
+    </div>
   </div>
 
   <div class="phase">
     <div class="phase-dot done">&#10003;</div>
     <div class="phase-title">Phase 1: Brand Package &amp; Core Wiring</div>
-    <div class="phase-desc">Create <code>@ai-firewall/brand</code> and wire into CLI + core config loading paths.</div>
-    <div class="card" style="border-color: var(--emerald-border);">
+    <div class="phase-desc">Centralized <code>@ai-firewall/brand</code> package created and wired into key paths.</div>
+    <div class="card done-border">
       <ul class="checklist">
-        <li><span class="check">&#10003;</span> <span class="text-done">Created <code>packages/brand/src/index.ts</code> with all constants</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Created <code>packages/brand/src/index.ts</code> with 20+ constants</span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">Wired into <code>extensions/cli/src/env.ts</code></span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">Wired into <code>core/promptFiles/index.ts</code></span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">Updated <code>core/indexing/ignore.ts</code></span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">Updated <code>core/config/loadLocalAssistants.ts</code></span></li>
-        <li><span class="check">&#10003;</span> <span class="text-done">Updated <code>core/config/createNewAssistantFile.ts</code></span></li>
-        <li><span class="check">&#10003;</span> <span class="text-done">Updated <code>core/promptFiles/createNewPromptFile.ts</code></span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">All 11 packages renamed to <code>@ai-firewall/*</code> scope</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">VS Code extension publisher set to <code>ai-firewall</code></span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Login page redesigned with AI Firewall branding</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done"><code>.ai-firewall/</code> added to gitignore patterns</span></li>
       </ul>
       <div class="progress-bar"><div class="progress-fill emerald" style="width: 100%"></div></div>
     </div>
@@ -297,7 +733,7 @@
   <div class="phase">
     <div class="phase-dot active">2</div>
     <div class="phase-title">Phase 2: Code References (~80 files)</div>
-    <div class="phase-desc">Replace remaining <code>.continue/</code> paths and <code>Continue</code> strings in TypeScript source files.</div>
+    <div class="phase-desc">Replace remaining <code>.continue/</code> paths and <code>Continue</code> variable names in TypeScript source.</div>
     <div class="grid-2">
       <div class="card">
         <div class="card-header">
@@ -334,10 +770,10 @@
   <div class="phase">
     <div class="phase-dot pending">3</div>
     <div class="phase-title">Phase 3: GUI &amp; User-Facing Strings (~150 refs)</div>
-    <div class="phase-desc">Replace "Continue" brand name in all React components, help text, error messages, and banners.</div>
+    <div class="phase-desc">Replace "Continue" brand name in React components, help text, error messages, and banners.</div>
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Key Files</div>
+        <div class="card-title">Key Components</div>
         <span class="badge medium">~30 components</span>
       </div>
       <table>
@@ -345,7 +781,6 @@
         <tr><td><code>gui/src/components/CliInstallBanner.tsx</code></td><td>"Try out the Continue CLI" &rarr; BRAND.name</td></tr>
         <tr><td><code>gui/src/pages/config/sections/HelpSection.tsx</code></td><td>GitHub URLs &rarr; BRAND.repoUrl</td></tr>
         <tr><td><code>gui/src/pages/gui/StreamError.tsx</code></td><td>Issue URL &rarr; BRAND.issuesUrl</td></tr>
-        <tr><td><code>gui/src/pages/login/index.tsx</code></td><td>Already rebranded &#10003;</td></tr>
         <tr><td><code>gui/src/components/OnboardingCard/</code></td><td>"Continue" &rarr; "AI Firewall"</td></tr>
       </table>
     </div>
@@ -354,7 +789,7 @@
   <div class="phase">
     <div class="phase-dot pending">4</div>
     <div class="phase-title">Phase 4: Documentation (~150 refs)</div>
-    <div class="phase-desc">Bulk rename across all <code>.mdx</code> and <code>.md</code> files. Can be done with sed scripts.</div>
+    <div class="phase-desc">Bulk rename across all <code>.mdx</code> and <code>.md</code> files.</div>
     <div class="card">
       <div class="code-block">
 <span class="comment"># Bulk replacement commands</span>
@@ -381,91 +816,50 @@ find docs/ -name "*.mdx" -exec sed -i '' 's/@continuedev\//@ai-firewall\//g' {} 
   </div>
 </div>
 
-<!-- ═══ EXTERNAL SERVICES ═══ -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 6: STILL USING @CONTINUEDEV -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
 <div class="section">
   <div class="section-header">
-    <div class="section-icon red">&#128273;</div>
-    <div class="section-title">External Services — Keys Required at Deployment</div>
-    <span class="badge info">8 services</span>
-  </div>
-
-  <div class="info-box">
-    <div class="icon">&#9432;</div>
-    <div class="content">
-      None of these need immediate action. They're required when you deploy to production. Current hardcoded values are Continue.dev's keys.
+    <div class="section-icon amber">&#128230;</div>
+    <div>
+      <div class="section-title">Remaining <code>@continuedev</code> References</div>
+      <div class="section-subtitle">Package references still pointing to the old npm scope</div>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card warn-border">
     <table>
+      <tr><th>File</th><th>Current Reference</th><th>Action</th></tr>
       <tr>
-        <th>Service</th>
-        <th>What's Needed</th>
-        <th>Current Value</th>
-        <th>Where</th>
-        <th>Priority</th>
+        <td><code>extensions/cli/package.json:58</code></td>
+        <td class="mono red">@ai-firewall/sdk: "npm:@continuedev/sdk@^0.0.13"</td>
+        <td>Publish SDK under @ai-firewall scope, remove npm: alias</td>
       </tr>
       <tr>
-        <td><strong>WorkOS</strong></td>
-        <td>New OAuth app &rarr; 2 client IDs</td>
-        <td class="mono" style="font-size: 11px;">client_01J0FW6X...Y65J</td>
-        <td><code>core/control-plane/env.ts</code><br><code>extensions/cli/src/env.ts</code></td>
-        <td><span class="badge critical">Deploy Auth</span></td>
+        <td><code>README.md:51,55</code></td>
+        <td class="mono red">npm link @continuedev/core</td>
+        <td>Update to <code>npm link @ai-firewall/core</code></td>
       </tr>
       <tr>
-        <td><strong>PostHog</strong></td>
-        <td>New project &rarr; API key</td>
-        <td class="mono" style="font-size: 11px;">phc_JS6XFROu...lSPs</td>
-        <td><code>gui/src/hooks/TelemetryProviders.tsx</code><br><code>extensions/cli/src/telemetry/posthogService.ts</code></td>
-        <td><span class="badge high">Deploy Analytics</span></td>
+        <td><code>LOCAL_SETUP.md:50,60</code></td>
+        <td class="mono red">npm link @continuedev/core</td>
+        <td>Update to <code>npm link @ai-firewall/core</code></td>
       </tr>
       <tr>
-        <td><strong>Sentry</strong></td>
-        <td>New project &rarr; DSN string</td>
-        <td style="color: var(--text-muted);">Currently disabled (empty DSN)</td>
-        <td><code>core/util/sentry/constants.ts</code><br><code>extensions/intellij/.../ContinueSentryService.kt</code></td>
-        <td><span class="badge medium">Deploy Errors</span></td>
-      </tr>
-      <tr>
-        <td><strong>Google OAuth</strong></td>
-        <td>New OAuth app &rarr; client ID + secret</td>
-        <td class="mono" style="font-size: 11px;">926281559704-...8.apps</td>
-        <td><code>proxy/.env</code><br><code>proxy/src/auth/ssoService.ts</code></td>
-        <td><span class="badge critical">Deploy SSO</span></td>
-      </tr>
-      <tr>
-        <td><strong>GitHub OAuth</strong></td>
-        <td>New OAuth app &rarr; client ID + secret</td>
-        <td style="color: var(--text-muted);">Not yet configured</td>
-        <td><code>proxy/src/auth/ssoService.ts</code></td>
-        <td><span class="badge high">Deploy SSO</span></td>
-      </tr>
-      <tr>
-        <td><strong>Microsoft OAuth</strong></td>
-        <td>New OAuth app &rarr; client ID + secret</td>
-        <td style="color: var(--text-muted);">Not yet configured</td>
-        <td><code>proxy/src/auth/ssoService.ts</code></td>
-        <td><span class="badge medium">Deploy SSO</span></td>
-      </tr>
-      <tr>
-        <td><strong>Domain DNS</strong></td>
-        <td>A/CNAME records for ai-firewall.dev</td>
-        <td class="mono" style="font-size: 11px;">ai-firewall.dev</td>
-        <td><code>packages/brand/src/index.ts</code></td>
-        <td><span class="badge critical">Deploy</span></td>
-      </tr>
-      <tr>
-        <td><strong>NPM Registry</strong></td>
-        <td>Claim @ai-firewall scope on npmjs.com</td>
-        <td style="color: var(--text-muted);">Internal only (file refs)</td>
-        <td>All <code>package.json</code> files</td>
-        <td><span class="badge low">Publish</span></td>
+        <td>GitHub Workflows</td>
+        <td class="mono red">npm install -g @continuedev/cli@latest</td>
+        <td>Update to <code>@ai-firewall/cli</code></td>
       </tr>
     </table>
   </div>
 </div>
 
-<!-- ═══ REFERENCE BREAKDOWN ═══ -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 7: REFERENCE BREAKDOWN -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
 <div class="section">
   <div class="section-header">
     <div class="section-icon amber">&#128200;</div>
@@ -500,7 +894,10 @@ find docs/ -name "*.mdx" -exec sed -i '' 's/@continuedev\//@ai-firewall\//g' {} 
   </div>
 </div>
 
-<!-- ═══ WHAT'S ALREADY DONE ═══ -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 8: ALREADY COMPLETED -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
 <div class="section">
   <div class="section-header">
     <div class="section-icon emerald">&#10003;</div>
@@ -508,8 +905,8 @@ find docs/ -name "*.mdx" -exec sed -i '' 's/@continuedev\//@ai-firewall\//g' {} 
   </div>
 
   <div class="grid-2">
-    <div class="card">
-      <div class="card-header"><div class="card-title">Package Names</div><span class="badge done">Done</span></div>
+    <div class="card done-border">
+      <div class="card-header"><div class="card-title">Package Names (11/11)</div><span class="badge done">Done</span></div>
       <ul class="checklist">
         <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/core</span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/cli</span></li>
@@ -521,25 +918,105 @@ find docs/ -name "*.mdx" -exec sed -i '' 's/@continuedev\//@ai-firewall\//g' {} 
         <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/openai-adapters</span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/terminal-security</span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/hub</span></li>
-        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/sdk</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">@ai-firewall/sdk (+ brand)</span></li>
       </ul>
     </div>
-    <div class="card">
+    <div class="card done-border">
       <div class="card-header"><div class="card-title">Brand Infrastructure</div><span class="badge done">Done</span></div>
       <ul class="checklist">
-        <li><span class="check">&#10003;</span> <span class="text-done">packages/brand/ — centralized constants</span></li>
-        <li><span class="check">&#10003;</span> <span class="text-done">CLI env.ts — uses BRAND constants</span></li>
-        <li><span class="check">&#10003;</span> <span class="text-done">VS Code extension displayName</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">packages/brand/ &mdash; centralized constants (20+ values)</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">CLI env.ts &mdash; uses BRAND constants</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">VS Code extension publisher = "ai-firewall"</span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">Proxy API URLs (api.ai-firewall.dev)</span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">Login page (glassmorphism redesign)</span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">Core config paths (rules, agents, prompts)</span></li>
         <li><span class="check">&#10003;</span> <span class="text-done">.ai-firewall/ in gitignore patterns</span></li>
+        <li><span class="check">&#10003;</span> <span class="text-done">Sentry disabled (no external error tracking)</span></li>
       </ul>
     </div>
   </div>
 </div>
 
-<!-- ═══ FUTURE RENAME STRATEGY ═══ -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 9: DEPLOYMENT CHECKLIST -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
+<div class="section">
+  <div class="section-header">
+    <div class="section-icon emerald">&#128640;</div>
+    <div>
+      <div class="section-title">Production Deployment Checklist</div>
+      <div class="section-subtitle">Everything needed to go from local dev to production</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Pre-Deployment (Do First)</div>
+      <span class="badge critical">Critical Path</span>
+    </div>
+    <ul class="checklist">
+      <li><span class="pending-icon">&#9744;</span> Rotate Google OAuth credentials in Google Cloud Console</li>
+      <li><span class="pending-icon">&#9744;</span> Generate new MASTER_KEY and JWT_SECRET</li>
+      <li><span class="pending-icon">&#9744;</span> Create WorkOS OAuth app &rarr; get new client IDs</li>
+      <li><span class="pending-icon">&#9744;</span> Register domain <code>ai-firewall.dev</code> and configure DNS</li>
+      <li><span class="pending-icon">&#9744;</span> Verify <code>proxy/.env</code> is in <code>.gitignore</code> and not tracked</li>
+      <li><span class="pending-icon">&#9744;</span> Create <code>.env.example</code> template files for proxy, core, CLI</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Infrastructure Setup</div>
+      <span class="badge high">Hosting</span>
+    </div>
+    <ul class="checklist">
+      <li><span class="pending-icon">&#9744;</span> Deploy proxy server (Fastify, port 8080) &mdash; Docker or bare metal</li>
+      <li><span class="pending-icon">&#9744;</span> Deploy GUI (Vite build, static hosting or CDN)</li>
+      <li><span class="pending-icon">&#9744;</span> Set up reverse proxy (nginx/Caddy) with TLS for <code>api.ai-firewall.dev</code></li>
+      <li><span class="pending-icon">&#9744;</span> Configure SSL certificates (Let's Encrypt or similar)</li>
+      <li><span class="pending-icon">&#9744;</span> Set up CI/CD pipeline (GitHub Actions &mdash; update workflow secrets)</li>
+      <li><span class="pending-icon">&#9744;</span> Configure production SQLite path or PostgreSQL (Phase 5)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">External Service Accounts</div>
+      <span class="badge high">Accounts</span>
+    </div>
+    <ul class="checklist">
+      <li><span class="pending-icon">&#9744;</span> WorkOS &mdash; Create organization + OAuth app</li>
+      <li><span class="pending-icon">&#9744;</span> Google Cloud &mdash; Create OAuth consent screen + credentials</li>
+      <li><span class="pending-icon">&#9744;</span> PostHog &mdash; Create new project, get API key</li>
+      <li><span class="pending-icon">&#9744;</span> GitHub &mdash; Create OAuth app (optional SSO)</li>
+      <li><span class="pending-icon">&#9744;</span> Sentry &mdash; Create project, get DSN (optional)</li>
+      <li><span class="pending-icon">&#9744;</span> npmjs.com &mdash; Claim <code>@ai-firewall</code> scope (for publishing)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Post-Deployment Verification</div>
+      <span class="badge medium">Testing</span>
+    </div>
+    <ul class="checklist">
+      <li><span class="pending-icon">&#9744;</span> Test WorkOS login flow end-to-end</li>
+      <li><span class="pending-icon">&#9744;</span> Test Google SSO login through proxy</li>
+      <li><span class="pending-icon">&#9744;</span> Test scanner pipeline (secret + PII detection)</li>
+      <li><span class="pending-icon">&#9744;</span> Test LLM proxy flow (chat completions route)</li>
+      <li><span class="pending-icon">&#9744;</span> Verify <code>/health</code> endpoint returns OK</li>
+      <li><span class="pending-icon">&#9744;</span> Test VS Code extension connects to production proxy</li>
+      <li><span class="pending-icon">&#9744;</span> Verify telemetry events reaching PostHog</li>
+      <li><span class="pending-icon">&#9744;</span> Load test with concurrent requests</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 10: FUTURE RENAME STRATEGY -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+
 <div class="section">
   <div class="section-header">
     <div class="section-icon purple">&#9733;</div>
@@ -550,7 +1027,7 @@ find docs/ -name "*.mdx" -exec sed -i '' 's/@continuedev\//@ai-firewall\//g' {} 
       When the product name changes again, update <strong>one file</strong>:
     </p>
     <div class="code-block">
-<span class="comment">// packages/brand/src/index.ts — Change these values:</span>
+<span class="comment">// packages/brand/src/index.ts &mdash; Change these values:</span>
 <span class="key">name</span>: <span class="str">"New Product Name"</span>,
 <span class="key">nameLower</span>: <span class="str">"new-product"</span>,
 <span class="key">globalDir</span>: <span class="str">".new-product"</span>,
@@ -559,15 +1036,15 @@ find docs/ -name "*.mdx" -exec sed -i '' 's/@continuedev\//@ai-firewall\//g' {} 
 <span class="comment">// ... rebuild all packages</span>
     </div>
     <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px;">
-      Note: Config directory migration (moving <code>~/.ai-firewall/</code> to <code>~/.new-product/</code>) would need a one-time migration script. The <code>altDirs</code> array in BRAND supports backward-compatible directory checking.
+      Config directory migration (moving <code>~/.ai-firewall/</code> to <code>~/.new-product/</code>) would need a one-time migration script. The <code>altDirs</code> array in BRAND supports backward-compatible directory checking.
     </p>
   </div>
 </div>
 
-<!-- ═══ FOOTER ═══ -->
+<!-- FOOTER -->
 <div style="text-align: center; padding: 40px 0 20px; border-top: 1px solid var(--border); margin-top: 40px;">
   <p style="font-size: 12px; color: var(--text-muted);">
-    AI Firewall Rebrand Strategy &middot; Generated 2026-04-03 &middot; ~558 total references &middot; 8 external services
+    AI Firewall &mdash; Rebrand &amp; Deployment Checklist &middot; Updated 2026-04-05 &middot; ~558 total references &middot; 8 external services &middot; 3 critical actions
   </p>
 </div>
 

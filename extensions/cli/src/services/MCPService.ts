@@ -73,11 +73,13 @@ export class MCPService
     this.assistant = assistant;
     this.connections.clear();
 
-    const connectionPromises = assistant.mcpServers?.map(async (config) => {
-      if (config) {
-        return await this.connectServer(config);
-      }
-    });
+    const connectionPromises = assistant.mcpServers?.map(
+      async (config: Record<string, unknown> | null) => {
+        if (config) {
+          return await this.connectServer(config);
+        }
+      },
+    );
 
     const connectionInit = Promise.all(connectionPromises ?? []);
     if (isHeadless || hasAgentFile) {
@@ -279,7 +281,8 @@ export class MCPService
     if (!this.assistant || !this.assistant.mcpServers) return;
 
     const serverConfig = this.assistant.mcpServers.find(
-      (s, index) => s && (s.name || `server-${index}`) === serverName,
+      (s: Record<string, unknown> | null, index: number) =>
+        s && (s.name || `server-${index}`) === serverName,
     );
 
     if (!serverConfig) {

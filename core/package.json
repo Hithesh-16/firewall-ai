@@ -55,6 +55,7 @@
     "vitest": "^3.1.4"
   },
   "dependencies": {
+    "@ai-firewall/brand": "file:../packages/brand",
     "@ai-firewall/config-types": "file:../packages/config-types",
     "@ai-firewall/config-yaml": "file:../packages/config-yaml",
     "@ai-firewall/fetch": "file:../packages/fetch",

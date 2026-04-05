@@ -1,7 +1,10 @@
 import { Box, Text } from "ink";
 import React, { useEffect, useState } from "react";
 
-import { setExitMessageCallback, shouldShowExitMessage } from "../../index.js";
+import {
+  setExitMessageCallback,
+  shouldShowExitMessage,
+} from "../../tuiState.js";
 import type { PermissionMode } from "../../permissions/types.js";
 import type { NavigationScreen } from "../context/NavigationContext.js";
 import { FreeTrialStatus } from "../FreeTrialStatus.js";

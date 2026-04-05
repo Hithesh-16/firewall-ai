@@ -26,10 +26,7 @@ import { cancelStream } from "../redux/thunks/cancelStream";
 import { handleApplyStateUpdate } from "../redux/thunks/handleApplyStateUpdate";
 import { loadSession, refreshSessionMetadata } from "../redux/thunks/session";
 import { updateFileSymbolsFromHistory } from "../redux/thunks/updateFileSymbols";
-import {
-  addScanResult,
-  setProxyHealthy,
-} from "../redux/slices/securitySlice";
+import { addScanResult, setProxyHealthy } from "../redux/slices/securitySlice";
 import {
   setDocumentStylesFromLocalStorage,
   setDocumentStylesFromTheme,
@@ -291,22 +288,31 @@ function ParallelListeners() {
   }, []);
 
   // AI Firewall: Listen for scan results from the proxy
-  useWebviewListener("firewallScanResult", async (data) => {
-    dispatch(setProxyHealthy(true));
-    dispatch(
-      addScanResult({
-        ...data,
-        entropyCount: data.entropyCount ?? 0,
-        timestamp: Date.now(),
-      }),
-    );
-  }, []);
+  useWebviewListener(
+    "firewallScanResult",
+    async (data) => {
+      dispatch(setProxyHealthy(true));
+      dispatch(
+        addScanResult({
+          ...data,
+          entropyCount: data.entropyCount ?? 0,
+          findings: data.findings ?? [],
+          timestamp: Date.now(),
+        }),
+      );
+    },
+    [],
+  );
 
   // AI Firewall: Listen for "showFirstLook" from extension to trigger security setup
-  useWebviewListener("showFirstLook", async () => {
-    // Navigate to the First Look security perimeter setup page
-    window.postMessage({ type: "navigate", path: "/first-look" }, "*");
-  }, []);
+  useWebviewListener(
+    "showFirstLook",
+    async () => {
+      // Navigate to the First Look security perimeter setup page
+      window.postMessage({ type: "navigate", path: "/first-look" }, "*");
+    },
+    [],
+  );
 
   return <></>;
 }

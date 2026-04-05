@@ -5,8 +5,8 @@ import * as vscode from "vscode";
 import { QuickEditShowParams } from "../../../quickEdit/QuickEditQuickPick";
 import { isTutorialFile } from "../../../util/tutorial";
 import {
-  CONTINUE_WORKSPACE_KEY,
-  getContinueWorkspaceConfig,
+  AI_FIREWALL_WORKSPACE_KEY,
+  getAiFirewallWorkspaceConfig,
 } from "../../../util/workspaceConfig";
 
 export const ENABLE_QUICK_ACTIONS_KEY = "enableQuickActions";
@@ -17,7 +17,7 @@ export function getQuickActionsConfig(config: ContinueConfig) {
 
 export function subscribeToVSCodeQuickActionsSettings(listener: Function) {
   vscode.workspace.onDidChangeConfiguration((e) => {
-    const configKey = `${CONTINUE_WORKSPACE_KEY}.${ENABLE_QUICK_ACTIONS_KEY}`;
+    const configKey = `${AI_FIREWALL_WORKSPACE_KEY}.${ENABLE_QUICK_ACTIONS_KEY}`;
 
     if (e.affectsConfiguration(configKey)) {
       Telemetry.capture("VSCode Quick Actions Settings Changed", {
@@ -32,11 +32,11 @@ export function subscribeToVSCodeQuickActionsSettings(listener: Function) {
 export function toggleQuickActions() {
   const curStatus = quickActionsEnabledStatus();
 
-  getContinueWorkspaceConfig().update(ENABLE_QUICK_ACTIONS_KEY, curStatus);
+  getAiFirewallWorkspaceConfig().update(ENABLE_QUICK_ACTIONS_KEY, curStatus);
 }
 
 export function quickActionsEnabledStatus() {
-  return getContinueWorkspaceConfig().get<boolean>(ENABLE_QUICK_ACTIONS_KEY);
+  return getAiFirewallWorkspaceConfig().get<boolean>(ENABLE_QUICK_ACTIONS_KEY);
 }
 
 /**

@@ -170,7 +170,7 @@ describe("hookConfig", () => {
       expect(result.disabled).toBe(false);
     });
 
-    it("loads hooks from .continue/settings.json", () => {
+    it("loads hooks from .ai-firewall/settings.json", () => {
       const settingsDir = path.join(projectDir, ".ai-firewall");
       fs.mkdirSync(settingsDir, { recursive: true });
       fs.writeFileSync(
@@ -227,7 +227,7 @@ describe("hookConfig", () => {
         }),
       );
 
-      // .continue/settings.json (project-level)
+      // .ai-firewall/settings.json (project-level)
       const continueDir = path.join(projectDir, ".ai-firewall");
       fs.mkdirSync(continueDir, { recursive: true });
       fs.writeFileSync(
@@ -828,14 +828,14 @@ describeUnix("hookRunner", () => {
   });
 
   describe("runHooks - environment variables", () => {
-    it("sets CONTINUE_PROJECT_DIR and CLAUDE_PROJECT_DIR env vars", async () => {
+    it("sets AI_FIREWALL_PROJECT_DIR and CLAUDE_PROJECT_DIR env vars", async () => {
       const config: HooksConfig = {
         PreToolUse: [
           {
             hooks: [
               {
                 type: "command",
-                command: 'echo "$CONTINUE_PROJECT_DIR|$CLAUDE_PROJECT_DIR"',
+                command: 'echo "$AI_FIREWALL_PROJECT_DIR|$CLAUDE_PROJECT_DIR"',
               },
             ],
           },

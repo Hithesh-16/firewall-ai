@@ -12,7 +12,7 @@ Analyze this pull request for breaking changes that may leave stale references e
 1. **CLI command renames or removals** - If a command registered in `extensions/cli/src/commands/` is renamed, removed, or has its flags changed, check that:
 
    - Documentation in `docs/` reflects the new name
-   - Agent definitions in `.continue/agents/` don't reference the old command
+   - Agent definitions in `.ai-firewall/agents/` don't reference the old command
    - Skills in `skills/` are updated
    - README and CONTRIBUTING.md are current
    - GitHub Actions workflows don't invoke the old command
@@ -28,7 +28,7 @@ Analyze this pull request for breaking changes that may leave stale references e
    - Documentation examples use the new format
    - Default configs are updated
 
-4. **URL changes** - If any hardcoded URLs (e.g., `hub.continue.dev`, `api.continue.dev`) are changed, scan for stale references across the repo.
+4. **URL changes** - If any hardcoded URLs (e.g., `hub.ai-firewall.dev`, `api.ai-firewall.dev`) are changed, scan for stale references across the repo.
 
 ## What to Do
 

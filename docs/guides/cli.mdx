@@ -1,7 +1,7 @@
 ---
-title: "How to Use Continue CLI (cn)"
-sidebarTitle: "Continue CLI (cn)"
-description: "Learn how to use Continue's command-line interface for context engineering, automated coding tasks, and headless development workflows with customizable models, rules, and tools"
+title: "How to Use AI Firewall CLI (cn)"
+sidebarTitle: "AI Firewall CLI (cn)"
+description: "Learn how to use AI Firewall's command-line interface for context engineering, automated coding tasks, and headless development workflows with customizable models, rules, and tools"
 ---
 
 import { OSAutoDetect } from '/snippets/OSAutoDetect.jsx'
@@ -29,7 +29,7 @@ cn
 cn -p "Generate a conventional commit name for the current git changes"
 ```
 
-## How to Use Continue CLI - Basic Usage
+## How to Use AI Firewall CLI - Basic Usage
 
 Out of the box, `cn` comes with tools that let it understand your codebase, edit files, run terminal commands, and more (if you approve). You can ask `cn` to:
 
@@ -51,11 +51,11 @@ In headless mode, `cn` will only output its final response, making it perfect fo
 echo "$(git diff) Generate a conventional commit name for the current git changes" | cn -p > commit-message.txt
 ```
 
-## How to Configure Continue CLI
+## How to Configure AI Firewall CLI
 
-`cn` uses [`config.yaml`](/reference), the exact same configuration file as Continue. This means that you can log in to [Continue Mission Control](/mission-control) or use your existing local configuration.
+`cn` uses [`config.yaml`](/reference), the exact same configuration file as Continue. This means that you can log in to [AI Firewall Mission Control](/mission-control) or use your existing local configuration.
 
-To switch between configurations, you can use the `/config` slash command in `cn`, or you can start it with the `--config` flag (e.g. `cn --config continuedev/default-cli-config` or `cn --config ~/.continue/config.yaml`).
+To switch between configurations, you can use the `/config` slash command in `cn`, or you can start it with the `--config` flag (e.g. `cn --config ai-firewall/default-cli-config` or `cn --config ~/.ai-firewall/config.yaml`).
 
 ### How to Add Custom Models
 
@@ -63,15 +63,15 @@ Learn how to add custom models [here](/customize/overview). Then, you can use th
 
 ### How to Configure Rules
 
-`cn` supports [rules](/customize/deep-dives/rules) in the same way as the Continue IDE extensions. You can also use the `--rule` flag to manually include a rule from Mission Control. For example, `cn --rule nate/spanish` will tell `cn` to use [this rule](https://continue.dev/nate/spanish) to always speak in Spanish.
+`cn` supports [rules](/customize/deep-dives/rules) in the same way as the AI Firewall IDE extensions. You can also use the `--rule` flag to manually include a rule from Mission Control. For example, `cn --rule nate/spanish` will tell `cn` to use [this rule](https://ai-firewall.dev/nate/spanish) to always speak in Spanish.
 
 ### How to Configure Tools
 
-`cn` supports MCP tools, which can be configured in the [same way](/customize/deep-dives/mcp) as with the Continue IDE extensions.
+`cn` supports MCP tools, which can be configured in the [same way](/customize/deep-dives/mcp) as with the AI Firewall IDE extensions.
 
 #### How to Set Tool Permissions
 
-`cn` includes a tool permission system to make sure you approve of the agent's actions. It will begin with minimal permissions but as you approve tool calls, it will add policies to `~/.continue/permissions.yaml` to remember your preferences.
+`cn` includes a tool permission system to make sure you approve of the agent's actions. It will begin with minimal permissions but as you approve tool calls, it will add policies to `~/.ai-firewall/permissions.yaml` to remember your preferences.
 
 If you want to explicitly allow or deny tools for a single session, you can use the command line flags `--allow`, `--ask`, and `--exclude`. For example:
 
@@ -88,12 +88,12 @@ cn --exclude Fetch
 
 ## API Key Authentication
 
-For automation in CI or other headless environments, you can use an API key to authenticate with Continue. First, obtain your personal API key [here](https://continue.dev/settings/api-keys). Then, set it as the `CONTINUE_API_KEY` environment variable. You can now use `cn -p` (headless mode) without needing to log in.
+For automation in CI or other headless environments, you can use an API key to authenticate with AI Firewall. First, obtain your personal API key [here](https://ai-firewall.dev/settings/api-keys). Then, set it as the `CONTINUE_API_KEY` environment variable. You can now use `cn -p` (headless mode) without needing to log in.
 
-If you wish to run an automation on behalf of your organization you can obtain an organization-scoped API key by going to [your organization's settings](https://continue.dev/settings/organizations) -> API Keys.
+If you wish to run an automation on behalf of your organization you can obtain an organization-scoped API key by going to [your organization's settings](https://ai-firewall.dev/settings/organizations) -> API Keys.
 
 ## Troubleshooting
 
-Run `cn` with the `--verbose` flag to see more detailed logs. These will be output to `~/.continue/logs/cn.log`.
+Run `cn` with the `--verbose` flag to see more detailed logs. These will be output to `~/.ai-firewall/logs/cn.log`.
 
-If you have feedback on the beta, please [leave feedback in the GitHub discussion](https://github.com/continuedev/continue/discussions/7307).
+If you have feedback on the beta, please [leave feedback in the GitHub discussion](https://github.com/ai-firewall/ai-firewall/discussions/7307).

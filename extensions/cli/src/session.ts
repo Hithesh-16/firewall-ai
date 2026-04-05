@@ -40,7 +40,7 @@ export interface ExtendedSessionMetadata extends BaseSessionMetadata {
  */
 function getSessionDir(): string {
   // For tests, use the test directory if we're in test mode
-  if (process.env.CONTINUE_CLI_TEST && process.env.HOME) {
+  if (process.env.AI_FIREWALL_CLI_TEST && process.env.HOME) {
     const sessionDir = path.join(process.env.HOME, ".ai-firewall", "sessions");
 
     // Create directory if it doesn't exist
@@ -53,7 +53,8 @@ function getSessionDir(): string {
 
   // Use AI_FIREWALL_GLOBAL_DIR if set (for testing)
   const continueHome =
-    process.env.AI_FIREWALL_GLOBAL_DIR || path.join(os.homedir(), ".ai-firewall");
+    process.env.AI_FIREWALL_GLOBAL_DIR ||
+    path.join(os.homedir(), ".ai-firewall");
   const sessionDir = path.join(continueHome, "sessions");
 
   // Create directory if it doesn't exist
@@ -99,8 +100,8 @@ class SessionManager {
   getCurrentSession(): Session {
     if (!this.currentSession) {
       // Use test session ID for testing consistency
-      const sessionId = process.env.CONTINUE_CLI_TEST_SESSION_ID
-        ? process.env.CONTINUE_CLI_TEST_SESSION_ID
+      const sessionId = process.env.AI_FIREWALL_CLI_TEST_SESSION_ID
+        ? process.env.AI_FIREWALL_CLI_TEST_SESSION_ID
         : uuidv4();
 
       this.currentSession = {

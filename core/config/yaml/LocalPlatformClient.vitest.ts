@@ -140,14 +140,14 @@ describe("LocalPlatformClient", () => {
         "dotenv-" + Math.floor(Math.random() * 100);
 
       testIde.readFile = vi.fn(async (fileUri: string) => {
-        // fileUri should contain .continue/.env and not .env
-        if (fileUri.match(/.*\.continue\/\.env.*/gi)?.length) {
+        // fileUri should contain .ai-firewall/.env and not .env
+        if (fileUri.match(/.*\.ai-firewall\/\.env.*/gi)?.length) {
           return (
             envKeyValuesString.split("\n")[0] + randomValueForContinueDirDotEnv
           );
         }
-        // filUri should contain .env and not .continue/.env
-        else if (fileUri.match(/.*(?<!\.continue\/)\.env.*/gi)?.length) {
+        // filUri should contain .env and not .ai-firewall/.env
+        else if (fileUri.match(/.*(?<!\.ai-firewall\/)\.env.*/gi)?.length) {
           return (
             envKeyValuesString.split("\n")[1] + randomValueForWorkspaceDotEnv
           );
@@ -194,14 +194,14 @@ describe("LocalPlatformClient", () => {
 
       const originalIdeReadFile = testIde.readFile;
       testIde.readFile = vi.fn(async (fileUri: string) => {
-        // fileUri should contain .continue/.env and not .env
-        if (fileUri.match(/.*\.continue\/\.env.*/gi)?.length) {
+        // fileUri should contain .ai-firewall/.env and not .env
+        if (fileUri.match(/.*\.ai-firewall\/\.env.*/gi)?.length) {
           return (
             envKeyValuesString.split("\n")[0] + randomValueForContinueDirDotEnv
           );
         }
-        // filUri should contain .env and not .continue/.env
-        else if (fileUri.match(/.*(?<!\.continue\/)\.env.*/gi)?.length) {
+        // filUri should contain .env and not .ai-firewall/.env
+        else if (fileUri.match(/.*(?<!\.ai-firewall\/)\.env.*/gi)?.length) {
           return (
             envKeyValuesString.split("\n")[0] + randomValueForWorkspaceDotEnv
           );
@@ -220,7 +220,7 @@ describe("LocalPlatformClient", () => {
       expect(
         (resolvedFQSNs[0] as SecretResult & { value: unknown })?.value,
       ).toContain(secretValue);
-      // we check that workspace <workspace>.continue/.env does not override the <workspace>/.env secret
+      // we check that workspace <workspace>.ai-firewall/.env does not override the <workspace>/.env secret
       expect(
         (resolvedFQSNs[0] as SecretResult & { value: unknown })?.value,
       ).toContain(randomValueForContinueDirDotEnv);
@@ -381,10 +381,10 @@ describe("LocalPlatformClient", () => {
       const workspaceContinueEnvValue = "secret-from-workspace-continue-env";
       testIde.fileExists = vi.fn(async (fileUri: string) =>
         // Only mock existence for <workspace>/.ai-firewall/.env
-        fileUri.includes(".continue/.env"),
+        fileUri.includes(".ai-firewall/.env"),
       );
       testIde.readFile = vi.fn(async (fileUri: string) => {
-        if (fileUri.includes(".continue/.env")) {
+        if (fileUri.includes(".ai-firewall/.env")) {
           return `${testFQSN.secretName}=${workspaceContinueEnvValue}`;
         }
         return "";

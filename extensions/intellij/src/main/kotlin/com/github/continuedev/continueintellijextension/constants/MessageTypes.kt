@@ -60,7 +60,7 @@ class MessageTypes {
             "indexing/statusUpdate", // Docs, etc.
             "addContextItem",
             "refreshSubmenuItems",
-            "isContinueInputFocused",
+            "isFirewallInputFocused",
             "setTTSActive",
             "getWebviewHistoryLength",
             "getCurrentSessionId",

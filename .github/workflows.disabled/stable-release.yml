@@ -18,8 +18,8 @@ jobs:
   stable-release:
     name: Stable Release
     runs-on: ubuntu-latest
-    # Only run this workflow on the main repository (continuedev/continue)
-    if: github.repository == 'continuedev/continue'
+    # Only run this workflow on the main repository (ai-firewall/ai-firewall)
+    if: github.repository == 'ai-firewall/ai-firewall'
     steps:
       - name: Checkout
         uses: actions/checkout@v6

@@ -8,11 +8,11 @@ on:
 
 jobs:
   run-cn-task:
-    # Only run this workflow on the main repository (continuedev/continue)
-    if: github.repository == 'continuedev/continue'
+    # Only run this workflow on the main repository (ai-firewall/ai-firewall)
+    if: github.repository == 'ai-firewall/ai-firewall'
     uses: ./.github/workflows/run-continue-agent.yml
     with:
-      agent: continuedev/tidy-up-markdown-agent
+      agent: ai-firewall/tidy-up-markdown-agent
       branch_name: main
     secrets:
       CONTINUE_API_KEY: ${{ secrets.CONTINUE_API_KEY }}

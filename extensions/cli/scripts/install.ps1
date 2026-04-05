@@ -1,11 +1,11 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Continue CLI Installer for Windows
+    AI Firewall CLI Installer for Windows
 .DESCRIPTION
-    Installs Node.js (if needed) and the Continue CLI globally
+    Installs Node.js (if needed) and the AI Firewall CLI globally
 .EXAMPLE
-    irm https://continue.dev/install.ps1 | iex
+    irm https://ai-firewall.dev/install.ps1 | iex
 .NOTES
     Supports Windows 10/11, Windows Server 2016+
     Requires internet connectivity
@@ -268,7 +268,7 @@ function Install-Cli {
     $npmPrefix = npm config get prefix 2>$null
     if ($npmPrefix -and (Test-Path $npmPrefix)) {
         try {
-            $testFile = Join-Path $npmPrefix "_continue_test_write"
+            $testFile = Join-Path $npmPrefix "_ai_firewall_test_write"
             [IO.File]::WriteAllText($testFile, "test")
             Remove-Item $testFile -Force
         } catch {
@@ -310,7 +310,7 @@ function Install-Cli {
 function Show-Complete {
     Write-Host ""
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Success "Continue CLI installation complete!"
+    Write-Success "AI Firewall CLI installation complete!"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Write-Host ""
 
@@ -327,7 +327,7 @@ function Show-Complete {
 function Main {
     Write-Host ""
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Host "           Continue CLI Installer" -ForegroundColor White
+    Write-Host "           AI Firewall CLI Installer" -ForegroundColor White
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Write-Host ""
 

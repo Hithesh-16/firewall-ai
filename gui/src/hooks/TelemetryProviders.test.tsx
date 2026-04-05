@@ -57,9 +57,9 @@ vi.mock("../context/Auth", () => ({
   }),
 }));
 
-// Mock isContinueTeamMember utility
+// Mock isFirewallTeamMember utility
 vi.mock("../util/isContinueTeamMember", () => ({
-  isContinueTeamMember: vi.fn(() => true), // Mock as Continue team member
+  isFirewallTeamMember: vi.fn(() => true), // Mock as AI Firewall team member
 }));
 
 // Mock window.vscMachineId

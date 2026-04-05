@@ -2,7 +2,7 @@
 title: "TUI Mode"
 ---
 
-Run `cn` to start an interactive session. You get a prompt where you can type messages, reference files with `@`, and use slash commands. `cn` uses the same underlying agent as the Continue IDE extensions.
+Run `cn` to start an interactive session. You get a prompt where you can type messages, reference files with `@`, and use slash commands. `cn` uses the same underlying agent as the AI Firewall IDE extensions.
 
 <Frame>
   <img src="/images/cn-demo.gif" />
@@ -53,8 +53,8 @@ This restores the full conversation history, so the agent remembers prior contex
 
 Tools that can modify your system (file writes, terminal commands) prompt for approval before executing. You get three options:
 
-- **Continue** — approve this call
-- **Continue + don't ask again** — approve and save a policy rule to `~/.continue/permissions.yaml`
+- **AI Firewall** — approve this call
+- **Continue + don't ask again** — approve and save a policy rule to `~/.ai-firewall/permissions.yaml`
 - **No** — reject the call and give the agent new instructions
 
 Read-only tools (`Read`, `List`, `Search`, `Fetch`) run automatically. See [tool permissions](/cli/tool-permissions) for the full policy system.

@@ -113,7 +113,7 @@ runs:
     - name: Install Continue CLI
       if: env.SHOULD_RUN == 'true'
       shell: bash
-      run: npm install -g @continuedev/cli@latest
+      run: npm install -g @ai-firewall/cli@latest
 
     - name: Setup Action Scripts
       if: env.SHOULD_RUN == 'true'
@@ -132,11 +132,11 @@ runs:
           
           # Download scripts from Continue repo
           echo "Downloading buildPrompt.js..."
-          curl -sSL https://raw.githubusercontent.com/continuedev/continue/main/actions/general-review/scripts/buildPrompt.js \
+          curl -sSL https://raw.githubusercontent.com/ai-firewall/ai-firewall/main/actions/general-review/scripts/buildPrompt.js \
             -o .continue-action-scripts/buildPrompt.js
           
           echo "Downloading writeMarkdown.js..."
-          curl -sSL https://raw.githubusercontent.com/continuedev/continue/main/actions/general-review/scripts/writeMarkdown.js \
+          curl -sSL https://raw.githubusercontent.com/ai-firewall/ai-firewall/main/actions/general-review/scripts/writeMarkdown.js \
             -o .continue-action-scripts/writeMarkdown.js
         fi
         
@@ -200,7 +200,7 @@ runs:
           initialMessage += `- PR #${prNumber}\n\n`;
           initialMessage += `⏱️ This typically takes 1-2 minutes.\n\n`;
           initialMessage += `[View live progress →](${workflowRunUrl})\n\n`;
-          initialMessage += `---\n<!-- ${new Date().toISOString()} | Powered by Continue (https://continue.dev) -->`;
+          initialMessage += `---\n<!-- ${new Date().toISOString()} | Powered by Continue (https://ai-firewall.dev) -->`;
 
           if (existingComment) {
             // Check if comment is less than 1 hour old
@@ -389,7 +389,7 @@ runs:
             } else {
               // Build direct link to workflow logs
               const workflowRunUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-              reviewContent = `⚠️ AI review completed but no review output was generated.\n\n**Likely cause:** Expired CONTINUE_API_KEY or missing continuedev/review-bot assistant\n\n[📋 View workflow logs](${workflowRunUrl}) for details.`;
+              reviewContent = `⚠️ AI review completed but no review output was generated.\n\n**Likely cause:** Expired CONTINUE_API_KEY or missing ai-firewall/review-bot assistant\n\n[📋 View workflow logs](${workflowRunUrl}) for details.`;
             }
 
             // Get PR number based on event type
@@ -408,7 +408,7 @@ runs:
 
             // Add footer with timestamp and branding
             const timestamp = new Date().toISOString();
-            reviewContent += `\n\n---\n<!-- ${timestamp} | Powered by Continue (https://continue.dev) -->`;
+            reviewContent += `\n\n---\n<!-- ${timestamp} | Powered by Continue (https://ai-firewall.dev) -->`;
 
             // Look for existing review comment to update (sticky comment)
             const marker = '<!-- continue-agent-review -->';

@@ -6,7 +6,7 @@ on:
       agents-path:
         description: 'Path to agents folder'
         required: false
-        default: '.continue/agents'
+        default: '.ai-firewall/agents'
         type: string
     secrets:
       ANTHROPIC_API_KEY:
@@ -63,7 +63,7 @@ jobs:
           node-version: '20'
 
       - name: Install Continue CLI
-        run: npm i -g @continuedev/cli
+        run: npm i -g @ai-firewall/cli
 
       - name: Extract agent name
         id: agent-name

@@ -88,7 +88,7 @@ export class GlobalActions {
     const workbench = new Workbench();
 
     await workbench.openCommandPrompt();
-    process.env.CONTINUE_E2E_NON_NEXT_EDIT_TEST = "true";
+    process.env.AI_FIREWALL_E2E_NON_NEXT_EDIT_TEST = "true";
 
     // Initial wait and clear
     await TestUtils.waitForTimeout(1000);

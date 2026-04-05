@@ -1,6 +1,6 @@
 ---
-title: "Continue Autocomplete Setup and Configuration Guide"
-description: "Step-by-step guide to setting up and configuring autocomplete in Continue, including Codestral, Ollama, and IDE settings."
+title: "AI Firewall Autocomplete Setup and Configuration Guide"
+description: "Step-by-step guide to setting up and configuring autocomplete in AI Firewall, including Codestral, Ollama, and IDE settings."
 keywords: [autocomplete]
 sidebarTitle: Autocomplete
 ---
@@ -11,13 +11,13 @@ import { ModelRecommendations } from "/snippets/ModelRecommendations.jsx";
 
 <ModelRecommendations role="autocomplete" />
 
-## How to Set Up Autocomplete in Continue with Codestral (Recommended)
+## How to Set Up Autocomplete in AI Firewall with Codestral (Recommended)
 
 If you want to have the best autocomplete experience, we recommend using Codestral, which is available through the [Mistral API](https://console.mistral.ai/). To do this, obtain an API key and add it to your config:
 
 <Tabs>
   <Tab title="Hub">
-  [Mistral Codestral model block](https://continue.dev/mistral/codestral)
+  [Mistral Codestral model block](https://ai-firewall.dev/mistral/codestral)
   </Tab>
   <Tab title="YAML">
   ```yaml title="config.yaml"
@@ -56,7 +56,7 @@ If you want to have the best autocomplete experience, we recommend using Codestr
   "https://api.mistral.ai/v1"` in your `tabAutocompleteModel`.
 </Tip>
 
-## How to Set Up Autocomplete in Continue with Ollama (Local Model)
+## How to Set Up Autocomplete in AI Firewall with Ollama (Local Model)
 
 If you'd like to run your autocomplete model locally, we recommend using Ollama. To do this, first download the latest version of Ollama from [here](https://ollama.ai). Then, run the following command to download our recommended model:
 
@@ -68,7 +68,7 @@ Then, add the model to your configuration:
 
 <Tabs>
   <Tab title="Hub">
-  [Ollama Qwen 2.5 Coder 1.5B model block](https://continue.dev/ollama/qwen2.5-coder-1.5b)
+  [Ollama Qwen 2.5 Coder 1.5B model block](https://ai-firewall.dev/ollama/qwen2.5-coder-1.5b)
   </Tab>
   <Tab title="YAML">
   ```yaml title="config.yaml"
@@ -132,13 +132,13 @@ models:
 
 Then, in the continue panel, select this model as the default model for autocomplete.
 
-## Autocomplete Configuration Options in Continue
+## Autocomplete Configuration Options in AI Firewall
 
-### Autocomplete Models Available on the Continue Mission Control
+### Autocomplete Models Available on the AI Firewall Mission Control
 
-Explore autocomplete model configurations on [the hub](https://continue.dev/explore/models?roles=autocomplete)
+Explore autocomplete model configurations on [the hub](https://ai-firewall.dev/explore/models?roles=autocomplete)
 
-### Customize Autocomplete User Settings in the Continue Extension
+### Customize Autocomplete User Settings in the AI Firewall Extension
 
 {/* - `Use autocomplete cache`: If on, caches completions */}
 The following settings can be configured for autocompletion in the IDE extension User Settings Page:
@@ -173,23 +173,23 @@ models:
 
 The `config.json` configuration format offers configuration options through `tabAutocompleteOptions`. See the [JSON Reference](/reference/json-reference#tabautocompleteoptions) for more details.
 
-## Autocomplete FAQs and Troubleshooting in Continue
+## Autocomplete FAQs and Troubleshooting in AI Firewall
 
 ### I want better completions, should I use GPT-5?
 
-Perhaps surprisingly, the answer is no. The models that we suggest for autocomplete are trained with a highly specific prompt format, which allows them to respond to requests for completing code (see examples of these prompts [here](https://github.com/continuedev/continue/blob/main/core/autocomplete/templating/AutocompleteTemplate.ts)). Some of the best commercial models like GPT-5 or Claude are not trained with this prompt format, which means that they won't generate useful completions. Luckily, a huge model is not required for great autocomplete. Most of the state-of-the-art autocomplete models are no more than 10b parameters, and increasing beyond this does not significantly improve performance.
+Perhaps surprisingly, the answer is no. The models that we suggest for autocomplete are trained with a highly specific prompt format, which allows them to respond to requests for completing code (see examples of these prompts [here](https://github.com/ai-firewall/ai-firewall/blob/main/core/autocomplete/templating/AutocompleteTemplate.ts)). Some of the best commercial models like GPT-5 or Claude are not trained with this prompt format, which means that they won't generate useful completions. Luckily, a huge model is not required for great autocomplete. Most of the state-of-the-art autocomplete models are no more than 10b parameters, and increasing beyond this does not significantly improve performance.
 
 ### Autocomplete Not Working – How to Fix It
 
 Follow these steps to ensure that everything is set up correctly:
 
-1. Make sure you have the "Enable Tab Autocomplete" setting checked (in VS Code, you can toggle by clicking the "Continue" button in the status bar, and in JetBrains by going to Settings -> Tools -> Continue).
+1. Make sure you have the "Enable Tab Autocomplete" setting checked (in VS Code, you can toggle by clicking the "AI Firewall" button in the status bar, and in JetBrains by going to Settings -> Tools -> Continue).
 2. Make sure you have downloaded Ollama.
 3. Run `ollama run qwen2.5-coder:1.5b` to verify that the model is downloaded.
 4. Make sure that any other completion providers are disabled (e.g. Copilot), as they may interfere.
-5. Check the output of the logs to find any potential errors: <kbd>cmd/ctrl</kbd> + <kbd>shift</kbd> + <kbd>P</kbd> -> "Toggle Developer Tools" -> "Console" tab in VS Code, ~/.continue/logs/core.log in JetBrains.
+5. Check the output of the logs to find any potential errors: <kbd>cmd/ctrl</kbd> + <kbd>shift</kbd> + <kbd>P</kbd> -> "Toggle Developer Tools" -> "Console" tab in VS Code, ~/.ai-firewall/logs/core.log in JetBrains.
 6. Check VS Code settings to make sure that `"editor.inlineSuggest.enabled"` is set to `true` (use <kbd>cmd/ctrl</kbd> + <kbd>,</kbd> then search for this and check the box)
-7. If you are still having issues, please let us know in our [GitHub Discussions](https://github.com/continuedev/continue/discussions) and we'll help as soon as possible.
+7. If you are still having issues, please let us know in our [GitHub Discussions](https://github.com/ai-firewall/ai-firewall/discussions) and we'll help as soon as possible.
 
 ### Why Are My Completions Only Single-Line?
 
@@ -216,20 +216,20 @@ This is a built-in feature of VS Code, but it's just a bit hidden. Follow these 
    This will make multi-line completion (including continue and from VS Code built-in or other plugin snippets) still work, and you will see multi-line completion. However, Tab will only fill in one line at a time. Any unnecessary code can be canceled with <kbd>Esc</kbd>.
    If you need to apply all the code, just press <kbd>Tab</kbd> multiple times.
 
-### How to Turn Off Autocomplete in Continue (VS Code and JetBrains)
+### How to Turn Off Autocomplete in AI Firewall (VS Code and JetBrains)
 
 #### VS Code
 
-Click the "Continue" button in the status panel at the bottom right of the screen. The checkmark will become a "cancel" symbol and you will no longer see completions. You can click again to turn it back on.
+Click the "AI Firewall" button in the status panel at the bottom right of the screen. The checkmark will become a "cancel" symbol and you will no longer see completions. You can click again to turn it back on.
 
-Alternatively, open VS Code settings, search for "Continue" and uncheck the box for "Enable Tab Autocomplete".
+Alternatively, open VS Code settings, search for "AI Firewall" and uncheck the box for "Enable Tab Autocomplete".
 
 You can also use the default shortcut to disable autocomplete directly using a chord: press and hold <kbd>ctrl/cmd</kbd> + <kbd>K</kbd> (continue holding <kbd>ctrl/cmd</kbd>) and press <kbd>ctrl/cmd</kbd> + <kbd>A</kbd>. This will turn off autocomplete without navigating through settings.
 
 #### JetBrains
 
-Open Settings -> Tools -> Continue and uncheck the box for "Enable Tab Autocomplete".
+Open Settings -> Tools -> AI Firewall and uncheck the box for "Enable Tab Autocomplete".
 
 #### Feedback
 
-If you're turning off autocomplete, we'd love to hear how we can improve! Please let us know in our [GitHub Discussions](https://github.com/continuedev/continue/discussions) or file an issue on GitHub.
+If you're turning off autocomplete, we'd love to hear how we can improve! Please let us know in our [GitHub Discussions](https://github.com/ai-firewall/ai-firewall/discussions) or file an issue on GitHub.

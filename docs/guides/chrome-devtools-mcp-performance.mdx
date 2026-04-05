@@ -1,6 +1,6 @@
 ---
 title: "Chrome DevTools Performance Optimization Cookbook"
-description: "Measure and optimize web performance with Chrome DevTools MCP, automated performance traces, and Core Web Vitals monitoring using Continue."
+description: "Measure and optimize web performance with Chrome DevTools MCP, automated performance traces, and Core Web Vitals monitoring using AI Firewall."
 sidebarTitle: "Chrome DevTools MCP for Performance"
 ---
 
@@ -22,7 +22,7 @@ import CLIInstall from '/snippets/cli-install.mdx'
   - [Performance Insights](https://developer.chrome.com/docs/devtools/performance-insights) with AI-powered analysis
   - [Screenshot Debugging](https://developer.chrome.com/docs/devtools/device-mode) for visual regression detection
 
-This guide shows you how to leverage these features through natural language with Continue CLI!
+This guide shows you how to leverage these features through natural language with AI Firewall CLI!
 
 </Info>
 
@@ -41,14 +41,14 @@ This cookbook teaches you to:
 - Chrome browser installed
 - Web project with a running development server (or deployed URL)
 - Node.js 20+ installed
-- [Continue CLI](https://docs.continue.dev/guides/cli)
-- [Chrome DevTools MCP](https://continue.dev) configured
+- [AI Firewall CLI](https://docs.ai-firewall.dev/guides/cli)
+- [Chrome DevTools MCP](https://ai-firewall.dev) configured
 
 ## Quick Setup
 
 For all options, first:
 <Steps>
-<Step title="Install Continue CLI">
+<Step title="Install AI Firewall CLI">
     <CLIInstall />
   </Step>
 </Steps>
@@ -68,16 +68,16 @@ After completing **Quick Setup** above, you have two paths to get started:
 
     <Steps>
       <Step title="Add the Pre-Built Agent">
-        Visit the [Chrome Dev Tools Agent](https://continue.dev/continuedev/chrome-dev-tools-agent) on Continue Mission Control and click **"Install Agent"** or run:
+        Visit the [Chrome Dev Tools Agent](https://ai-firewall.dev/ai-firewall/chrome-dev-tools-agent) on AI Firewall Mission Control and click **"Install Agent"** or run:
         
         ```bash
-        cn --agent continuedev/chrome-dev-tools-agent
+        cn --agent ai-firewall/chrome-dev-tools-agent
         ```
 
         This agent includes:
         - **Optimized prompts** for performance analysis and debugging
         - **Built-in rules** for consistent formatting and error handling
-        - **[Chrome DevTools MCP](https://continue.dev/google/chrome-devtools-mcp)** for reliable browser automation
+        - **[Chrome DevTools MCP](https://ai-firewall.dev/google/chrome-devtools-mcp)** for reliable browser automation
       </Step>
 
       <Step title="Run Performance Analysis">
@@ -99,7 +99,7 @@ After completing **Quick Setup** above, you have two paths to get started:
   <Tab title="🛠️ Manual Setup">
     <Steps>
       <Step title="Add Chrome DevTools MCP to Your Assistant">
-        Visit the [Chrome DevTools MCP](https://continue.dev/google/chrome-devtools-mcp) on Continue Mission Control and add it to your assistant, or add this to your configuration:
+        Visit the [Chrome DevTools MCP](https://ai-firewall.dev/google/chrome-devtools-mcp) on AI Firewall Mission Control and add it to your assistant, or add this to your configuration:
 
         ```yaml
         name: Chrome DevTools MCP
@@ -142,8 +142,8 @@ After completing **Quick Setup** above, you have two paths to get started:
 
 <Accordion title="Agent Requirements">
     To use the pre-built agent, you need either:
-      - **Continue CLI Pro Plan** with the models add-on, OR
-      - **Your own API keys** added to Continue Mission Control secrets
+      - **AI Firewall CLI Pro Plan** with the models add-on, OR
+      - **Your own API keys** added to AI Firewall Mission Control secrets
       - **Chrome browser** installed on your system
       - **Node.js 20+** to run the MCP via npx
 
@@ -204,11 +204,11 @@ Please check the LCP of web.dev.
 
 ## Performance Analysis Recipes
 
-Now you can use natural language prompts to analyze web performance. The Continue agent automatically calls the appropriate Chrome DevTools MCP tools.
+Now you can use natural language prompts to analyze web performance. The AI Firewall agent automatically calls the appropriate Chrome DevTools MCP tools.
 
 <Info>
   **Where to run these workflows:**
-  - **IDE Extensions**: Use Continue in VS Code, JetBrains, or other supported IDEs
+  - **IDE Extensions**: Use AI Firewall in VS Code, JetBrains, or other supported IDEs
   - **Terminal (TUI mode)**: Run `cn` to enter interactive mode, then type your prompts
   - **CLI (headless mode)**: Use `cn -p "your prompt"` for headless commands
 
@@ -401,11 +401,11 @@ This example demonstrates a **Continuous AI workflow** where performance validat
 
 Navigate to **Repository Settings → Secrets and variables → Actions** and add:
 
-- `CONTINUE_API_KEY`: Your Continue API key from [continue.dev/settings/api-keys](https://continue.dev/settings/api-keys)
+- `CONTINUE_API_KEY`: Your AI Firewall API key from [ai-firewall.dev/settings/api-keys](https://ai-firewall.dev/settings/api-keys)
 
 ### Create Workflow File
 
-This workflow automatically validates web performance on pull requests using the Continue CLI in headless mode. It records performance traces, extracts Core Web Vitals, and posts a summary report as a PR comment.
+This workflow automatically validates web performance on pull requests using the AI Firewall CLI in headless mode. It records performance traces, extracts Core Web Vitals, and posts a summary report as a PR comment.
 
 Create `.github/workflows/performance-check.yml` in your repository:
 
@@ -426,7 +426,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          npm install -g @continuedev/cli
+          npm install -g @ai-firewall/cli
           npm ci
 
       - name: Build Project
@@ -441,7 +441,7 @@ jobs:
         env:
           CONTINUE_API_KEY: ${{ secrets.CONTINUE_API_KEY }}
         run: |
-          cn --agent continuedev/chrome-dev-tools-agent \
+          cn --agent ai-firewall/chrome-dev-tools-agent \
              -p "Navigate to http://localhost:3000 and:
              1. Record performance trace with reload
              2. Extract LCP, FID, CLS values
@@ -661,7 +661,7 @@ After completing this guide, you have a complete **AI-powered performance analys
 - ✅ **Ensures quality** — Performance checks prevent regressions from shipping
 
 <Card title="Continuous AI" icon="rocket">
-  Your performance workflow now operates at **[Level 2 Continuous AI](https://blog.continue.dev/what-is-continuous-ai-a-developers-guide/)** - AI handles routine performance analysis and debugging with human oversight through review and approval of changes.
+  Your performance workflow now operates at **[Level 2 Continuous AI](https://blog.ai-firewall.dev/what-is-continuous-ai-a-developers-guide/)** - AI handles routine performance analysis and debugging with human oversight through review and approval of changes.
 </Card>
 
 ## Chrome DevTools MCP Capabilities
@@ -789,7 +789,7 @@ Set up automated regression detection:
   <Card title="Chrome DevTools MCP" icon="plug" href="https://github.com/ChromeDevTools/chrome-devtools-mcp">
     Official Chrome DevTools MCP repository
   </Card>
-  <Card title="Continue Mission Control" icon="circle-nodes" href="https://continue.dev">
+  <Card title="AI Firewall Mission Control" icon="circle-nodes" href="https://ai-firewall.dev">
     Explore more MCP integrations
   </Card>
   <Card title="DevTools Documentation" icon="book" href="https://developer.chrome.com/docs/devtools">

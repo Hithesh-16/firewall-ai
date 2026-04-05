@@ -119,7 +119,7 @@ export function getModelByRole<T extends keyof ExperimentalModelRoles>(
  * This check is to determine if the user is on an unsupported CPU
  * target for our Lance DB binaries.
  *
- * See here for details: https://github.com/continuedev/continue/issues/940
+ * See here for details: https://github.com/ai-firewall/ai-firewall/issues/940
  */
 export function isSupportedLanceDbCpuTargetForLinux(ide?: IDE) {
   const CPU_FEATURES_TO_CHECK = ["avx2", "fma"] as const;

@@ -8,10 +8,10 @@ Agents use the same markdown file format as checks. The difference: agents can b
 
 There are two ways to define agents:
 
-- **Local**: Place agent files in `.continue/agents/` in your repository. Version-controlled and shared with your team.
-- **Cloud**: Created and managed on [continue.dev/agents](https://continue.dev/agents). Web UI for configuration, no file to commit.
+- **Local**: Place agent files in `.ai-firewall/agents/` in your repository. Version-controlled and shared with your team.
+- **Cloud**: Created and managed on [ai-firewall.dev/agents](https://ai-firewall.dev/agents). Web UI for configuration, no file to commit.
 
-Both run on Continue's cloud infrastructure.
+Both run on AI Firewall's cloud infrastructure.
 
 ## Triggers
 
@@ -33,7 +33,7 @@ Version-controlled trigger configuration (defined in the agent file itself) is o
 
 <Tabs>
   <Tab title="Mission Control">
-    Trigger agents from the web interface at [continue.dev](https://continue.dev) and review results in real-time.
+    Trigger agents from the web interface at [ai-firewall.dev](https://ai-firewall.dev) and review results in real-time.
   </Tab>
 
   <Tab title="CLI interactive">
@@ -57,7 +57,7 @@ Version-controlled trigger configuration (defined in the agent file itself) is o
 
 | | Checks | Agents |
 |---|---|---|
-| File location | `.continue/checks/` | `.continue/agents/` or continue.dev |
+| File location | `.ai-firewall/checks/` | `.ai-firewall/agents/` or ai-firewall.dev |
 | Trigger | Always on PR open | Configurable in [Mission Control](/mission-control/beyond-checks) |
 | Purpose | Pass/fail review of PRs | Any automated task |
 
@@ -66,38 +66,38 @@ Version-controlled trigger configuration (defined in the agent file itself) is o
 Pre-configured agents you can use immediately:
 
 <CardGroup cols={2}>
-  <Card title="Security Scanning" icon="shield-check" href="https://continue.dev/continuedev/snyk-continuous-ai-agent">
-    `continuedev/snyk-continuous-ai-agent`
+  <Card title="Security Scanning" icon="shield-check" href="https://ai-firewall.dev/ai-firewall/snyk-continuous-ai-agent">
+    `ai-firewall/snyk-continuous-ai-agent`
 
     Monitors vulnerabilities and automatically opens PRs with fixes.
   </Card>
 
-  <Card title="GitHub Management" icon="github" href="https://continue.dev/continuedev/github-project-manager-agent">
-    `continuedev/github-project-manager-agent`
+  <Card title="GitHub Management" icon="github" href="https://ai-firewall.dev/ai-firewall/github-project-manager-agent">
+    `ai-firewall/github-project-manager-agent`
 
     Triages issues and manages project workflows.
   </Card>
 
-  <Card title="Analytics Insights" icon="chart-bar" href="https://continue.dev/continuedev/posthog-continuous-ai-agent">
-    `continuedev/posthog-continuous-ai-agent`
+  <Card title="Analytics Insights" icon="chart-bar" href="https://ai-firewall.dev/ai-firewall/posthog-continuous-ai-agent">
+    `ai-firewall/posthog-continuous-ai-agent`
 
     Analyzes user data and creates actionable tasks.
   </Card>
 
-  <Card title="Performance Optimization" icon="gauge-high" href="https://continue.dev/continuedev/netlify-continuous-ai-agent">
-    `continuedev/netlify-continuous-ai-agent`
+  <Card title="Performance Optimization" icon="gauge-high" href="https://ai-firewall.dev/ai-firewall/netlify-continuous-ai-agent">
+    `ai-firewall/netlify-continuous-ai-agent`
 
     Monitors Core Web Vitals and optimizes deployments.
   </Card>
 
-  <Card title="Database Auditing" icon="database" href="https://continue.dev/continuedev/supabase-agent">
-    `continuedev/supabase-agent`
+  <Card title="Database Auditing" icon="database" href="https://ai-firewall.dev/ai-firewall/supabase-agent">
+    `ai-firewall/supabase-agent`
 
     Audits RLS security and generates migrations.
   </Card>
 
-  <Card title="Data Pipelines" icon="arrows-rotate" href="https://continue.dev/continuedev/dlt-agent">
-    `continuedev/dlt-agent`
+  <Card title="Data Pipelines" icon="arrows-rotate" href="https://ai-firewall.dev/ai-firewall/dlt-agent">
+    `ai-firewall/dlt-agent`
 
     Inspects pipelines and debugs load errors.
   </Card>

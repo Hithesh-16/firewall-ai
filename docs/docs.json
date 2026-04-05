@@ -351,17 +351,17 @@
       "anchors": [
         {
           "anchor": "About Us",
-          "href": "https://continue.dev/about-us",
+          "href": "https://ai-firewall.dev/about-us",
           "icon": "book-open"
         },
         {
           "anchor": "Blog",
-          "href": "https://continue.dev/blog",
+          "href": "https://ai-firewall.dev/blog",
           "icon": "newspaper"
         },
         {
           "anchor": "Changelog",
-          "href": "https://changelog.continue.dev/",
+          "href": "https://changelog.ai-firewall.dev/",
           "icon": "bullhorn"
         }
       ]
@@ -370,7 +370,7 @@
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg",
-    "href": "https://continue.dev"
+    "href": "https://ai-firewall.dev"
   },
   "background": {
     "color": {
@@ -381,20 +381,20 @@
     "links": [
       {
         "label": "🚀 Get Started",
-        "href": "https://continue.dev/"
+        "href": "https://ai-firewall.dev/"
       }
     ],
     "primary": {
       "type": "github",
-      "href": "https://github.com/continuedev/continue"
+      "href": "https://github.com/ai-firewall/ai-firewall"
     }
   },
   "footer": {
     "socials": {
-      "x": "https://twitter.com/continuedev",
-      "github": "https://github.com/continuedev/continue",
-      "linkedin": "https://linkedin.com/company/continuedev",
-      "youtube": "https://www.youtube.com/@continuedev"
+      "x": "https://twitter.com/aifirewall",
+      "github": "https://github.com/ai-firewall/ai-firewall",
+      "linkedin": "https://linkedin.com/company/ai-firewall",
+      "youtube": "https://www.youtube.com/@ai-firewall"
     }
   },
   "contextual": {
@@ -428,7 +428,7 @@
     },
     {
       "source": "/changelog",
-      "destination": "https://changelog.continue.dev"
+      "destination": "https://changelog.ai-firewall.dev"
     },
     {
       "source": "/hub",
@@ -1124,7 +1124,7 @@
     },
     {
       "source": "/about",
-      "destination": "https://continue.dev/about-us"
+      "destination": "https://ai-firewall.dev/about-us"
     },
     {
       "source": "/autocomplete/model-setup",

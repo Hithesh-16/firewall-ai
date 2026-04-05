@@ -93,7 +93,7 @@ export class UpdateService extends BaseService<UpdateServiceState> {
         autoUpdate &&
         isUpdateAvailable &&
         this.currentState.status !== "updating" &&
-        !process.env.CONTINUE_CLI_AUTO_UPDATED //Already auto updated, preventing sequential auto-update
+        !process.env.AI_FIREWALL_CLI_AUTO_UPDATED //Already auto updated, preventing sequential auto-update
       ) {
         await this.performUpdate(true);
       } else {
@@ -220,7 +220,7 @@ export class UpdateService extends BaseService<UpdateServiceState> {
         stdio: "inherit",
         env: {
           ...process.env,
-          CONTINUE_CLI_AUTO_UPDATED: "true",
+          AI_FIREWALL_CLI_AUTO_UPDATED: "true",
         },
       });
 

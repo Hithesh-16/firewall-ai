@@ -54,8 +54,8 @@ import { stringifyMcpPrompt } from "./commands/slash/mcpSlashCommand";
 import { createNewAssistantFile } from "./config/createNewAssistantFile";
 import {
   isColocatedRulesFile,
-  isContinueAgentConfigFile,
-  isContinueConfigRelatedUri,
+  isFirewallAgentConfigFile,
+  isFirewallConfigRelatedUri,
 } from "./config/loadLocalAssistants";
 import { CodebaseRulesCache } from "./config/markdown/loadCodebaseRules";
 import {
@@ -354,8 +354,14 @@ export class Core {
     });
 
     on("history/repoSummary", (msg) => {
-      const { getRepoSummary, formatRepoSummaryForSystemMessage } = require("./util/repoMemory");
-      const summary = getRepoSummary(historyManager, msg.data.workspaceDirectory);
+      const {
+        getRepoSummary,
+        formatRepoSummaryForSystemMessage,
+      } = require("./util/repoMemory");
+      const summary = getRepoSummary(
+        historyManager,
+        msg.data.workspaceDirectory,
+      );
       if (!summary) return { summary: null, formatted: "" };
       return {
         summary,
@@ -452,7 +458,7 @@ export class Core {
         const filepath = msg.data.filepath;
         if (
           !isColocatedRulesFile(filepath) &&
-          !isContinueConfigRelatedUri(filepath)
+          !isFirewallConfigRelatedUri(filepath)
         ) {
           throw new Error("Only rule files can be deleted");
         }
@@ -933,9 +939,9 @@ export class Core {
       }
 
       // If it's a local config being created, we want to reload all configs so it shows up in the list
-      if (nonColocatedRuleUris.some(isContinueAgentConfigFile)) {
+      if (nonColocatedRuleUris.some(isFirewallAgentConfigFile)) {
         await this.configHandler.refreshAll("Local config file created");
-      } else if (nonColocatedRuleUris.some(isContinueConfigRelatedUri)) {
+      } else if (nonColocatedRuleUris.some(isFirewallConfigRelatedUri)) {
         await this.configHandler.reloadConfig(
           ".continue config-related file created",
         );
@@ -965,9 +971,9 @@ export class Core {
       }
 
       // If it's a local config being deleted, we want to reload all configs so it disappears from the list
-      if (nonColocatedRuleUris.some(isContinueAgentConfigFile)) {
+      if (nonColocatedRuleUris.some(isFirewallAgentConfigFile)) {
         await this.configHandler.refreshAll("Local config file deleted");
-      } else if (nonColocatedRuleUris.some(isContinueConfigRelatedUri)) {
+      } else if (nonColocatedRuleUris.some(isFirewallConfigRelatedUri)) {
         await this.configHandler.reloadConfig(
           ".continue config-related file deleted",
         );
@@ -1363,7 +1369,7 @@ export class Core {
           } catch (e) {
             Logger.error(`Failed to update codebase rule: ${e}`);
           }
-        } else if (isContinueConfigRelatedUri(uri)) {
+        } else if (isFirewallConfigRelatedUri(uri)) {
           await this.configHandler.reloadConfig(
             "Local config-related file updated",
           );

@@ -492,7 +492,7 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
     description:
       "One of the fastest ways to get started with local models on Mac, Linux, or Windows",
     longDescription:
-      'To get started with Ollama, follow these steps:\n1. Download from [ollama.ai](https://ollama.ai/download) and open the application\n2. Open a terminal and run `ollama run <MODEL_NAME>`. Example model names are `codellama:7b-instruct` or `llama2:7b-text`. You can find the full list [here](https://ollama.ai/library).\n3. Make sure that the model name used in step 2 is the same as the one in config.json (e.g. `model="codellama:7b-instruct"`)\n4. Once the model has finished downloading, you can start asking questions through Continue.',
+      'To get started with Ollama, follow these steps:\n1. Download from [ollama.ai](https://ollama.ai/download) and open the application\n2. Open a terminal and run `ollama run <MODEL_NAME>`. Example model names are `codellama:7b-instruct` or `llama2:7b-text`. You can find the full list [here](https://ollama.ai/library).\n3. Make sure that the model name used in step 2 is the same as the one in config.json (e.g. `model="codellama:7b-instruct"`)\n4. Once the model has finished downloading, you can start asking questions through AI Firewall.',
     icon: "ollama.png",
     tags: [ModelProviderTags.Local, ModelProviderTags.OpenSource],
     packages: [
@@ -675,7 +675,7 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
     description:
       "Use Novita AI API for extremely fast streaming of open-source models",
     icon: "novita.png",
-    longDescription: `[Novita AI](https://novita.ai?utm_source=github_continuedev&utm_medium=github_readme&utm_campaign=github_link) offers an affordable, reliable, and simple inference platform with scalable [LLM APIs](https://novita.ai/docs/model-api/reference/introduction.html), empowering developers to build AI applications. To get started with Novita AI:\n1. Obtain an API key from [here](https://novita.ai/settings/key-management?utm_source=github_continuedev&utm_medium=github_readme&utm_campaign=github_link)\n2. Paste below\n3. Select a model preset`,
+    longDescription: `[Novita AI](https://novita.ai?utm_source=github_aifirewall&utm_medium=github_readme&utm_campaign=github_link) offers an affordable, reliable, and simple inference platform with scalable [LLM APIs](https://novita.ai/docs/model-api/reference/introduction.html), empowering developers to build AI applications. To get started with Novita AI:\n1. Obtain an API key from [here](https://novita.ai/settings/key-management?utm_source=github_aifirewall&utm_medium=github_readme&utm_campaign=github_link)\n2. Paste below\n3. Select a model preset`,
     tags: [ModelProviderTags.RequiresApiKey, ModelProviderTags.OpenSource],
     params: {
       apiKey: "",
@@ -700,7 +700,7 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
       return p;
     }),
     apiKeyUrl:
-      "https://novita.ai/settings/key-management?utm_source=github_continuedev&utm_medium=github_readme&utm_campaign=github_link",
+      "https://novita.ai/settings/key-management?utm_source=github_aifirewall&utm_medium=github_readme&utm_campaign=github_link",
   },
   gemini: {
     title: "Google Gemini API",
@@ -768,7 +768,7 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
     description:
       "High-performance local LLM inference with AMD hardware optimization",
     longDescription:
-      "Lemonade provides optimized local LLM inference with support for AMD NPU, GPU, and CPU acceleration. Visit [lemonade-server.ai](https://lemonade-server.ai/) for installation and setup instructions. Once the Lemonade server is running, you can begin using Continue with your local models.",
+      "Lemonade provides optimized local LLM inference with support for AMD NPU, GPU, and CPU acceleration. Visit [lemonade-server.ai](https://lemonade-server.ai/) for installation and setup instructions. Once the Lemonade server is running, you can begin using AI Firewall with your local models.",
     icon: "lemonade.png",
     tags: [ModelProviderTags.Local, ModelProviderTags.OpenSource],
     params: {
@@ -800,7 +800,7 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
     description:
       "One of the fastest ways to get started with local models on Mac or Windows",
     longDescription:
-      "LMStudio provides a professional and well-designed GUI for exploring, configuring, and serving LLMs. It is available on both Mac and Windows. To get started:\n1. Download from [lmstudio.ai](https://lmstudio.ai/) and open the application\n2. Search for and download the desired model from the home screen of LMStudio.\n3. In the left-bar, click the '<->' icon to open the Local Inference Server and press 'Start Server'.\n4. Once your model is loaded and the server has started, you can begin using Continue.",
+      "LMStudio provides a professional and well-designed GUI for exploring, configuring, and serving LLMs. It is available on both Mac and Windows. To get started:\n1. Download from [lmstudio.ai](https://lmstudio.ai/) and open the application\n2. Search for and download the desired model from the home screen of LMStudio.\n3. In the left-bar, click the '<->' icon to open the Local Inference Server and press 'Start Server'.\n4. Once your model is loaded and the server has started, you can begin using AI Firewall.",
     icon: "lmstudio.png",
     tags: [ModelProviderTags.Local, ModelProviderTags.OpenSource],
     params: {
@@ -879,7 +879,7 @@ Select the \`GPT-4o\` model below to complete your provider configuration, but n
 .\\server.exe -c 4096 --host 0.0.0.0 -t 16 --mlock -m models/codellama-7b-instruct.Q8_0.gguf
 \`\`\`
 
-After it's up and running, you can start using Continue.`,
+After it's up and running, you can start using AI Firewall.`,
     icon: "llamacpp.png",
     tags: [ModelProviderTags.Local, ModelProviderTags.OpenSource],
     packages: openSourceModels,
@@ -895,7 +895,7 @@ After it's up and running, you can start using Continue.`,
 
 - [text-gen-webui](https://github.com/oobabooga/text-generation-webui/tree/main/extensions/openai#setup--installation)
 - [LocalAI](https://localai.io/basics/getting_started/)
-- [llama-cpp-python](https://github.com/continuedev/ggml-server-example)
+- [llama-cpp-python](https://github.com/ai-firewall/ggml-server-example)
 - [FastChat](https://github.com/lm-sys/FastChat/blob/main/docs/openai_api.md)`,
     params: {
       apiBase: "",

@@ -83,7 +83,7 @@ models:
 const SMOKE_PROXY_MODEL = process.env.SMOKE_PROXY_MODEL || "";
 
 /**
- * Writes a YAML config that uses the Continue proxy (CONTINUE_API_KEY).
+ * Writes a YAML config that uses the Continue proxy (AI_FIREWALL_API_KEY).
  * Requires SMOKE_PROXY_MODEL to be set to a valid proxy model name.
  */
 export async function writeContinueProxyConfig(
@@ -123,7 +123,7 @@ export async function runHeadless(
     cwd: ctx.testDir,
     env: {
       ...process.env,
-      CONTINUE_CLI_TEST: "true",
+      AI_FIREWALL_CLI_TEST: "true",
       HOME: ctx.testDir,
       USERPROFILE: ctx.testDir,
       FORCE_NO_TTY: "true",
@@ -153,7 +153,7 @@ export function spawnServe(
     cwd: ctx.testDir,
     env: {
       ...process.env,
-      CONTINUE_CLI_TEST: "true",
+      AI_FIREWALL_CLI_TEST: "true",
       HOME: ctx.testDir,
       USERPROFILE: ctx.testDir,
       ...opts.env,

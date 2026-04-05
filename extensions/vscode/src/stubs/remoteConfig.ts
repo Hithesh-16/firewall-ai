@@ -6,7 +6,7 @@ import { getConfigJsonPathForRemote } from "core/util/paths";
 import { canParseUrl } from "core/util/url";
 import * as vscode from "vscode";
 
-import { CONTINUE_WORKSPACE_KEY } from "../util/workspaceConfig";
+import { AI_FIREWALL_WORKSPACE_KEY } from "../util/workspaceConfig";
 
 export class RemoteConfigSync {
   private userToken: string | null;
@@ -30,7 +30,7 @@ export class RemoteConfigSync {
 
     // Listen for changes to VS Code settings, then trigger a refresh
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration(CONTINUE_WORKSPACE_KEY)) {
+      if (event.affectsConfiguration(AI_FIREWALL_WORKSPACE_KEY)) {
         const { userToken, remoteConfigServerUrl, remoteConfigSyncPeriod } =
           await this.loadVsCodeSettings();
         if (

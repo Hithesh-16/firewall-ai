@@ -6,13 +6,13 @@ AI Firewall is a security-first AI code agent that combines a full-featured codi
 
 ## Prerequisites
 
-| Requirement | Version | Check |
-|---|---|---|
-| Node.js | >= 20.19.0 | `node --version` |
-| npm | >= 10.x | `npm --version` |
-| Python | 3.9 - 3.11 | `python3 --version` |
-| VS Code | >= 1.70.0 | `code --version` |
-| Git | any | `git --version` |
+| Requirement | Version    | Check               |
+| ----------- | ---------- | ------------------- |
+| Node.js     | >= 20.19.0 | `node --version`    |
+| npm         | >= 10.x    | `npm --version`     |
+| Python      | 3.9 - 3.11 | `python3 --version` |
+| VS Code     | >= 1.70.0  | `code --version`    |
+| Git         | any        | `git --version`     |
 
 > **macOS users**: If you have Python 3.12+, use `/usr/bin/python3` (system Python 3.9) for native module builds: `npm_config_python=/usr/bin/python3`
 
@@ -47,7 +47,7 @@ cd ..
 ```bash
 cd gui
 npm install
-npm link @continuedev/core
+npm link @ai-firewall/core
 NODE_OPTIONS="--max-old-space-size=4096" npm run build
 cd ..
 ```
@@ -57,7 +57,7 @@ cd ..
 ```bash
 cd extensions/vscode
 npm install
-npm link @continuedev/core
+npm link @ai-firewall/core
 npm run package
 cd ../..
 ```

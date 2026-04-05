@@ -1,7 +1,7 @@
 ---
-title: "Slack and Gmail Automation with Klavis AI Strata MCP and Continue"
-description: "Use Continue and Klavis AI's Strata MCP to automate communication workflows across Slack and Gmail with natural language prompts."
-sidebarTitle: "Klavis AI with Continue"
+title: "Slack and Gmail Automation with Klavis AI Strata MCP and AI Firewall"
+description: "Use AI Firewall and Klavis AI's Strata MCP to automate communication workflows across Slack and Gmail with natural language prompts."
+sidebarTitle: "Klavis AI with AI Firewall"
 ---
 
 import { OSAutoDetect } from '/snippets/OSAutoDetect.jsx'
@@ -10,25 +10,25 @@ import CLIInstall from '/snippets/cli-install.mdx'
 <OSAutoDetect />
 
 <Card title="What You'll Build" icon="wand-magic-sparkles">
-  A communication workflow assistant that uses Continue CLI with Klavis AI's Strata MCP to manage and automate multi-platform workflows including Slack and Gmail—all through simple natural language prompts.
+  A communication workflow assistant that uses AI Firewall CLI with Klavis AI's Strata MCP to manage and automate multi-platform workflows including Slack and Gmail—all through simple natural language prompts.
 </Card>
 
 ## Prerequisites
 
 Before starting, ensure you have:
 
-- [Continue CLI](https://docs.continue.dev/guides/cli) with **active credits** (required for API usage)
+- [AI Firewall CLI](https://docs.ai-firewall.dev/guides/cli) with **active credits** (required for API usage)
 - A Klavis [AI account](https://www.klavis.ai/) with access to your Strata URL
 - OAuth authentication completed in Klavis dashboard for Slack and Gmail (see [Klavis integrations guide](https://www.klavis.ai/integrations))
 
 <Warning>
-  To use agents in headless mode, you need a [Continue API key](https://continue.dev/settings/api-keys).
+  To use agents in headless mode, you need a [AI Firewall API key](https://ai-firewall.dev/settings/api-keys).
   Klavis AI Strata requires proper OAuth authentication for each service integration.
 </Warning>
 
 For all options, first:
 <Steps>
-<Step title="Install Continue CLI">
+<Step title="Install AI Firewall CLI">
   <CLIInstall />
   </Step>
 
@@ -44,8 +44,8 @@ For all options, first:
 <Tabs>
   <Tab title="Manual Setup">
     <Steps>
-      <Step title="Create an Agent on Continue Hub">
-        Go to the [Continue Hub](https://continue.dev) and [create a new agent](https://continue.dev/agents/new).
+      <Step title="Create an Agent on AI Firewall Hub">
+        Go to the [AI Firewall Hub](https://ai-firewall.dev) and [create a new agent](https://ai-firewall.dev/agents/new).
       </Step>
 
       <Step title="Add Klavis AI Strata MCP">
@@ -71,7 +71,7 @@ For all options, first:
       </Step>
 
       <Step title="Test the Connection">
-        Launch Continue and ask:
+        Launch AI Firewall and ask:
         ```
         Check my latest 5 emails and summarize them in a Slack message to #general.
         ```
@@ -79,7 +79,7 @@ For all options, first:
     </Steps>
 
     <Info>
-      **Pro tip**: Learn how to integrate and use [Klavis Strata](https://www.klavis.ai/docs/knowledge-base/use-mcp-server/continue) with Continue through CLI and IDE.
+      **Pro tip**: Learn how to integrate and use [Klavis Strata](https://www.klavis.ai/docs/knowledge-base/use-mcp-server/continue) with AI Firewall through CLI and IDE.
     </Info>
 
   </Tab>
@@ -92,14 +92,14 @@ For all options, first:
         ```
       </Step>
 
-      <Step title="Launch Continue with Klavis MCP">
+      <Step title="Launch AI Firewall with Klavis MCP">
         From your project root:
         ```bash
         cn --agent your-agent-name
         ```
         Now try:
         ```
-        "Send a Slack message to #general saying 'Hello from Continue!'"
+        "Send a Slack message to #general saying 'Hello from AI Firewall!'"
         ```
       </Step>
     </Steps>
@@ -107,9 +107,9 @@ For all options, first:
 </Tabs>
 
 <Accordion title="Agent Requirements">
-  To use Klavis AI Strata MCP with Continue CLI, you need either:
-  - **Continue CLI Pro Plan** with the models add-on, OR
-  - **Your own API keys** added to Continue Hub secrets
+  To use Klavis AI Strata MCP with AI Firewall CLI, you need either:
+  - **AI Firewall CLI Pro Plan** with the models add-on, OR
+  - **Your own API keys** added to AI Firewall Hub secrets
 
   The agent will automatically detect and use your configuration along with the Klavis AI Strata MCP for multi-tool operations.
 </Accordion>
@@ -122,7 +122,7 @@ Use natural language to send messages, manage channels, and coordinate team comm
 
 <Info>
   **Where to run these workflows:**
-  - **IDE Extensions**: Use Continue in VS Code, JetBrains, or other supported IDEs
+  - **IDE Extensions**: Use AI Firewall in VS Code, JetBrains, or other supported IDEs
   - **Terminal (TUI mode)**: Run `cn` to enter interactive mode, then type your prompts
   - **CLI (headless mode)**: Use `cn -p "your prompt" --auto` for automation
 
@@ -546,7 +546,7 @@ After completing this guide, you have a complete **AI-powered communication auto
 
 <Card title="Continuous AI" icon="rocket">
   Your communication workflows now operate at **[Level 2 Continuous
-  AI](https://blog.continue.dev/what-is-continuous-ai-a-developers-guide/)** -
+  AI](https://blog.ai-firewall.dev/what-is-continuous-ai-a-developers-guide/)** -
   AI handles routine communications and coordinates multi-platform workflows
   with optional human oversight and approval.
 </Card>
@@ -588,10 +588,10 @@ After completing this guide, you have a complete **AI-powered communication auto
   <Card title="Strata MCP Documentation" icon="book" href="https://www.klavis.ai/docs/concepts/strata">
     Learn about Klavis AI's Strata MCP platform architecture
   </Card>
-  <Card title="MCP in Continue" icon="puzzle-piece" href="/customize/deep-dives/mcp">
-    Learn how MCP works with Continue agents
+  <Card title="MCP in AI Firewall" icon="puzzle-piece" href="/customize/deep-dives/mcp">
+    Learn how MCP works with AI Firewall agents
   </Card>
-  <Card title="Continue Hub" icon="globe" href="https://continue.dev">
-    Create and manage your Continue agents
+  <Card title="AI Firewall Hub" icon="globe" href="https://ai-firewall.dev">
+    Create and manage your AI Firewall agents
   </Card>
 </CardGroup>

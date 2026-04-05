@@ -262,7 +262,7 @@ Every file read in the CLI and core agent tools passes through the proxy's `/api
 3. Proxy scan: `scanFileViaProxy()` calls `POST /api/scan/file` with the file path
 4. Proxy runs full scanner pipeline (secrets, PII, entropy, injection) + policy evaluation
 5. Based on the decision:
-   - **BLOCK** → `ContinueError` thrown, file is **never read**
+   - **BLOCK** → `AIFirewallError` thrown, file is **never read**
    - **REDACT** → proxy's sanitized content returned (secrets replaced with `[REDACTED_TYPE]`)
    - **ALLOW** → file read proceeds normally
 6. **Fail-open** — if the proxy is unreachable (not running), file reads proceed as before

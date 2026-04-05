@@ -48,11 +48,11 @@ node scripts/build-packages.js
 cd core && PUPPETEER_SKIP_DOWNLOAD=true npm install && npm link && cd ..
 
 # 5. Install GUI + build
-cd gui && npm install && npm link @continuedev/core
+cd gui && npm install && npm link @ai-firewall/core
 NODE_OPTIONS="--max-old-space-size=4096" npm run build && cd ..
 
 # 6. Install + package VS Code extension
-cd extensions/vscode && npm install && npm link @continuedev/core
+cd extensions/vscode && npm install && npm link @ai-firewall/core
 npm run package && cd ../..
 
 # 7. Install the extension
@@ -72,54 +72,57 @@ Reload VS Code (`Cmd+Shift+P` > "Developer: Reload Window"). The AI Firewall pan
 ## Features
 
 ### AI Code Agent
-| Feature | Description |
-|---|---|
-| **Chat** | Conversational AI with full tool use (read/write files, terminal, search) |
-| **Tab Autocomplete** | Ghost text inline completions as you type |
-| **Inline Edit** | Modify code in-place without leaving the editor |
-| **Next Edit Prediction** | Predicts your next edit based on context |
-| **Codebase Indexing** | Vector + full-text search over your entire codebase (LanceDB) |
-| **30+ Context Providers** | @file, @diff, @git, @web, @docs, @terminal, @codebase, and more |
-| **26 Built-in Tools** | read_file, edit_file, grep_search, run_terminal_command, create_plan, save_memory, etc. |
-| **60+ LLM Providers** | OpenAI, Anthropic, Gemini, Ollama, Azure, AWS Bedrock, Groq, Mistral, and 50+ more |
-| **MCP Support** | Connect to any Model Context Protocol server (stdio, ws, sse, http) |
-| **Slash Commands** | /commit, /review, /cmd, /share, custom commands |
-| **Config Profiles** | YAML/JSON config with per-project and per-org profiles |
-| **CLI Agent** | Full TUI terminal agent (`cn` command) |
+
+| Feature                   | Description                                                                             |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| **Chat**                  | Conversational AI with full tool use (read/write files, terminal, search)               |
+| **Tab Autocomplete**      | Ghost text inline completions as you type                                               |
+| **Inline Edit**           | Modify code in-place without leaving the editor                                         |
+| **Next Edit Prediction**  | Predicts your next edit based on context                                                |
+| **Codebase Indexing**     | Vector + full-text search over your entire codebase (LanceDB)                           |
+| **30+ Context Providers** | @file, @diff, @git, @web, @docs, @terminal, @codebase, and more                         |
+| **26 Built-in Tools**     | read_file, edit_file, grep_search, run_terminal_command, create_plan, save_memory, etc. |
+| **60+ LLM Providers**     | OpenAI, Anthropic, Gemini, Ollama, Azure, AWS Bedrock, Groq, Mistral, and 50+ more      |
+| **MCP Support**           | Connect to any Model Context Protocol server (stdio, ws, sse, http)                     |
+| **Slash Commands**        | /commit, /review, /cmd, /share, custom commands                                         |
+| **Config Profiles**       | YAML/JSON config with per-project and per-org profiles                                  |
+| **CLI Agent**             | Full TUI terminal agent (`cn` command)                                                  |
 
 ### Security Proxy (Port 8080)
-| Feature | Description |
-|---|---|
-| **Secret Scanning** | 13 pattern types: AWS keys, private keys, JWTs, database URLs, GitHub tokens, etc. |
-| **PII Detection** | 7 types: email, phone, SSN, credit card, IP address, Aadhaar, PAN |
-| **Prompt Injection Detection** | 13 attack patterns with weighted scoring |
-| **Entropy Analysis** | Detects high-entropy strings (likely encoded secrets) |
-| **Policy Engine** | BLOCK / REDACT / ALLOW decisions with configurable severity thresholds |
-| **Risk Scoring** | 0-100 risk score per request |
-| **Redaction** | Replace sensitive values with `[REDACTED_TYPE]` tokens before sending |
-| **File Scope** | Block/allow specific file paths from being sent to AI |
-| **Token Vault** | AES-256-GCM encrypted API key storage |
-| **Multi-Provider Gateway** | Route to OpenAI, Anthropic, Gemini, Ollama with auto format conversion |
-| **Credit/Budget Limits** | Per-provider token/cost/request caps with daily/weekly/monthly reset |
-| **Usage Tracking** | Per-model, per-user token and cost tracking |
-| **Audit Trail** | Every request logged with scan results, risk score, and decision |
-| **Compliance Export** | JSON, CSV, and compliance summary report generation |
+
+| Feature                        | Description                                                                        |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| **Secret Scanning**            | 13 pattern types: AWS keys, private keys, JWTs, database URLs, GitHub tokens, etc. |
+| **PII Detection**              | 7 types: email, phone, SSN, credit card, IP address, Aadhaar, PAN                  |
+| **Prompt Injection Detection** | 13 attack patterns with weighted scoring                                           |
+| **Entropy Analysis**           | Detects high-entropy strings (likely encoded secrets)                              |
+| **Policy Engine**              | BLOCK / REDACT / ALLOW decisions with configurable severity thresholds             |
+| **Risk Scoring**               | 0-100 risk score per request                                                       |
+| **Redaction**                  | Replace sensitive values with `[REDACTED_TYPE]` tokens before sending              |
+| **File Scope**                 | Block/allow specific file paths from being sent to AI                              |
+| **Token Vault**                | AES-256-GCM encrypted API key storage                                              |
+| **Multi-Provider Gateway**     | Route to OpenAI, Anthropic, Gemini, Ollama with auto format conversion             |
+| **Credit/Budget Limits**       | Per-provider token/cost/request caps with daily/weekly/monthly reset               |
+| **Usage Tracking**             | Per-model, per-user token and cost tracking                                        |
+| **Audit Trail**                | Every request logged with scan results, risk score, and decision                   |
+| **Compliance Export**          | JSON, CSV, and compliance summary report generation                                |
 
 ### Enterprise Features
-| Feature | Description |
-|---|---|
-| **Organization Management** | Create orgs, assign users, manage teams |
-| **Role-Based Access** | 4 roles: admin, security_lead, developer, auditor |
-| **SSO/OIDC** | Google, GitHub, Microsoft, generic OIDC authentication |
-| **Webhook Notifications** | Alerts on policy violations, credit exhaustion |
-| **Model Allow/Denylist** | Per-org control over which models developers can use |
-| **Rate Limiting** | Per-user requests/minute and tokens/minute caps |
-| **Scheduled Reports** | Auto-generated weekly security compliance reports |
-| **Team Dashboard** | Org-wide usage, risks, and security score |
-| **Project Instructions** | `.aifirewall.md` file auto-loaded as agent context |
-| **Persistent Memory** | Agent remembers user preferences, project context across sessions |
-| **Hooks System** | Pre/post tool call hooks (auto-format, approval workflows) |
-| **Worktree Isolation** | Run agent experiments in isolated git worktrees |
+
+| Feature                     | Description                                                       |
+| --------------------------- | ----------------------------------------------------------------- |
+| **Organization Management** | Create orgs, assign users, manage teams                           |
+| **Role-Based Access**       | 4 roles: admin, security_lead, developer, auditor                 |
+| **SSO/OIDC**                | Google, GitHub, Microsoft, generic OIDC authentication            |
+| **Webhook Notifications**   | Alerts on policy violations, credit exhaustion                    |
+| **Model Allow/Denylist**    | Per-org control over which models developers can use              |
+| **Rate Limiting**           | Per-user requests/minute and tokens/minute caps                   |
+| **Scheduled Reports**       | Auto-generated weekly security compliance reports                 |
+| **Team Dashboard**          | Org-wide usage, risks, and security score                         |
+| **Project Instructions**    | `.aifirewall.md` file auto-loaded as agent context                |
+| **Persistent Memory**       | Agent remembers user preferences, project context across sessions |
+| **Hooks System**            | Pre/post tool call hooks (auto-format, approval workflows)        |
+| **Worktree Isolation**      | Run agent experiments in isolated git worktrees                   |
 
 ---
 
@@ -198,6 +201,7 @@ Create at your project root. Auto-loaded as system context every session:
 
 ```markdown
 # Project Instructions
+
 - This is a TypeScript monorepo using pnpm workspaces
 - Always run tests before committing
 - Never modify files in migrations/
@@ -220,79 +224,87 @@ Create at your project root. Auto-loaded as system context every session:
 
 ### Environment Variables (Proxy)
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `8080` | Proxy port |
-| `DB_PATH` | `./data/firewall.db` | SQLite database path |
-| `MASTER_KEY` | (required) | Vault encryption key |
-| `STRICT_LOCAL` | `false` | Block all cloud providers |
-| `SSO_PROVIDER` | (none) | `google`, `github`, `microsoft`, or `oidc` |
-| `SSO_CLIENT_ID` | (none) | OAuth client ID |
-| `SSO_CLIENT_SECRET` | (none) | OAuth client secret |
-| `REPORT_INTERVAL_HOURS` | `168` | Weekly compliance reports (0 to disable) |
+| Variable                | Default              | Description                                |
+| ----------------------- | -------------------- | ------------------------------------------ |
+| `PORT`                  | `8080`               | Proxy port                                 |
+| `DB_PATH`               | `./data/firewall.db` | SQLite database path                       |
+| `MASTER_KEY`            | (required)           | Vault encryption key                       |
+| `STRICT_LOCAL`          | `false`              | Block all cloud providers                  |
+| `SSO_PROVIDER`          | (none)               | `google`, `github`, `microsoft`, or `oidc` |
+| `SSO_CLIENT_ID`         | (none)               | OAuth client ID                            |
+| `SSO_CLIENT_SECRET`     | (none)               | OAuth client secret                        |
+| `REPORT_INTERVAL_HOURS` | `168`                | Weekly compliance reports (0 to disable)   |
 
 ---
 
 ## API Reference (Proxy)
 
 ### Core
-| Method | Path | Description |
-|---|---|---|
-| POST | `/v1/chat/completions` | Main AI proxy (scans + routes) |
-| GET | `/health` | Health check |
+
+| Method | Path                   | Description                    |
+| ------ | ---------------------- | ------------------------------ |
+| POST   | `/v1/chat/completions` | Main AI proxy (scans + routes) |
+| GET    | `/health`              | Health check                   |
 
 ### Security Scanning
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/browser-scan` | Scan text from browser extension |
-| POST | `/api/permission-check` | Pre-flight permission check |
-| POST | `/api/estimate` | Cost estimation without sending |
-| POST | `/api/simulate` | Scan directory for leaks |
+
+| Method | Path                    | Description                      |
+| ------ | ----------------------- | -------------------------------- |
+| POST   | `/api/browser-scan`     | Scan text from browser extension |
+| POST   | `/api/permission-check` | Pre-flight permission check      |
+| POST   | `/api/estimate`         | Cost estimation without sending  |
+| POST   | `/api/simulate`         | Scan directory for leaks         |
 
 ### Auth & SSO
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/auth/register` | Create user |
-| POST | `/api/auth/login` | Authenticate |
-| GET | `/api/auth/sso/login` | SSO redirect |
-| GET | `/api/auth/sso/callback` | SSO callback |
+
+| Method | Path                     | Description  |
+| ------ | ------------------------ | ------------ |
+| POST   | `/api/auth/register`     | Create user  |
+| POST   | `/api/auth/login`        | Authenticate |
+| GET    | `/api/auth/sso/login`    | SSO redirect |
+| GET    | `/api/auth/sso/callback` | SSO callback |
 
 ### Organization & Users
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/orgs` | Create organization |
-| GET | `/api/admin/users` | List all users |
-| PUT | `/api/admin/users/:id/role` | Change user role |
+
+| Method | Path                        | Description         |
+| ------ | --------------------------- | ------------------- |
+| POST   | `/api/orgs`                 | Create organization |
+| GET    | `/api/admin/users`          | List all users      |
+| PUT    | `/api/admin/users/:id/role` | Change user role    |
 
 ### Providers & Models
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/providers` | Register AI provider |
-| GET | `/api/providers` | List providers |
-| POST | `/api/providers/:id/models` | Add model to provider |
+
+| Method | Path                        | Description           |
+| ------ | --------------------------- | --------------------- |
+| POST   | `/api/providers`            | Register AI provider  |
+| GET    | `/api/providers`            | List providers        |
+| POST   | `/api/providers/:id/models` | Add model to provider |
 
 ### Credits & Usage
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/credits` | Set credit limit |
-| GET | `/api/credits/status/:providerId` | Check usage vs limit |
-| GET | `/api/usage/summary` | Aggregated usage stats |
+
+| Method | Path                              | Description            |
+| ------ | --------------------------------- | ---------------------- |
+| POST   | `/api/credits`                    | Set credit limit       |
+| GET    | `/api/credits/status/:providerId` | Check usage vs limit   |
+| GET    | `/api/usage/summary`              | Aggregated usage stats |
 
 ### Audit & Compliance
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/logs` | Paginated audit logs |
-| GET | `/api/stats` | Dashboard statistics |
-| GET | `/api/export/json` | Export logs as JSON |
-| GET | `/api/export/csv` | Export logs as CSV |
-| GET | `/api/export/compliance` | Compliance summary report |
+
+| Method | Path                     | Description               |
+| ------ | ------------------------ | ------------------------- |
+| GET    | `/api/logs`              | Paginated audit logs      |
+| GET    | `/api/stats`             | Dashboard statistics      |
+| GET    | `/api/export/json`       | Export logs as JSON       |
+| GET    | `/api/export/csv`        | Export logs as CSV        |
+| GET    | `/api/export/compliance` | Compliance summary report |
 
 ### Policy & Webhooks
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/policy` | Get current policy |
-| PUT | `/api/policy` | Update policy |
-| POST | `/api/webhooks` | Register webhook |
+
+| Method | Path            | Description        |
+| ------ | --------------- | ------------------ |
+| GET    | `/api/policy`   | Get current policy |
+| PUT    | `/api/policy`   | Update policy      |
+| POST   | `/api/webhooks` | Register webhook   |
 
 ---
 
@@ -300,15 +312,15 @@ Create at your project root. Auto-loaded as system context every session:
 
 Every proxied request includes these headers:
 
-| Header | Example | Description |
-|---|---|---|
-| `X-AF-Action` | `ALLOW` | BLOCK, REDACT, or ALLOW |
-| `X-AF-Risk-Score` | `45` | 0-100 risk score |
-| `X-AF-Secrets-Count` | `2` | Secrets detected |
-| `X-AF-PII-Count` | `1` | PII items detected |
+| Header                | Example         | Description              |
+| --------------------- | --------------- | ------------------------ |
+| `X-AF-Action`         | `ALLOW`         | BLOCK, REDACT, or ALLOW  |
+| `X-AF-Risk-Score`     | `45`            | 0-100 risk score         |
+| `X-AF-Secrets-Count`  | `2`             | Secrets detected         |
+| `X-AF-PII-Count`      | `1`             | PII items detected       |
 | `X-AF-Redacted-Types` | `EMAIL,API_KEY` | Types that were redacted |
-| `X-AF-Tokens-Used` | `1250` | Tokens consumed |
-| `X-AF-Cost` | `0.003` | Estimated cost (USD) |
+| `X-AF-Tokens-Used`    | `1250`          | Tokens consumed          |
+| `X-AF-Cost`           | `0.003`         | Estimated cost (USD)     |
 
 ---
 

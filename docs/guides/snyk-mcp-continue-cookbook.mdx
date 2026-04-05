@@ -1,7 +1,7 @@
 ---
-title: "Automated Security Scanning with Snyk MCP and Continue"
+title: "Automated Security Scanning with Snyk MCP and AI Firewall"
 description: "Set up an AI-powered security workflow that automatically scans your code, dependencies, infrastructure, and containers using natural language commands."
-sidebarTitle: "Snyk Security Scanning with Continue"
+sidebarTitle: "Snyk Security Scanning with AI Firewall"
 ---
 
 import { OSAutoDetect } from '/snippets/OSAutoDetect.jsx'
@@ -28,7 +28,7 @@ import CLIInstall from '/snippets/cli-install.mdx'
 </Note>
 
 <Card title="What You'll Build" icon="shield-halved">
-  An automated security scanning system that uses Continue's AI agent with Snyk
+  An automated security scanning system that uses AI Firewall's AI agent with Snyk
   MCP to identify vulnerabilities in code, dependencies, infrastructure, and
   containers - all through simple natural language prompts
 </Card>
@@ -39,7 +39,7 @@ import CLIInstall from '/snippets/cli-install.mdx'
   width="100%"
   height="400"
   src="https://www.youtube.com/embed/cwVnKOf3tVg"
-  title="Snyk MCP Continue Cookbook Demo"
+  title="Snyk MCP AI Firewall Cookbook Demo"
   frameborder="0"
   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
   allowfullscreen
@@ -49,7 +49,7 @@ import CLIInstall from '/snippets/cli-install.mdx'
 
 Before starting, ensure you have:
 
-- Continue account with **Hub access**
+- AI Firewall account with **Hub access**
 - Read: [Understanding Configs — How to get started with Hub configs](/guides/understanding-configs#how-to-get-started-with-hub-configs)
 - Node.js 18+ installed locally
 - [Snyk account](https://snyk.io/) (free tier works)
@@ -57,7 +57,7 @@ Before starting, ensure you have:
 
 For all options, first:
 <Steps>
-<Step title="Install Continue CLI">
+<Step title="Install AI Firewall CLI">
     <CLIInstall />
   </Step>
 
@@ -76,10 +76,10 @@ For all options, first:
 </Steps>
 
 <Note>
-  **Important**: The Snyk MCP requires the Snyk CLI to be authenticated locally. Run `snyk auth` to authenticate before using the Continue agent with Snyk MCP.
+  **Important**: The Snyk MCP requires the Snyk CLI to be authenticated locally. Run `snyk auth` to authenticate before using the AI Firewall agent with Snyk MCP.
 </Note>
  <Warning>
-  To use agents in headless mode, you need a [Continue API key](https://continue.dev/settings/api-keys).
+  To use agents in headless mode, you need a [AI Firewall API key](https://ai-firewall.dev/settings/api-keys).
   </Warning>
 
 ## Snyk Continuous AI Workflow Options
@@ -98,7 +98,7 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
       <Step title="Load the Pre-Built Agent">
         Navigate to your project directory and run:
         ```bash
-        cn --agent continuedev/snyk-continuous-ai-agent
+        cn --agent ai-firewall/snyk-continuous-ai-agent
         ```
 
         This agent includes:
@@ -125,12 +125,12 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
 
   <Tab title="🛠️ Manual Setup">
 <Steps>
-  <Step title="Create a New Agent via the Continue Mission Control">
-    Go to the [Continue Mission Control](https://continue.dev) and [create a new agent](https://continue.dev/agents/new).
+  <Step title="Create a New Agent via the AI Firewall Mission Control">
+    Go to the [AI Firewall Mission Control](https://ai-firewall.dev) and [create a new agent](https://ai-firewall.dev/agents/new).
     </Step>
 
-  <Step title="Connect Snyk MCP via Continue Mission Control">
-    Visit the [Snyk Continuous AI Agent](https://continue.dev/continuedev/snyk-continuous-ai-agent) and click **Install** to add it to the agent you created in the step above.
+  <Step title="Connect Snyk MCP via AI Firewall Mission Control">
+    Visit the [Snyk Continuous AI Agent](https://ai-firewall.dev/ai-firewall/snyk-continuous-ai-agent) and click **Install** to add it to the agent you created in the step above.
 
     This will add Snyk MCP to your agent's available tools. The Mission Control listing automatically configures the MCP command:
     ```bash
@@ -140,25 +140,25 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
     <Tip>
       **Alternative installation methods:**
       1. **Quick CLI install**: `cn --mcp snyk/snyk-mcp`
-      2. **Manual configuration**: Add the MCP to your `~/.continue/config.json` under the `mcpServers` section
+      2. **Manual configuration**: Add the MCP to your `~/.ai-firewall/config.json` under the `mcpServers` section
 
-      Once installed, Snyk MCP tools become available to your Continue agent for all prompts.
+      Once installed, Snyk MCP tools become available to your AI Firewall agent for all prompts.
     </Tip>
 
     <Info>
       The MCP will request authentication and folder trust permissions when first used.
-      This is handled automatically by the Continue agent.
+      This is handled automatically by the AI Firewall agent.
     </Info>
 
   </Step>
 
   <Step title="Add Secure-at-Inception Rules">
-    Install the [Snyk Secure-at-Inception rules](https://continue.dev/snyk/secure-at-inception) from Mission Control to enable automatic security scanning.
+    Install the [Snyk Secure-at-Inception rules](https://ai-firewall.dev/snyk/secure-at-inception) from Mission Control to enable automatic security scanning.
 
     **How to add rules to your agent:**
     1. Visit the rules link above and click **Install**
     2. The rules will be added to your agent configuration automatically
-    3. Rules apply globally to all your Continue sessions
+    3. Rules apply globally to all your AI Firewall sessions
 
     These rules configure your agent to:
     - **Run [SAST](https://snyk.io/learn/application-security/sast/) scans** on newly generated or modified code
@@ -181,8 +181,8 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
 
 <Accordion title="Agent Requirements">
     To use the pre-built agent, you need either: 
-      - **Continue CLI Pro Plan** with the models add-on, OR 
-      - **Your own API keys** added to Continue Mission Control secrets (same as manual setup)
+      - **AI Firewall CLI Pro Plan** with the models add-on, OR 
+      - **Your own API keys** added to AI Firewall Mission Control secrets (same as manual setup)
       
     The agent will automatically detect and use your configuration along with the pre-configured Snyk MCP for security scanning operations.
 
@@ -192,15 +192,15 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
 
 ## Security Scanning Recipes
 
-Now you can use natural language prompts to run comprehensive security scans. The Continue agent automatically calls the appropriate Snyk MCP tools.
+Now you can use natural language prompts to run comprehensive security scans. The AI Firewall agent automatically calls the appropriate Snyk MCP tools.
 
 <Info>
-You can add prompts to your agent's configuration for easy access in future sessions. Go to your agent in the [Continue Mission Control](https://continue.dev), click **Edit**, and add prompts under the **Prompts** section.
+You can add prompts to your agent's configuration for easy access in future sessions. Go to your agent in the [AI Firewall Mission Control](https://ai-firewall.dev), click **Edit**, and add prompts under the **Prompts** section.
 </Info>
 
 <Info>
   **Where to run these workflows:**
-  - **IDE Extensions**: Use Continue in VS Code, JetBrains, or other supported IDEs
+  - **IDE Extensions**: Use AI Firewall in VS Code, JetBrains, or other supported IDEs
   - **Terminal (TUI mode)**: Run `cn` to enter interactive mode, then type your prompts
   - **CLI (headless mode)**: Use `cn -p "your prompt" --auto` for headless commands
 
@@ -335,7 +335,7 @@ This example demonstrates a **Continuous AI workflow** where security scanning r
 
 Navigate to **Repository Settings → Secrets and variables → Actions** and add:
 
-- `CONTINUE_API_KEY`: Your Continue API key from [continue.dev/settings/api-keys](https://continue.dev/settings/api-keys)
+- `CONTINUE_API_KEY`: Your AI Firewall API key from [ai-firewall.dev/settings/api-keys](https://ai-firewall.dev/settings/api-keys)
 - `SNYK_TOKEN`: Your Snyk authentication token from [app.snyk.io/account](https://app.snyk.io/account)
 
 ### Create Workflow File
@@ -376,10 +376,10 @@ jobs:
           npm install -g snyk
           echo "✅ Snyk CLI installed"
 
-      - name: Install Continue CLI
+      - name: Install AI Firewall CLI
         run: |
-          npm install -g @continuedev/cli
-          echo "✅ Continue CLI installed"
+          npm install -g @ai-firewall/cli
+          echo "✅ AI Firewall CLI installed"
 
       - name: Validate Secrets
         run: |
@@ -456,7 +456,7 @@ jobs:
         run: |
           echo "🤖 Generating AI-powered mitigation suggestions..."
 
-          # Create a summary of findings for Continue CLI
+          # Create a summary of findings for AI Firewall CLI
           FINDINGS_SUMMARY=$(cat snyk-code-results.json snyk-oss-results.json | jq -r '
             if .runs then
               .runs[0].results[] | "Code Issue: \(.message.text) in \(.locations[0].physicalLocation.artifactLocation.uri) (Severity: \(.level))"
@@ -472,10 +472,10 @@ jobs:
             echo "$FINDINGS_SUMMARY"
             echo ""
 
-            # Use Continue CLI to generate mitigation suggestions
+            # Use AI Firewall CLI to generate mitigation suggestions
             PROMPT="Analyze these Snyk security findings and provide specific, actionable mitigation steps for each issue. Focus on: 1) Root cause, 2) Immediate fix, 3) Long-term prevention. Findings: $FINDINGS_SUMMARY. Provide clear, prioritized recommendations."
 
-            cn --agent continuedev/snyk-continuous-ai-agent -p "$PROMPT" --auto > mitigation-suggestions.md || {
+            cn --agent ai-firewall/snyk-continuous-ai-agent -p "$PROMPT" --auto > mitigation-suggestions.md || {
               echo "⚠️ Warning: Could not generate AI suggestions"
               exit 0
             }
@@ -515,7 +515,7 @@ jobs:
           **Scan Details:**
           - 📊 Full report available in workflow artifacts
           - 🔍 Review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for complete details
-          - 🤖 Generated with Continue CLI + Snyk
+          - 🤖 Generated with AI Firewall CLI + Snyk
 
           _This is an automated security analysis. Please review and address the findings before merging._
           EOF
@@ -597,7 +597,7 @@ jobs:
 <Info>
   **About SNYK_TOKEN**: The workflow uses the SNYK_TOKEN in two ways:
   1. **Direct Snyk CLI authentication** - Authenticates the Snyk CLI for running scans
-  2. **Continue CLI access** - Available as an environment variable when Continue generates AI mitigation suggestions
+  2. **AI Firewall CLI access** - Available as an environment variable when Continue generates AI mitigation suggestions
 
   The `cn` agent automatically uses the SNYK_TOKEN when needed for Snyk MCP operations.
 </Info>
@@ -605,17 +605,17 @@ jobs:
 <Info>
   This workflow demonstrates several advanced features:
   - **Changed Files Detection**: Only scans files modified in the PR
-  - **AI Mitigation**: Uses Continue CLI to generate actionable mitigation steps
+  - **AI Mitigation**: Uses AI Firewall CLI to generate actionable mitigation steps
   - **PR Comments**: Automatically posts mitigation suggestions as PR comments
   - **Comprehensive Reporting**: Generates detailed security reports with artifacts
 </Info>
 
 ## Security Guardrails
 
-Implement automated security policies using Continue's rule system. See the [Rules deep dive](/customize/deep-dives/rules) for authoring tips.
+Implement automated security policies using AI Firewall's rule system. See the [Rules deep dive](/customize/deep-dives/rules) for authoring tips.
 
 <Note>
-  **Coming Soon**: These security guardrail prompts will be available as pre-configured rules on the Continue Mission Control for easy installation.
+  **Coming Soon**: These security guardrail prompts will be available as pre-configured rules on the AI Firewall Mission Control for easy installation.
 </Note>
 
 <Card title="Pre-commit Scanning" icon="lock">
@@ -672,9 +672,9 @@ then rerun the same Snyk scan to confirm resolution."
 ### Connection Problems
 
 <Check>
-  **Verification Steps:** - Snyk MCP is installed via [Continue
-  Hub](https://continue.dev/snyk/snyk-mcp) - Secure-at-Inception rules are
-  [enabled](https://continue.dev/snyk/secure-at-inception) - Authentication
+  **Verification Steps:** - Snyk MCP is installed via [AI Firewall
+  Hub](https://ai-firewall.dev/snyk/snyk-mcp) - Secure-at-Inception rules are
+  [enabled](https://ai-firewall.dev/snyk/secure-at-inception) - Authentication
   completed successfully - Project folder has been trusted
 </Check>
 
@@ -689,7 +689,7 @@ After completing this guide, you have a complete **AI-powered security system** 
 
 <Card title="Continuous AI" icon="rocket">
   Your security workflow now operates at **[Level 2 Continuous
-  AI](https://blog.continue.dev/what-is-continuous-ai-a-developers-guide/)** -
+  AI](https://blog.ai-firewall.dev/what-is-continuous-ai-a-developers-guide/)** -
   AI handles routine security scanning and remediation with human oversight
   through review and approval of fixes.
 </Card>
@@ -708,7 +708,7 @@ After completing this guide, you have a complete **AI-powered security system** 
   <Card title="Snyk Documentation" icon="book" href="https://docs.snyk.io">
     Complete Snyk platform documentation
   </Card>
-  <Card title="Continue Mission Control" icon="plug" href="https://continue.dev">
+  <Card title="AI Firewall Mission Control" icon="plug" href="https://ai-firewall.dev">
     Explore more MCP integrations and agents
   </Card>
   <Card

@@ -133,11 +133,7 @@ const isFileInDirectory = (
  * Checks if a rule is a root-level rule (.continue directory or no file path)
  */
 const isRootLevelRule = (rule: RuleWithSource): boolean => {
-  return (
-    !rule.sourceFile ||
-    rule.sourceFile.includes(".ai-firewall/") ||
-    rule.sourceFile.includes(".continue/")
-  );
+  return !rule.sourceFile || rule.sourceFile.includes(".ai-firewall/");
 };
 
 /**

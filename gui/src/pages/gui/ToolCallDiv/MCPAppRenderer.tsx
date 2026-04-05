@@ -295,7 +295,10 @@ export function McpAppRenderer({
         });
       }
     } catch (err) {
-      console.error("[Continue] Failed to connect bridge to MCP App UI:", err);
+      console.error(
+        "[AI Firewall] Failed to connect bridge to MCP App UI:",
+        err,
+      );
       setError(err instanceof Error ? err : new Error(String(err)));
     }
   }, [html, csp, permissions]);
@@ -394,7 +397,7 @@ ${html}
 
       {hasRestrictedPermissions && !permissionWarningDismissed && (
         <div
-          className={`absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/85 p-5 ${
+          className={`bg-background/85 absolute inset-0 z-10 flex flex-col items-center justify-center p-5 ${
             prefersBorder ? "rounded" : ""
           }`}
         >

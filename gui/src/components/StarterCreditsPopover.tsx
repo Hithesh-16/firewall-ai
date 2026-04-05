@@ -30,7 +30,7 @@ function ProgressBar({ label, current, total }: ProgressBarProps) {
           ${(current / 100).toFixed(2)} / ${(total / 100).toFixed(2)}
         </span>
       </div>
-      <div className="h-2 w-full rounded-full bg-secondary">
+      <div className="bg-secondary h-2 w-full rounded-full">
         <div
           className="h-2 rounded-full transition-all duration-300"
           style={{
@@ -151,7 +151,7 @@ export default function StarterCreditsPopover({
 
             <div className="mb-4">
               <span className="text-description">
-                You are currently using starter credits for Continue, which
+                You are currently using starter credits for AI Firewall, which
                 allows you to use a variety of frontier models at cost. Read
                 more{" "}
                 <span
@@ -162,7 +162,7 @@ export default function StarterCreditsPopover({
                     });
                     ``;
                   }}
-                  className="cursor-pointer text-info underline hover:text-info"
+                  className="text-info hover:text-info cursor-pointer underline"
                 >
                   here
                 </span>

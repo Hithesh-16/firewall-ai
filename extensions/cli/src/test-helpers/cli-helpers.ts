@@ -84,7 +84,7 @@ export async function runCLI(
     cwd: context.testDir,
     env: {
       ...process.env,
-      CONTINUE_CLI_TEST: "true",
+      AI_FIREWALL_CLI_TEST: "true",
       HOME: context.testDir,
       // Windows-specific home directory variables
       USERPROFILE: context.testDir,
@@ -251,7 +251,7 @@ export async function withInteractiveInput(
     cwd: context.testDir,
     env: {
       ...process.env,
-      CONTINUE_CLI_TEST: "true",
+      AI_FIREWALL_CLI_TEST: "true",
       HOME: context.testDir,
       // Windows-specific home directory variables
       USERPROFILE: context.testDir,

@@ -33,7 +33,7 @@ export class RecentlyVisitedRangesService {
   }
 
   private async initWithPostHog() {
-    // TODO merge this and re-enable https://github.com/continuedev/continue/pull/8364
+    // TODO merge this and re-enable https://github.com/ai-firewall/ai-firewall/pull/8364
     // const recentlyVisitedRangesNumSurroundingLines =
     //   await Telemetry.getValueForFeatureFlag(
     //     PosthogFeatureFlag.RecentlyVisitedRangesNumSurroundingLines,

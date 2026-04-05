@@ -5,8 +5,8 @@ import * as vscode from "vscode";
 import { Battery } from "../util/battery";
 import { getMetaKeyLabel } from "../util/util";
 import {
-  CONTINUE_WORKSPACE_KEY,
-  getContinueWorkspaceConfig,
+  AI_FIREWALL_WORKSPACE_KEY,
+  getAiFirewallWorkspaceConfig,
 } from "../util/workspaceConfig";
 
 export enum StatusBarStatus {
@@ -154,8 +154,8 @@ export function setupStatusBar(
   }
 
   vscode.workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration(CONTINUE_WORKSPACE_KEY)) {
-      const enabled = getContinueWorkspaceConfig().get<boolean>(
+    if (event.affectsConfiguration(AI_FIREWALL_WORKSPACE_KEY)) {
+      const enabled = getAiFirewallWorkspaceConfig().get<boolean>(
         "enableTabAutocomplete",
       );
       if (enabled && statusBarStatus === StatusBarStatus.Paused) {
@@ -296,8 +296,7 @@ export function updateStatusBarAfterScan(meta: {
     meta.tokensUsed !== undefined
       ? ` | ${(meta.tokensUsed / 1000).toFixed(1)}k tok`
       : "";
-  const costStr =
-    meta.cost !== undefined ? ` | $${meta.cost.toFixed(4)}` : "";
+  const costStr = meta.cost !== undefined ? ` | $${meta.cost.toFixed(4)}` : "";
 
   statusBarItem.text = `$(shield)${modelStr}${tokenStr}${costStr}`;
 
@@ -340,7 +339,9 @@ function showScanNotification(meta: {
 
   const findings: string[] = [];
   if (meta.secretsCount && meta.secretsCount > 0) {
-    findings.push(`${meta.secretsCount} secret${meta.secretsCount > 1 ? "s" : ""}`);
+    findings.push(
+      `${meta.secretsCount} secret${meta.secretsCount > 1 ? "s" : ""}`,
+    );
   }
   if (meta.piiCount && meta.piiCount > 0) {
     findings.push(`${meta.piiCount} PII item${meta.piiCount > 1 ? "s" : ""}`);
@@ -349,7 +350,8 @@ function showScanNotification(meta: {
     findings.push(meta.redactedTypes.join(", "));
   }
 
-  const riskStr = meta.riskScore !== undefined ? ` (Risk: ${meta.riskScore}/100)` : "";
+  const riskStr =
+    meta.riskScore !== undefined ? ` (Risk: ${meta.riskScore}/100)` : "";
   const detailStr = findings.length > 0 ? `: ${findings.join(" · ")}` : "";
 
   if (meta.action === "BLOCK") {

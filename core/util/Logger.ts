@@ -15,7 +15,7 @@ class LoggerClass {
           const metaStr = Object.keys(meta).length
             ? ` ${JSON.stringify(meta)}`
             : "";
-          return `[@continuedev] ${level}: ${message}${metaStr}`;
+          return `[@ai-firewall] ${level}: ${message}${metaStr}`;
         }),
       ),
       transports: [

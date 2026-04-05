@@ -14,7 +14,7 @@ function logDomText() {
     "",
   );
   cleaned = cleaned?.replace(
-    /[⌘Ctrl]+⏎ (?:No )?[Aa]ctive file⏎ Enter⏎Log in to access a free trial of theModels Add-OnLog in to Continue HubOr, configure your own models/,
+    /[⌘Ctrl]+⏎ (?:No )?[Aa]ctive file⏎ Enter⏎Log in to access a free trial of theModels Add-OnLog in to AI Firewall HubOr, configure your own models/,
     "",
   );
   cleaned = cleaned.replaceAll("Select model", "");

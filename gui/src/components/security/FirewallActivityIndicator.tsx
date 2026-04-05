@@ -4,7 +4,7 @@
  * Shows real-time firewall pipeline activity in the chat.
  * Displays a timeline of steps: scanning, policy check, token counting, etc.
  *
- * Follows Continue's existing ToolCallStatusMessage pattern (icon + text + spinner).
+ * Follows AI Firewall's existing ToolCallStatusMessage pattern (icon + text + spinner).
  */
 
 import { useAppSelector } from "../../redux/hooks";
@@ -35,7 +35,7 @@ function ActivityStep({
     >
       {/* Spinner for current step, icon for completed */}
       {isCurrent && activity.step !== "complete" ? (
-        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-info border-t-transparent" />
+        <span className="border-info inline-block h-3 w-3 animate-spin rounded-full border-2 border-t-transparent" />
       ) : (
         <span className="inline-block w-3 text-center text-[10px] leading-3">
           {label.icon}
@@ -58,7 +58,7 @@ function ElapsedBadge({ startedAt }: { startedAt: number }) {
   if (elapsed < 500) return null; // Don't show for very fast steps
 
   return (
-    <span className="text-[10px] text-description-muted">
+    <span className="text-description-muted text-[10px]">
       {elapsed < 1000 ? `${elapsed}ms` : `${(elapsed / 1000).toFixed(1)}s`}
     </span>
   );
@@ -76,7 +76,7 @@ export function FirewallActivityIndicator() {
   const visibleSteps = activityLog.slice(-5);
 
   return (
-    <div className="mx-3 mb-2 animate-in fade-in slide-in-from-top-1 duration-200">
+    <div className="animate-in fade-in slide-in-from-top-1 mx-3 mb-2 duration-200">
       <div className="flex flex-col gap-0">
         {visibleSteps.map((step, idx) => (
           <ActivityStep

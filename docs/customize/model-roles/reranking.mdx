@@ -7,7 +7,7 @@ sidebar_position: 6
 
 A "reranking model" is trained to take two pieces of text (often a user question and a document) and return a relevancy score between 0 and 1, estimating how useful the document will be in answering the question. Rerankers are typically much smaller than LLMs, and will be extremely fast and cheap in comparison.
 
-In Continue, rerankers are designated using the `rerank` role and used by [codebase awareness](/guides/codebase-documentation-awareness) in order to select the most relevant code snippets after vector search.
+In AI Firewall, rerankers are designated using the `rerank` role and used by [codebase awareness](/guides/codebase-documentation-awareness) in order to select the most relevant code snippets after vector search.
 
 ## Recommended reranking models
 
@@ -56,7 +56,7 @@ See Cohere's documentation for rerankers [here](https://docs.cohere.com/docs/rer
 <Tabs>
   {/* HUB_TODO block doesn't exist */}
   {/* <Tab title="Hub">
-  [Cohere Reranker English v3](https://continue.dev/)
+  [Cohere Reranker English v3](https://ai-firewall.dev/)
   </Tab> */}
   <Tab title="YAML">
   ```yaml title="config.yaml"
@@ -82,7 +82,7 @@ If you only have access to a single LLM, then you can use it as a reranker. This
 <Tabs>
   {/* HUB_TODO block doesn't exist */}
   {/* <Tab title="Hub">
-  [GPT-4o LLM Reranker Block](https://continue.dev/)
+  [GPT-4o LLM Reranker Block](https://ai-firewall.dev/)
   </Tab> */}
   <Tab title="YAML">
   ```yaml title="config.yaml"
@@ -109,7 +109,7 @@ If you only have access to a single LLM, then you can use it as a reranker. This
 <Tabs>
   {/* HUB_TODO */}
   {/* <Tab title="Hub">
-  [HuggingFace TEI Reranker block](https://continue.dev/)
+  [HuggingFace TEI Reranker block](https://ai-firewall.dev/)
   </Tab> */}
     <Tab title="YAML">
     ```yaml title="config.yaml"

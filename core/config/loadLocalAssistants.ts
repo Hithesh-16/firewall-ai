@@ -13,7 +13,7 @@ import { localPathToUri } from "../util/pathToUri";
 import { getUriPathBasename, joinPathsToUri } from "../util/uri";
 import { SYSTEM_PROMPT_DOT_FILE } from "./getWorkspaceContinueRuleDotFiles";
 import { SUPPORTED_AGENT_FILES } from "./markdown";
-export function isContinueConfigRelatedUri(uri: string): boolean {
+export function isFirewallConfigRelatedUri(uri: string): boolean {
   return (
     uri.endsWith(".ai-firewallrc.json") ||
     uri.endsWith(".prompt") ||
@@ -23,15 +23,13 @@ export function isContinueConfigRelatedUri(uri: string): boolean {
       (uri.endsWith(".yaml") ||
         uri.endsWith(".yml") ||
         uri.endsWith(".json"))) ||
-    [...BLOCK_TYPES, "agents", "assistants"].some(
-      (blockType) =>
-        uri.includes(`.ai-firewall/${blockType}`) ||
-        uri.includes(`.continue/${blockType}`),
+    [...BLOCK_TYPES, "agents", "assistants"].some((blockType) =>
+      uri.includes(`.ai-firewall/${blockType}`),
     )
   );
 }
 
-export function isContinueAgentConfigFile(uri: string): boolean {
+export function isFirewallAgentConfigFile(uri: string): boolean {
   const isYaml = uri.endsWith(".yaml") || uri.endsWith(".yml");
   if (!isYaml) {
     return false;

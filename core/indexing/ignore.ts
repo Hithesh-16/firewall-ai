@@ -159,7 +159,6 @@ export const ADDITIONAL_INDEXING_IGNORE_FILETYPES = [
   // "*.prompt", // can be incredibly confusing for the LLM to have another set of instructions injected into the prompt
   // Application specific
   ".ai-firewall/",
-  ".continue/",
 ];
 
 export const ADDITIONAL_INDEXING_IGNORE_DIRS = [

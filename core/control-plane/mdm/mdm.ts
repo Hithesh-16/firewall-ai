@@ -8,7 +8,7 @@ export interface MdmKeys {
   licenseKey: string;
 }
 
-const CONTINUE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+const AI_FIREWALL_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz1pFVzsW2UScSnaPAwFp
 93QU4+txtyJj8AOC3Kx7YkX1d48DGU2Fy1he7SXPHgcuhXYIqfWGn/Vy/4yJxXD7
 HlU8RM7LlWHRk7ecAvF4WtxZDjPE0OSG5T69w5f7tMCtQPQseInCKqleJuCjxrvA
@@ -48,7 +48,7 @@ export function validateLicenseKey(licenseKey: string): {
     verify.update(data);
     verify.end();
 
-    const isValid = verify.verify(CONTINUE_PUBLIC_KEY, signature, "base64");
+    const isValid = verify.verify(AI_FIREWALL_PUBLIC_KEY, signature, "base64");
 
     if (!isValid) return { isValid: false };
 
@@ -77,9 +77,12 @@ export function validateLicenseKey(licenseKey: string): {
 
 const MACOS_MDM_PATHS = [
   // Organization-specific MDM plist
-  "/Library/Managed Preferences/dev.continue.app.plist",
+  "/Library/Managed Preferences/dev.ai-firewall.app.plist",
   // User-specific MDM plist
-  path.join(os.homedir(), "Library/Managed Preferences/dev.continue.app.plist"),
+  path.join(
+    os.homedir(),
+    "Library/Managed Preferences/dev.ai-firewall.app.plist",
+  ),
 ];
 
 function readMdmKeysMacOS(): MdmKeys | undefined {
@@ -125,8 +128,8 @@ function readMdmKeysWindows(): MdmKeys | undefined {
     const { execSync } = require("child_process");
 
     // Path to the registry where MDM configuration is stored
-    const regPath = "HKLM\\Software\\Continue\\MDM";
-    const userRegPath = "HKCU\\Software\\Continue\\MDM";
+    const regPath = "HKLM\\Software\\AIFirewall\\MDM";
+    const userRegPath = "HKCU\\Software\\AIFirewall\\MDM";
 
     // Try to read from HKEY_LOCAL_MACHINE first
     try {
@@ -177,10 +180,10 @@ function extractRegValue(output: string): string | undefined {
 // Common locations for MDM configurations in Linux systems
 const LINUX_MDM_PATHS = [
   // System-wide configuration
-  "/etc/continue/mdm.json",
-  "/var/lib/continue/mdm.json",
+  "/etc/ai-firewall/mdm.json",
+  "/var/lib/ai-firewall/mdm.json",
   // User-specific configuration
-  path.join(os.homedir(), ".config/continue/mdm.json"),
+  path.join(os.homedir(), ".config/ai-firewall/mdm.json"),
 ];
 
 function readMdmKeysLinux(): MdmKeys | undefined {
@@ -264,7 +267,7 @@ function writeMdmKeysMacOS(licenseKey: string): boolean {
     // Write to user-specific MDM plist
     const userMdmPath = path.join(
       os.homedir(),
-      "Library/Managed Preferences/dev.continue.app.plist",
+      "Library/Managed Preferences/dev.ai-firewall.app.plist",
     );
 
     const config = {
@@ -290,7 +293,7 @@ function writeMdmKeysWindows(licenseKey: string): boolean {
     const { execSync } = require("child_process");
 
     // Use HKEY_CURRENT_USER to avoid needing admin privileges
-    const userRegPath = "HKCU\\Software\\Continue\\MDM";
+    const userRegPath = "HKCU\\Software\\AIFirewall\\MDM";
 
     // Create the registry key if it doesn't exist
     try {
@@ -314,7 +317,7 @@ function writeMdmKeysWindows(licenseKey: string): boolean {
 function writeMdmKeysLinux(licenseKey: string): boolean {
   try {
     // Write to user-specific configuration
-    const userMdmPath = path.join(os.homedir(), ".config/continue/mdm.json");
+    const userMdmPath = path.join(os.homedir(), ".config/ai-firewall/mdm.json");
 
     const config = {
       licenseKey,

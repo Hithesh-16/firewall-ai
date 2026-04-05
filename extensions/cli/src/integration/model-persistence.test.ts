@@ -140,14 +140,14 @@ describe("Model Persistence Integration", () => {
     expect(getModelName(loadedConfig)).toBeNull();
   });
 
-  test("should not persist model name when using CONTINUE_API_KEY", () => {
+  test("should not persist model name when using AI_FIREWALL_API_KEY", () => {
     // Clear GlobalContext first
     persistModelName(null);
 
     // Capture original value to restore after test
-    const originalApiKey = process.env.CONTINUE_API_KEY;
+    const originalApiKey = process.env.AI_FIREWALL_API_KEY;
     // Set environment variable
-    process.env.CONTINUE_API_KEY = "test-api-key";
+    process.env.AI_FIREWALL_API_KEY = "test-api-key";
 
     // Try to update model name
     updateModelName("Claude 3.5 Sonnet");
@@ -158,9 +158,9 @@ describe("Model Persistence Integration", () => {
 
     // Restore original value
     if (originalApiKey === undefined) {
-      delete process.env.CONTINUE_API_KEY;
+      delete process.env.AI_FIREWALL_API_KEY;
     } else {
-      process.env.CONTINUE_API_KEY = originalApiKey;
+      process.env.AI_FIREWALL_API_KEY = originalApiKey;
     }
   });
 

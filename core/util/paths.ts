@@ -120,7 +120,7 @@ export function getConfigYamlPath(ideType?: IdeType): string {
   const p = path.join(getAiFirewallGlobalPath(), "config.yaml");
   if (!fs.existsSync(p) && !fs.existsSync(getConfigJsonPath())) {
     if (ideType === "jetbrains") {
-      // https://github.com/continuedev/continue/pull/7224
+      // https://github.com/ai-firewall/ai-firewall/pull/7224
       // This was here because we had different context provider support between jetbrains and vs code
       // Leaving so we could differentiate later but for now configs are the same between IDEs
       fs.writeFileSync(p, YAML.stringify(defaultConfig));
@@ -212,7 +212,10 @@ export function getTsConfigPath(): string {
 
 export function getContinueRcPath(): string {
   // Disable indexing of the config folder to prevent infinite loops
-  const continuercPath = path.join(getAiFirewallGlobalPath(), ".ai-firewallrc.json");
+  const continuercPath = path.join(
+    getAiFirewallGlobalPath(),
+    ".ai-firewallrc.json",
+  );
   if (!fs.existsSync(continuercPath)) {
     fs.writeFileSync(
       continuercPath,

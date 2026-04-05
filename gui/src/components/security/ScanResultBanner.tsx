@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { dismissBanner } from "../../redux/slices/securitySlice";
 
 /**
- * Scan Result Banner — floating notification card matching Continue's session limit style.
+ * Scan Result Banner — floating notification card matching AI Firewall's session limit style.
  * Appears above the input box after each scan with BLOCK/REDACT/REQUIRE_APPROVAL results.
  */
 

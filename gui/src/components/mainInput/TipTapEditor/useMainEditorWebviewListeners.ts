@@ -38,7 +38,7 @@ export function useMainEditorWebviewListeners({
   const isInEdit = useAppSelector((state) => state.session.isInEdit);
 
   useWebviewListener(
-    "isContinueInputFocused",
+    "isFirewallInputFocused",
     async () => {
       return !!editorFocusedRef.current;
     },
@@ -167,7 +167,7 @@ export function useMainEditorWebviewListeners({
   );
 
   useWebviewListener(
-    "isContinueInputFocused",
+    "isFirewallInputFocused",
     async () => {
       return !!editorFocusedRef.current;
     },

@@ -57,12 +57,12 @@ cd core && PUPPETEER_SKIP_DOWNLOAD=true npm install && npm link && cd ..
 </Step>
 <Step title="Build GUI">
 ```bash
-cd gui && npm install && npm link @continuedev/core && NODE_OPTIONS="--max-old-space-size=4096" npm run build && cd ..
+cd gui && npm install && npm link @ai-firewall/core && NODE_OPTIONS="--max-old-space-size=4096" npm run build && cd ..
 ```
 </Step>
 <Step title="Package VS Code extension">
 ```bash
-cd extensions/vscode && npm install && npm link @continuedev/core && npm run package && cd ../..
+cd extensions/vscode && npm install && npm link @ai-firewall/core && npm run package && cd ../..
 ```
 VSIX at `extensions/vscode/build/ai-firewall-{VERSION}.vsix`
 </Step>

@@ -10,7 +10,7 @@ This repository provides a GitHub Action for automated PR reviews:
 
 Provides high-level PR assessment with overall feedback and recommendations.
 
-- **Path:** `continuedev/continue/actions/general-review@main`
+- **Path:** `ai-firewall/ai-firewall/actions/general-review@main`
 - **Trigger:** `@continue-review`
 - **Output:** Summary comment with strengths, issues, and recommendations
 
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: continuedev/continue/actions/general-review@main
+      - uses: ai-firewall/ai-firewall/actions/general-review@main
         with:
           continue-api-key: ${{ secrets.CONTINUE_API_KEY }}
           continue-org: "your-org-name"
@@ -122,7 +122,7 @@ We recommend using the main branch:
 Example:
 
 ```yaml
-uses: continuedev/continue/actions/general-review@main
+uses: ai-firewall/ai-firewall/actions/general-review@main
 ```
 
 ## Troubleshooting
@@ -143,6 +143,6 @@ uses: continuedev/continue/actions/general-review@main
 
 For issues or questions:
 
-- [Continue Documentation](https://docs.continue.dev)
-- [GitHub Issues](https://github.com/continuedev/continue/issues)
-- [GitHub Discussions](https://github.com/continuedev/continue/discussions)
+- [Continue Documentation](https://docs.ai-firewall.dev)
+- [GitHub Issues](https://github.com/ai-firewall/ai-firewall/issues)
+- [GitHub Discussions](https://github.com/ai-firewall/ai-firewall/discussions)

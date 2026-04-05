@@ -19,7 +19,7 @@ models:
 
   const testEnv = {
     OPENAI_API_KEY: "test-key",
-    CONTINUE_API_KEY: "test-api-key",
+    AI_FIREWALL_API_KEY: "test-api-key",
   };
 
   beforeEach(async () => {

@@ -1,4 +1,4 @@
-# @continuedev/sdk
+# @ai-firewall/sdk
 
 > **⚠️ EXPERIMENTAL: This package is in early development and subject to frequent breaking changes without notice.**
 
@@ -21,8 +21,8 @@ Each package includes:
 
 End users should install the published packages directly:
 
-- For TypeScript/JavaScript: `npm install @continuedev/sdk`
-- For Python: `pip install continuedev`
+- For TypeScript/JavaScript: `npm install @ai-firewall/sdk`
+- For Python: `pip install ai-firewall`
 - For other languages: Check back for new language support
 
 Each published package includes its own documentation.

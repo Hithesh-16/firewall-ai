@@ -11,7 +11,7 @@ import { PropsWithChildren, useEffect } from "react";
 import { useAuth } from "../context/Auth";
 import { useAppSelector } from "../redux/hooks";
 import { isPrerelease } from "../util/index";
-import { isContinueTeamMember } from "../util/isContinueTeamMember";
+import { isFirewallTeamMember } from "../util/isContinueTeamMember";
 import { getLocalStorage } from "../util/localStorage";
 
 const SAMPLE_REATE = 0.1;

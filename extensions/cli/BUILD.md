@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Continue CLI uses esbuild to bundle the application along with local packages (`@continuedev/config-yaml` and `@continuedev/openai-adapters`) into a single distributable file. This ensures that users who install the CLI from npm don't need to worry about local file references.
+The AI Firewall CLI uses esbuild to bundle the application along with local packages (`@ai-firewall/config-yaml` and `@ai-firewall/openai-adapters`) into a single distributable file. This ensures that users who install the CLI from npm don't need to worry about local file references.
 
 ## Build Steps
 
@@ -19,7 +19,7 @@ The Continue CLI uses esbuild to bundle the application along with local package
 The `build.mjs` script uses esbuild to:
 
 - Bundle all TypeScript/JavaScript code into a single ES module
-- Include local packages (`@continuedev/config-yaml`, `@continuedev/openai-adapters`) directly in the bundle
+- Include local packages (`@ai-firewall/config-yaml`, `@ai-firewall/openai-adapters`) directly in the bundle
 - Keep problematic or native dependencies external (e.g., `@sentry/profiling-node`, `winston`, `express`)
 - Create a wrapper script (`dist/cn.js`) with the proper shebang for CLI execution
 
@@ -70,6 +70,6 @@ After building, check `dist/meta.json` to see:
 When publishing to npm:
 
 1. The bundled files in `dist/` are included
-2. Users install via `npm install -g @continuedev/cli`
+2. Users install via `npm install -g @ai-firewall/cli`
 3. The `cn` command becomes available globally
 4. No local file references or missing dependencies

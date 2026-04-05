@@ -3,9 +3,11 @@ binary/build
 binary/out
 binary/tmp
 core/.continue-test
+core/.ai-firewall-test
 docs/.docusaurus
 docs/**/*.mdx
 extensions/.continue-debug
+extensions/.ai-firewall-debug
 extensions/vscode/continue_rc_schema.json
 extensions/vscode/.vscode-test
 extensions/vscode/bin
@@ -15,6 +17,7 @@ extensions/vscode/textmate-syntaxes
 extensions/vscode/gui
 extensions/vscode/e2e/.test-extensions
 extensions/vscode/e2e/test-continue
+extensions/vscode/e2e/test-ai-firewall
 extensions/vscode/e2e/_output
 extensions/vscode/e2e/storage
 extensions/vscode/e2e/vsix
@@ -22,13 +25,17 @@ extensions/vscode/models
 extensions/intellij/src/main/resources
 gui/dist
 **/.continueignore
+**/.aifirewallignore
 .continue/rules/mintlify-formatting.md
+.ai-firewall/rules/mintlify-formatting.md
 CHANGELOG.md
 **/continue_tutorial.py
+**/ai_firewall_tutorial.py
 **/node_modules
 **/CODEOWNERS
 core/vendor
 coverage
 # e2e
 packages/continue-sdk
+packages/ai-firewall-sdk
 .conductor

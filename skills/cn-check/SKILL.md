@@ -3,7 +3,7 @@ name: cn-check
 description: Install and run the Continue CLI (`cn`) to execute AI agent checks on local code changes. Use when asked to "run checks", "lint with AI", "review my changes with cn", or set up Continue CI locally.
 license: Apache-2.0
 metadata:
-  author: continuedev
+  author: ai-firewall
   version: "1.0.0"
 ---
 
@@ -29,7 +29,7 @@ Run AI-powered code checks locally against your working tree changes using the C
 ### Install the CLI
 
 ```bash
-npm install -g @continuedev/cli
+npm install -g @ai-firewall/cli
 ```
 
 ### Authenticate (required for Hub checks, optional for local-only)
@@ -50,20 +50,20 @@ cn check
 
 This auto-detects checks from three sources (in priority order):
 
-1. Hub API — checks configured for your repo on continue.dev
-2. Local agents — markdown files in `.continue/agents/*.md`
+1. Hub API — checks configured for your repo on ai-firewall.dev
+2. Local agents — markdown files in `.ai-firewall/agents/*.md`
 
 ### Specify agents explicitly
 
 ```bash
 # Run a single local agent
-cn check --agent .continue/agents/security-review.md
+cn check --agent .ai-firewall/agents/security-review.md
 
 # Run a Hub-published agent
 cn check --agent myorg/code-style
 
 # Run multiple agents
-cn check --agent .continue/agents/security.md --agent .continue/agents/docs.md
+cn check --agent .ai-firewall/agents/security.md --agent .ai-firewall/agents/docs.md
 ```
 
 ### Compare against a specific base branch
@@ -97,7 +97,7 @@ Runs all checks, then applies any suggested patches directly to the working tree
 
 ## Creating a Check Agent
 
-Create a markdown file at `.continue/agents/<name>.md`:
+Create a markdown file at `.ai-firewall/agents/<name>.md`:
 
 ```markdown
 # Security Review
@@ -155,7 +155,7 @@ When complete, a full report prints with pass/fail status, agent output, and sug
 {
   "checks": [
     {
-      "agent": ".continue/agents/security.md",
+      "agent": ".ai-firewall/agents/security.md",
       "name": "security",
       "status": "pass",
       "patch": "",
@@ -194,7 +194,7 @@ Options:
 | Problem                      | Solution                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------- |
 | "No changes detected"        | Make sure you have uncommitted changes or specify `--base`                            |
-| "No checks found"            | Create `.continue/agents/*.md` files or run `cn login` for Hub checks                 |
+| "No checks found"            | Create `.ai-firewall/agents/*.md` files or run `cn login` for Hub checks              |
 | Check times out (5 min)      | Reduce diff size or split into focused agents                                         |
 | "Worker exited with code 1"  | Run with `--verbose` to see worker stderr                                             |
 | Patch conflicts with `--fix` | Apply patches manually: `cn check --patch > changes.patch && git apply changes.patch` |

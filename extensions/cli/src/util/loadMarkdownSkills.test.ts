@@ -47,7 +47,7 @@ describe("loadMarkdownSkills", () => {
     expect(result.errors).toEqual([]);
   });
 
-  it("loads a valid skill with files from .continue/skills", async () => {
+  it("loads a valid skill with files from .ai-firewall/skills", async () => {
     const skillDir = path.join(tmpDir, ".ai-firewall", "skills", "my-skill");
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(

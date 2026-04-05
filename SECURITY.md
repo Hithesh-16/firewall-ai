@@ -11,15 +11,15 @@ AI Firewall is itself a security product. Extra vigilance is required because:
 
 ### Security Guarantees
 
-| Guarantee | How |
-|-----------|-----|
-| No raw secrets stored in DB | Only SHA-256 hashes, never plaintext |
-| API keys encrypted at rest | AES-256-GCM via `proxy/src/vault/encryption.ts` |
-| Local-first scanning | Scanner pipeline runs offline, zero external calls |
-| Request body never logged | Pino configured to exclude bodies (they contain the secrets we scan for) |
-| STRICT_LOCAL mode | Runtime flag blocks all cloud providers — local LLM only |
-| Prompt injection detection | 13 pattern categories, configurable threshold |
-| OWASP-compliant approvals | Agent chat interface cannot grant permissions — separate approval channel required |
+| Guarantee                   | How                                                                                |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| No raw secrets stored in DB | Only SHA-256 hashes, never plaintext                                               |
+| API keys encrypted at rest  | AES-256-GCM via `proxy/src/vault/encryption.ts`                                    |
+| Local-first scanning        | Scanner pipeline runs offline, zero external calls                                 |
+| Request body never logged   | Pino configured to exclude bodies (they contain the secrets we scan for)           |
+| STRICT_LOCAL mode           | Runtime flag blocks all cloud providers — local LLM only                           |
+| Prompt injection detection  | 13 pattern categories, configurable threshold                                      |
+| OWASP-compliant approvals   | Agent chat interface cannot grant permissions — separate approval channel required |
 
 ### Scanner Coverage
 
@@ -37,7 +37,7 @@ AI Firewall is itself a security product. Extra vigilance is required because:
 If you discover a security vulnerability in AI Firewall:
 
 1. **Do NOT open a public issue**
-2. Email **security@continue.dev** with:
+2. Email **security@ai-firewall.dev** with:
    - Description of the vulnerability
    - Steps to reproduce
    - Your assessment of potential impact
@@ -47,12 +47,12 @@ If you discover a security vulnerability in AI Firewall:
 
 ### What Qualifies as Critical
 
-| Severity | Example |
-|----------|---------|
+| Severity     | Example                                                                         |
+| ------------ | ------------------------------------------------------------------------------- |
 | **Critical** | Scanner bypass (secret reaches LLM undetected), vault key exposure, auth bypass |
-| **High** | Policy engine incorrect decision, redaction failure, injection pattern evasion |
-| **Medium** | Information disclosure via error messages, rate limit bypass |
-| **Low** | Non-security-impacting bugs in scanner patterns (false positive/negative) |
+| **High**     | Policy engine incorrect decision, redaction failure, injection pattern evasion  |
+| **Medium**   | Information disclosure via error messages, rate limit bypass                    |
+| **Low**      | Non-security-impacting bugs in scanner patterns (false positive/negative)       |
 
 ## Security Response Protocol
 
@@ -67,4 +67,4 @@ When a critical vulnerability is reported:
 
 ## Contact
 
-For any security questions or concerns: security@continue.dev
+For any security questions or concerns: security@ai-firewall.dev

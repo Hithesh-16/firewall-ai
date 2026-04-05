@@ -129,7 +129,7 @@ export class VsCodeExtension {
       nextEditEnabled &&
       !modelSupportsNext &&
       !isNextEditTest() &&
-      process.env.CONTINUE_E2E_NON_NEXT_EDIT_TEST === "true"
+      process.env.AI_FIREWALL_E2E_NON_NEXT_EDIT_TEST === "true"
     ) {
       vscode.window
         .showWarningMessage(
@@ -187,7 +187,9 @@ export class VsCodeExtension {
       await this.proxyManager.start();
       // Fetch file restriction policy from proxy after it's healthy
       try {
-        const { refreshFileScope } = await import("../security/fileRestrictionChecker");
+        const { refreshFileScope } = await import(
+          "../security/fileRestrictionChecker"
+        );
         await refreshFileScope(this.proxyManager.proxyUrl ?? undefined);
       } catch {
         // Non-fatal — file restrictions checked server-side as fallback
@@ -584,7 +586,7 @@ export class VsCodeExtension {
       });
     });
 
-    // TODO merge this and re-enable https://github.com/continuedev/continue/pull/8364
+    // TODO merge this and re-enable https://github.com/ai-firewall/ai-firewall/pull/8364
     // vscode.workspace.onDidOpenTextDocument(async (event) => {
     //   const ast = await getAst(event.fileName, event.getText());
     //   if (ast) {

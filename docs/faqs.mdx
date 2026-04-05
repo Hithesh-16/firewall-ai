@@ -1,6 +1,6 @@
 ---
 title: "FAQs"
-description: "Frequently asked questions about Continue"
+description: "Frequently asked questions about AI Firewall"
 ---
 
 ## Networking Issues
@@ -46,11 +46,11 @@ If you are using VS Code and require requests to be made through a proxy, you ar
 
 ### code-server
 
-Continue can be used in [code-server](https://coder.com/), but if you are running across an error in the logs that includes "This is likely because the editor is not running in a secure context", please see [their documentation on securely exposing code-server](https://coder.com/docs/code-server/latest/guide#expose-code-server).
+AI Firewall can be used in [code-server](https://coder.com/), but if you are running across an error in the logs that includes "This is likely because the editor is not running in a secure context", please see [their documentation on securely exposing code-server](https://coder.com/docs/code-server/latest/guide#expose-code-server).
 
 ## Changes to Configs Not Showing in VS Code
 
-If you've made changes to a config (adding, modifying, or removing it) but the changes aren't appearing in the Continue extension in VS Code, try reloading the VS Code window:
+If you've made changes to a config (adding, modifying, or removing it) but the changes aren't appearing in the AI Firewall extension in VS Code, try reloading the VS Code window:
 
 1. Open the command palette (`cmd/ctrl` + `shift` + `P`)
 2. Type "Reload Window"
@@ -58,9 +58,9 @@ If you've made changes to a config (adding, modifying, or removing it) but the c
 
 This will restart VS Code and reload all extensions, which should make your config changes visible.
 
-## I installed Continue, but don't see the sidebar window
+## I installed AI Firewall, but don't see the sidebar window
 
-By default the Continue window is on the left side of VS Code, but it can be dragged to right side as well, which we recommend in our tutorial. In the situation where you have previously installed Continue and moved it to the right side, it may still be there. You can reveal Continue either by using cmd/ctrl+L or by clicking the button in the top right of VS Code to open the right sidebar.
+By default the AI Firewall window is on the left side of VS Code, but it can be dragged to right side as well, which we recommend in our tutorial. In the situation where you have previously installed AI Firewall and moved it to the right side, it may still be there. You can reveal Continue either by using cmd/ctrl+L or by clicking the button in the top right of VS Code to open the right sidebar.
 
 ## I'm getting a 404 error from OpenAI
 
@@ -74,19 +74,19 @@ If you have entered a valid API key and model, but are still getting a 404 error
 
 If you are having persistent errors with indexing, our recommendation is to rebuild your index from scratch. Note that for large codebases this may take some time.
 
-This can be accomplished using the following command: `Continue: Rebuild codebase index`.
+This can be accomplished using the following command: `AI Firewall: Rebuild codebase index`.
 
 ## Agent mode is unavailable or tools aren't working
 
 If Agent mode is grayed out or tools aren't functioning properly, this is likely due to model capability configuration issues.
 
 <Info>
-  Continue uses system message tools as a fallback for models without native tool support, so most models should work with Agent mode automatically.
+  AI Firewall uses system message tools as a fallback for models without native tool support, so most models should work with Agent mode automatically.
 </Info>
 
 ### Check if your model has tool support
 
-1. Not all models support native tool/function calling, but Continue will automatically use system message tools as a fallback
+1. Not all models support native tool/function calling, but AI Firewall will automatically use system message tools as a fallback
 2. Try adding `capabilities: ["tool_use"]` to your model config to force tool support
 3. Verify your provider supports function calling or that system message tools are working correctly
 
@@ -108,7 +108,7 @@ If you can't upload images:
 
 ### Add capabilities
 
-If Continue's autodetection isn't working correctly, you can manually add capabilities in your `config.yaml`:
+If AI Firewall's autodetection isn't working correctly, you can manually add capabilities in your `config.yaml`:
 
 ```yaml
 models:
@@ -126,7 +126,7 @@ Some proxy services (like OpenRouter) or custom deployments may not preserve too
 
 ### Verifying Current Capabilities
 
-To see what capabilities Continue detected for your model:
+To see what capabilities AI Firewall detected for your model:
 
 1. Check the mode selector tooltips - they indicate if tools are available
 2. Try uploading an image - if disabled, the model lacks `image_input`
@@ -136,13 +136,13 @@ See the [Model Capabilities guide](/customize/deep-dives/model-capabilities) for
 
 ## Android Studio - "Nothing to show" in Chat
 
-This can be fixed by selecting `Actions > Choose Boot runtime for the IDE` then selecting the latest version, and then restarting Android Studio. [See this thread](https://github.com/continuedev/continue/issues/596#issuecomment-1789327178) for details.
+This can be fixed by selecting `Actions > Choose Boot runtime for the IDE` then selecting the latest version, and then restarting Android Studio. [See this thread](https://github.com/ai-firewall/ai-firewall/issues/596#issuecomment-1789327178) for details.
 
 ## I received a "Codebase indexing disabled - Your Linux system lacks required CPU features (AVX2, FMA)" notification
 
 We use LanceDB as our vector database for codebase search features. On x64 Linux systems, LanceDB requires specific CPU features (FMA and AVX2) which may not be available on older processors.
 
-Most Continue features will work normally, including autocomplete and chat. However, commands that rely on codebase indexing, such as `@codebase`, `@files`, and `@folder`, will be disabled.
+Most AI Firewall features will work normally, including autocomplete and chat. However, commands that rely on codebase indexing, such as `@codebase`, `@files`, and `@folder`, will be disabled.
 
 For more details about this requirement, see the [LanceDB issue #2195](https://github.com/lancedb/lance/issues/2195).
 
@@ -178,7 +178,7 @@ When connecting to Ollama on another machine:
      ```
    - Restart Ollama: `sudo systemctl restart ollama`
 
-2. **Update your Continue config**:
+2. **Update your AI Firewall config**:
 ```yaml
 models:
   - name: llama3
@@ -215,7 +215,7 @@ netsh interface portproxy add v4tov4 listenport=11434 listenaddress=0.0.0.0 conn
 
 ### Docker container can't connect to host Ollama
 
-When running Continue or other tools in Docker that need to connect to Ollama on the host:
+When running AI Firewall or other tools in Docker that need to connect to Ollama on the host:
 
 **Windows/Mac**: Use `host.docker.internal`:
 ```yaml
@@ -260,20 +260,20 @@ If you're getting parse errors with remote Ollama:
 
 ### Managing Local Secrets and Environment Variables
 
-For running Continue completely offline without internet access, see the [Running Continue Without Internet guide](/guides/running-continue-without-internet).
+For running AI Firewall completely offline without internet access, see the [Running Continue Without Internet guide](/guides/running-continue-without-internet).
 
-Continue supports multiple methods for managing secrets locally, searched in this order:
+AI Firewall supports multiple methods for managing secrets locally, searched in this order:
 
 1. **Workspace `.env` files**: Place a `.env` file in your workspace root directory
-2. **Workspace Continue folder**: Place a `.env` file in `<workspace-root>/.continue/.env`  
-3. **Global `.env` file**: Place a `.env` file in `~/.continue/.env` for user-wide secrets
+2. **Workspace Continue folder**: Place a `.env` file in `<workspace-root>/.ai-firewall/.env`  
+3. **Global `.env` file**: Place a `.env` file in `~/.ai-firewall/.env` for user-wide secrets
 4. **Process environment variables**: Use standard system environment variables
 
 #### Creating `.env` files
 
 Create a `.env` file in one of these locations:
-- **Per-workspace**: `<workspace-root>/.env` or `<workspace-root>/.continue/.env`
-- **Global**: `~/.continue/.env`
+- **Per-workspace**: `<workspace-root>/.env` or `<workspace-root>/.ai-firewall/.env`
+- **Global**: `~/.ai-firewall/.env`
 
 Example `.env` file:
 ```
@@ -293,7 +293,7 @@ models:
 
 #### Mission Control-managed secrets
 
-For centralized team secret management, use `${{ inputs.SECRET_NAME }}` syntax in your config.yaml and manage them at [https://continue.dev/settings/secrets](https://continue.dev/settings/secrets):
+For centralized team secret management, use `${{ inputs.SECRET_NAME }}` syntax in your config.yaml and manage them at [https://ai-firewall.dev/settings/secrets](https://ai-firewall.dev/settings/secrets):
 ```yaml
 models:
   - provider: openai
@@ -304,7 +304,7 @@ models:
 
 - **Never commit `.env` files** to version control - add them to `.gitignore`
 - The `.env` file uses standard dotenv format (KEY=value, no quotes needed)
-- Secrets are loaded when Continue starts, so restart your IDE after changes
+- Secrets are loaded when AI Firewall starts, so restart your IDE after changes
 - Local `.env` files take precedence over Hub secrets when both exist
 
 #### Troubleshooting secrets
@@ -318,7 +318,7 @@ If your API keys aren't being recognized:
 
 ### Using Model Addons Locally
 
-You can leverage model addons from the Continue Mission Control in your local configurations using the `uses:` syntax. This allows you to reference pre-configured model blocks without duplicating configuration.
+You can leverage model addons from the AI Firewall Mission Control in your local configurations using the `uses:` syntax. This allows you to reference pre-configured model blocks without duplicating configuration.
 
 #### Requirements
 
@@ -376,10 +376,10 @@ This feature allows you to maintain consistent model configurations across teams
 
 ## How do I reset the state of the extension?
 
-Continue stores its data in the `~/.continue` directory (`%USERPROFILE%\.continue` on Windows).
+AI Firewall stores its data in the `~/.continue` directory (`%USERPROFILE%\.continue` on Windows).
 
 If you'd like to perform a clean reset of the extension, including removing all configuration files, indices, etc, you can remove this directory, uninstall, and then reinstall.
 
 ## Still having trouble?
 
-You can also join [GitHub Discussions](https://github.com/continuedev/continue/discussions) for additional support. Alternatively, you can create a GitHub issue [here](https://github.com/continuedev/continue/issues/new?assignees=&labels=bug&projects=&template=bug-report-%F0%9F%90%9B.md&title=), providing details of your problem, and we'll be able to help you out more quickly.
+You can also join [GitHub Discussions](https://github.com/ai-firewall/ai-firewall/discussions) for additional support. Alternatively, you can create a GitHub issue [here](https://github.com/ai-firewall/ai-firewall/issues/new?assignees=&labels=bug&projects=&template=bug-report-%F0%9F%90%9B.md&title=), providing details of your problem, and we'll be able to help you out more quickly.

@@ -98,14 +98,14 @@ export function BackgroundModeView({
           <h3 className="mb-2 text-lg font-semibold">Background Agents</h3>
           <p className="text-description mb-4 text-sm">
             Trigger long-running background agents that work on your codebase
-            autonomously. Sign in to Continue to get started.
+            autonomously. Sign in to AI Firewall to get started.
           </p>
           <button
             onClick={handleSignIn}
             disabled={isLoggingIn}
             className="bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg px-6 py-2 disabled:opacity-50"
           >
-            {isLoggingIn ? "Signing in..." : "Sign In to Continue"}
+            {isLoggingIn ? "Signing in..." : "Sign In to AI Firewall"}
           </button>
         </div>
       </div>
@@ -115,20 +115,20 @@ export function BackgroundModeView({
   return (
     <div className="flex flex-col gap-4 py-4">
       {!checkingGitHub && showGitHubSetup && (
-        <div className="mx-2 rounded-lg border border-warning/30 bg-warning/10 p-4">
+        <div className="border-warning/30 bg-warning/10 mx-2 rounded-lg border p-4">
           <div className="flex items-start gap-3">
-            <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0 text-warning" />
+            <ExclamationTriangleIcon className="text-warning h-5 w-5 flex-shrink-0" />
             <div className="flex-1">
-              <h4 className="text-sm font-semibold text-foreground">
+              <h4 className="text-foreground text-sm font-semibold">
                 Connect GitHub
               </h4>
-              <p className="mt-1 text-sm text-description">
+              <p className="text-description mt-1 text-sm">
                 Background agents need access to your GitHub repositories.
                 Connect your GitHub account to get started.
               </p>
               <button
                 onClick={handleOpenGitHubSettings}
-                className="mt-3 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:brightness-110"
+                className="bg-primary text-primary-foreground mt-3 rounded-md px-4 py-2 text-sm font-medium hover:brightness-110"
               >
                 Connect GitHub Account
               </button>

@@ -6,8 +6,8 @@ set -e
 #   oneper install --pr X     - Install VSIX from PR number X
 #   oneper install --latest   - Install latest pre-release from marketplace
 
-REPO="continuedev/continue"
-ONEPER_DIR="$HOME/.continue/.utils/oneper"
+REPO="ai-firewall/ai-firewall"
+ONEPER_DIR="$HOME/.ai-firewall/.utils/oneper"
 
 show_help() {
     echo "oneper - Install Continue VS Code extension from builds or latest pre-release"
@@ -42,7 +42,7 @@ show_help() {
     echo "  oneper clean                         # Clear cached VSIX files"
     echo "  oneper -h                            # Show help"
     echo ""
-    echo "VSIX files are cached in: ~/.continue/.utils/oneper/"
+    echo "VSIX files are cached in: ~/.ai-firewall/.utils/oneper/"
 }
 
 detect_os() {

@@ -16,13 +16,13 @@ Your prompt here. This is the system prompt the agent uses
 when evaluating the pull request.
 ```
 
-Check files live in `.continue/checks/` or `.agents/checks/` at the repository root.
+Check files live in `.ai-firewall/checks/` or `.agents/checks/` at the repository root.
 
 ## Frontmatter fields
 
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
-| `name` | Yes | string | Display name shown in GitHub status checks and on continue.dev |
+| `name` | Yes | string | Display name shown in GitHub status checks and on ai-firewall.dev |
 | `description` | Yes | string | Short description of what the check verifies |
 | `model` | No | string | Model to use. Defaults to Claude Sonnet. Example: `anthropic/claude-sonnet-4-5-20250514` |
 
@@ -36,7 +36,7 @@ Write concrete pass/fail criteria. See [Best Practices](/checks/best-practices) 
 
 A fully-specced check file using all available fields:
 
-```markdown .continue/checks/migration-safety.md
+```markdown .ai-firewall/checks/migration-safety.md
 ---
 name: Migration Safety
 description: Flag destructive database migrations
@@ -55,9 +55,9 @@ Pass if the migration is additive only (new tables, new columns, new indexes).
 
 ## File discovery
 
-Continue locates checks by scanning specific directories at the repository root:
+AI Firewall locates checks by scanning specific directories at the repository root:
 
-- Reads all `.md` files in `.continue/checks/`
+- Reads all `.md` files in `.ai-firewall/checks/`
 - Reads all `.md` files in `.agents/checks/`
 - Subdirectories are not scanned
 - Files without valid `name` and `description` frontmatter are skipped
@@ -66,6 +66,6 @@ Checks always run when a PR is opened. For event-triggered automation, use [agen
 
 ## Supported directory paths
 
-`.continue/checks/` and `.agents/checks/` are equivalent. Both are scanned and merged into a single list of checks.
+`.ai-firewall/checks/` and `.agents/checks/` are equivalent. Both are scanned and merged into a single list of checks.
 
-`.agents/` is an emerging cross-tool standard for AI agent configuration. `.continue/` is Continue-specific. Use whichever fits your project. If both directories contain a check with the same `name`, the `.continue/checks/` version takes precedence.
+`.agents/` is an emerging cross-tool standard for AI agent configuration. `.ai-firewall/` is Continue-specific. Use whichever fits your project. If both directories contain a check with the same `name`, the `.ai-firewall/checks/` version takes precedence.

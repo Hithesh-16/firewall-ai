@@ -96,7 +96,7 @@ const Layout = () => {
   );
 
   useWebviewListener(
-    "isContinueInputFocused",
+    "isFirewallInputFocused",
     async () => {
       return false;
     },
@@ -246,7 +246,7 @@ const Layout = () => {
   const standaloneWeb = isStandaloneWeb();
 
   const mainContent = (
-    <LayoutTopDiv className={standaloneWeb ? "flex-1 min-w-0" : ""}>
+    <LayoutTopDiv className={standaloneWeb ? "min-w-0 flex-1" : ""}>
       {showStagingIndicator && (
         <span
           title="Staging environment"

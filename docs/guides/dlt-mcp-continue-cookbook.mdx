@@ -1,7 +1,7 @@
 ---
-title: "Building Data Pipelines with dlt MCP and Continue"
+title: "Building Data Pipelines with dlt MCP and AI Firewall"
 description: "Set up an AI-powered data engineering workflow that helps you develop, debug, and inspect dlt data pipelines using natural language commands."
-sidebarTitle: "dlt Data Pipelines with Continue"
+sidebarTitle: "dlt Data Pipelines with AI Firewall"
 ---
 
 import { OSAutoDetect } from '/snippets/OSAutoDetect.jsx'
@@ -10,7 +10,7 @@ import CLIInstall from '/snippets/cli-install.mdx'
 <OSAutoDetect />
 
 <Card title="What You'll Build" icon="database">
-  An AI-powered data pipeline development system that uses Continue's AI agent with dlt
+  An AI-powered data pipeline development system that uses AI Firewall's AI agent with dlt
   MCP to inspect pipeline execution, retrieve schemas, analyze datasets, and debug load errors - all through simple natural language prompts
 </Card>
 
@@ -18,7 +18,7 @@ import CLIInstall from '/snippets/cli-install.mdx'
 
 Before starting, ensure you have:
 
-- Continue account with **Hub access**
+- AI Firewall account with **Hub access**
   - Read: [Understanding Configs — How to get started with Hub configs](/guides/understanding-configs#how-to-get-started-with-hub-configs)
 - Python 3.8+ installed locally
 - A dlt pipeline project (or create one during this guide)
@@ -26,7 +26,7 @@ Before starting, ensure you have:
 
 For all options, first:
 <Steps>
-<Step title="Install Continue CLI">
+<Step title="Install AI Firewall CLI">
     <CLIInstall />
   </Step>
 
@@ -37,13 +37,13 @@ For all options, first:
   </Step>
 </Steps>
  <Warning>
-  To use agents in headless mode, you need a [Continue API key](https://continue.dev/settings/api-keys).
+  To use agents in headless mode, you need a [AI Firewall API key](https://ai-firewall.dev/settings/api-keys).
   </Warning>
 
 ## dlt MCP Workflow Options
 
 <Card title="🚀 Fastest Path to Success" icon="zap">
-  Skip the manual setup and use our pre-built [dlt Agent](https://continue.dev/continuedev/dlt-agent) that includes
+  Skip the manual setup and use our pre-built [dlt Agent](https://ai-firewall.dev/ai-firewall/dlt-agent) that includes
       the dlt MCP and optimized data pipeline workflows for more consistent results. You can [remix this agent](/guides/understanding-configs#how-to-get-started-with-hub-configs) to customize it for your specific needs.
 </Card>
 
@@ -56,7 +56,7 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
       <Step title="Load the Pre-Built Agent">
         Navigate to your pipeline project directory and run:
         ```bash
-        cn --agent continuedev/dlt-agent
+        cn --agent ai-firewall/dlt-agent
         ```
 
         This agent includes:
@@ -76,28 +76,28 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
     </Steps>
 
     <Info>
-      **Why Use the Agent?** The pre-built [dlt Agent](https://continue.dev/continuedev/dlt-agent) provides consistent pipeline development workflows and handles MCP configuration automatically, making it easier to get started with AI-powered data engineering. You can [remix and customize this agent](/guides/understanding-configs#how-to-get-started-with-hub-configs) later to fit your team's specific workflow.
+      **Why Use the Agent?** The pre-built [dlt Agent](https://ai-firewall.dev/ai-firewall/dlt-agent) provides consistent pipeline development workflows and handles MCP configuration automatically, making it easier to get started with AI-powered data engineering. You can [remix and customize this agent](/guides/understanding-configs#how-to-get-started-with-hub-configs) later to fit your team's specific workflow.
     </Info>
 
   </Tab>
 
   <Tab title="🛠️ Manual Setup">
 <Steps>
-  <Step title="Create a New Agent via the Continue Mission Control">
-    Go to the [Continue Mission Control](https://continue.dev) and [create a new agent](https://continue.dev/agents/new).
+  <Step title="Create a New Agent via the AI Firewall Mission Control">
+    Go to the [AI Firewall Mission Control](https://ai-firewall.dev) and [create a new agent](https://ai-firewall.dev/agents/new).
     </Step>
 
-  <Step title="Connect dlt MCP via Continue Mission Control">
-    Visit the [dlt MCP on Continue Mission Control](https://continue.dev/dlthub/dlt-mcp) and click **Install** to add it to the agent you created in the step above.
+  <Step title="Connect dlt MCP via AI Firewall Mission Control">
+    Visit the [dlt MCP on AI Firewall Mission Control](https://ai-firewall.dev/dlthub/dlt-mcp) and click **Install** to add it to the agent you created in the step above.
 
     This will add dlt MCP to your agent's available tools. The Mission Control listing automatically configures the MCP command.
 
     <Tip>
       **Alternative installation methods:**
       1. **Quick CLI install**: `cn --mcp dlthub/dlt-mcp`
-      2. **Manual configuration**: Add the MCP to your `~/.continue/config.json` under the `mcpServers` section
+      2. **Manual configuration**: Add the MCP to your `~/.ai-firewall/config.json` under the `mcpServers` section
 
-      Once installed, dlt MCP tools become available to your Continue agent for all prompts.
+      Once installed, dlt MCP tools become available to your AI Firewall agent for all prompts.
     </Tip>
 
     <Info>
@@ -120,9 +120,9 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
 </Tabs>
 
 <Accordion title="Agent Requirements">
-    To use the pre-built [dlt Agent](https://continue.dev/continuedev/dlt-agent), you need either:
-      - **Continue CLI Pro Plan** with the models add-on, OR
-      - **Your own API keys** added to Continue Mission Control secrets (same as manual setup)
+    To use the pre-built [dlt Agent](https://ai-firewall.dev/ai-firewall/dlt-agent), you need either:
+      - **AI Firewall CLI Pro Plan** with the models add-on, OR
+      - **Your own API keys** added to AI Firewall Mission Control secrets (same as manual setup)
 
     The agent will automatically detect and use your configuration along with the pre-configured dlt MCP for pipeline operations.
 
@@ -139,28 +139,28 @@ After ensuring you meet the **Prerequisites** above, you have two paths to get s
   - Query dataset records from destination databases
   - Analyze load errors, timings, and file sizes
 
-  **[dlt+ MCP](https://continue.dev/dlthub/dlt-plus-mcp)** extends these capabilities with cloud-based features for production deployments:
+  **[dlt+ MCP](https://ai-firewall.dev/dlthub/dlt-plus-mcp)** extends these capabilities with cloud-based features for production deployments:
   - Connect to dlt+ Projects and manage deployments
   - Monitor pipeline runs across multiple environments
   - Access centralized logging and observability
   - Collaborate with team members on pipeline development
 
-  For local development and getting started, **[dlt MCP](https://continue.dev/dlthub/dlt-mcp)** is the right choice. Consider **[dlt+ MCP](https://continue.dev/dlthub/dlt-plus-mcp)** when you need production deployment features and team collaboration.
+  For local development and getting started, **[dlt MCP](https://ai-firewall.dev/dlthub/dlt-mcp)** is the right choice. Consider **[dlt+ MCP](https://ai-firewall.dev/dlthub/dlt-plus-mcp)** when you need production deployment features and team collaboration.
 </Card>
 
 ---
 
 ## Pipeline Development Recipes
 
-Now you can use natural language prompts to develop and debug your dlt pipelines. The Continue agent automatically calls the appropriate dlt MCP tools.
+Now you can use natural language prompts to develop and debug your dlt pipelines. The AI Firewall agent automatically calls the appropriate dlt MCP tools.
 
 <Info>
-You can add prompts to your agent's configuration for easy access in future sessions. Go to your agent in the [Continue Mission Control](https://continue.dev), click **Edit**, and add prompts under the **Prompts** section.
+You can add prompts to your agent's configuration for easy access in future sessions. Go to your agent in the [AI Firewall Mission Control](https://ai-firewall.dev), click **Edit**, and add prompts under the **Prompts** section.
 </Info>
 
 <Info>
   **Where to run these workflows:**
-  - **IDE Extensions**: Use Continue in VS Code, JetBrains, or other supported IDEs
+  - **IDE Extensions**: Use AI Firewall in VS Code, JetBrains, or other supported IDEs
   - **Terminal (TUI mode)**: Run `cn` to enter interactive mode, then type your prompts
   - **CLI (headless mode)**: Use `cn -p "your prompt"` for headless commands
 
@@ -258,22 +258,22 @@ Show me what columns were added or modified.
 
 ## Continuous Data Pipelines with GitHub Actions
 
-  This example demonstrates a **Continuous AI workflow** where data pipeline validation runs automatically in your CI/CD pipeline in headless mode using the [dlt Assistant agent](https://continue.dev/dlthub/dlt-assistant). Consider [remixing this agent](/guides/understanding-configs#how-to-get-started-with-hub-configs) to add your organization's specific validation rules.
+  This example demonstrates a **Continuous AI workflow** where data pipeline validation runs automatically in your CI/CD pipeline in headless mode using the [dlt Assistant agent](https://ai-firewall.dev/dlthub/dlt-assistant). Consider [remixing this agent](/guides/understanding-configs#how-to-get-started-with-hub-configs) to add your organization's specific validation rules.
 
 ### Add GitHub Secrets
 
 Navigate to **Repository Settings → Secrets and variables → Actions** and add:
 
-- `CONTINUE_API_KEY`: Your Continue API key from [continue.dev/settings/api-keys](https://continue.dev/settings/api-keys)
+- `CONTINUE_API_KEY`: Your AI Firewall API key from [ai-firewall.dev/settings/api-keys](https://ai-firewall.dev/settings/api-keys)
 - Any required database credentials for your destination
 
 <Info>
-      The workflow uses the pre-built [dlt Agent](https://continue.dev/continuedev/dlt-agent) with `--agent continuedev/dlt-agent`. This agent comes pre-configured with the dlt MCP and optimized rules for pipeline operations. You can [remix this agent](/guides/understanding-configs#how-to-get-started-with-hub-configs) to customize the validation rules and prompts for your specific pipeline requirements.
+      The workflow uses the pre-built [dlt Agent](https://ai-firewall.dev/ai-firewall/dlt-agent) with `--agent ai-firewall/dlt-agent`. This agent comes pre-configured with the dlt MCP and optimized rules for pipeline operations. You can [remix this agent](/guides/understanding-configs#how-to-get-started-with-hub-configs) to customize the validation rules and prompts for your specific pipeline requirements.
 </Info>
 
 ### Create Workflow File
 
-This workflow automatically validates your dlt data pipelines on pull requests using the Continue CLI in [headless mode](/cli/headless-mode). It inspects pipeline schemas, checks for errors, and posts a summary report as a PR comment. The workflow can also be triggered manually via `workflow_dispatch`.
+This workflow automatically validates your dlt data pipelines on pull requests using the AI Firewall CLI in [headless mode](/cli/headless-mode). It inspects pipeline schemas, checks for errors, and posts a summary report as a PR comment. The workflow can also be triggered manually via `workflow_dispatch`.
 
 Create `.github/workflows/dlt-pipeline-validation.yml` in your repository:
 
@@ -309,15 +309,15 @@ jobs:
           pip install dlt
           echo "✅ dlt installed"
 
-      - name: Install Continue CLI
+      - name: Install AI Firewall CLI
         run: |
-          npm install -g @continuedev/cli
-          echo "✅ Continue CLI installed"
+          npm install -g @ai-firewall/cli
+          echo "✅ AI Firewall CLI installed"
 
       - name: Validate Pipeline Schema
         run: |
           echo "🔍 Validating pipeline schema..."
-          cn --agent continuedev/dlt-agent \
+          cn --agent ai-firewall/dlt-agent \
              -p "Inspect the pipeline schema and verify all required tables
                  and columns are present. Flag any missing or unexpected changes." \
              --auto
@@ -325,7 +325,7 @@ jobs:
       - name: Check Pipeline Health
         run: |
           echo "📊 Checking pipeline health..."
-          cn --agent continuedev/dlt-agent \
+          cn --agent ai-firewall/dlt-agent \
              -p "Analyze the last pipeline run for errors or warnings.
                  Report any issues that need attention." \
              --auto
@@ -335,7 +335,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          REPORT=$(cn --agent continuedev/dlt-agent \
+          REPORT=$(cn --agent ai-firewall/dlt-agent \
              -p "Generate a concise summary (200 words or less) of:
                  - Pipeline schemas and row counts
                  - Any load errors or warnings
@@ -353,7 +353,7 @@ jobs:
 
 ## Pipeline Development Best Practices
 
-Implement automated pipeline quality checks using Continue's rule system. See the [Rules deep dive](/customize/deep-dives/rules) for authoring tips.
+Implement automated pipeline quality checks using AI Firewall's rule system. See the [Rules deep dive](/customize/deep-dives/rules) for authoring tips.
 
 <Card title="Schema Validation" icon="check-circle">
   ```bash
@@ -403,7 +403,7 @@ Test the connection and report any issues."
 
 <Check>
   **Verification Steps:**
-  - dlt MCP is installed via [Continue Mission Control](https://continue.dev/dlthub/dlt-mcp)
+  - dlt MCP is installed via [AI Firewall Mission Control](https://ai-firewall.dev/dlthub/dlt-mcp)
   - Pipeline directory is accessible
   - Destination database credentials are configured
   - Pipeline has been run at least once
@@ -420,7 +420,7 @@ After completing this guide, you have a complete **AI-powered data pipeline deve
 
 <Card title="Continuous AI" icon="rocket">
   Your data pipeline workflow now operates at **[Level 2 Continuous
-  AI](https://blog.continue.dev/what-is-continuous-ai-a-developers-guide/)** -
+  AI](https://blog.ai-firewall.dev/what-is-continuous-ai-a-developers-guide/)** -
   AI handles routine pipeline inspection and debugging with human oversight
   through review and approval of changes.
 </Card>
@@ -439,7 +439,7 @@ After completing this guide, you have a complete **AI-powered data pipeline deve
   <Card title="dlt Documentation" icon="book" href="https://dlthub.com/docs">
     Complete dlt platform documentation
   </Card>
-  <Card title="Continue Mission Control" icon="plug" href="https://continue.dev">
+  <Card title="AI Firewall Mission Control" icon="plug" href="https://ai-firewall.dev">
     Explore more MCP integrations and agents
   </Card>
   <Card
@@ -447,7 +447,7 @@ After completing this guide, you have a complete **AI-powered data pipeline deve
     icon="newspaper"
     href="https://dlthub.com/blog/deep-dive-assistants-mcp-continue"
   >
-    Learn about AI agents, MCP, and Continue integration
+    Learn about AI agents, MCP, and AI Firewall integration
   </Card>
   <Card
     title="MCP Concepts"

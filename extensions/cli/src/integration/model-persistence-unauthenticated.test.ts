@@ -203,14 +203,14 @@ describe("Model Persistence for Unauthenticated Users", () => {
     expect(getModelName(authConfig)).toBe("Claude 3.5 Sonnet");
   });
 
-  test("should not save to GlobalContext when using CONTINUE_API_KEY", () => {
+  test("should not save to GlobalContext when using AI_FIREWALL_API_KEY", () => {
     // Clear any existing model
     updateModelName(null);
     expect(getPersistedModelName()).toBeNull();
 
     // Capture original value to restore after test
-    const originalApiKey = process.env.CONTINUE_API_KEY;
-    process.env.CONTINUE_API_KEY = "test-api-key";
+    const originalApiKey = process.env.AI_FIREWALL_API_KEY;
+    process.env.AI_FIREWALL_API_KEY = "test-api-key";
 
     updateModelName("Claude 3.5 Sonnet");
 
@@ -219,9 +219,9 @@ describe("Model Persistence for Unauthenticated Users", () => {
 
     // Restore original value
     if (originalApiKey === undefined) {
-      delete process.env.CONTINUE_API_KEY;
+      delete process.env.AI_FIREWALL_API_KEY;
     } else {
-      process.env.CONTINUE_API_KEY = originalApiKey;
+      process.env.AI_FIREWALL_API_KEY = originalApiKey;
     }
   });
 

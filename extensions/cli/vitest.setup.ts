@@ -3,8 +3,8 @@ import { vi } from "vitest";
 import { resetConsoleOverrides } from "./src/init.js";
 
 // Disable telemetry for tests
-process.env.CONTINUE_CLI_ENABLE_TELEMETRY = "0";
-process.env.CONTINUE_ALLOW_ANONYMOUS_TELEMETRY = "0";
+process.env.AI_FIREWALL_CLI_ENABLE_TELEMETRY = "0";
+process.env.AI_FIREWALL_ALLOW_ANONYMOUS_TELEMETRY = "0";
 
 // Mock fetch to prevent actual API calls in tests
 const originalFetch = global.fetch;
@@ -14,7 +14,7 @@ global.fetch = vi
     const urlString = url.toString();
 
     // Mock the default config API call
-    if (urlString.includes("get-assistant/continuedev/default-cli-config")) {
+    if (urlString.includes("get-assistant/ai-firewall/default-cli-config")) {
       return {
         ok: true,
         status: 200,

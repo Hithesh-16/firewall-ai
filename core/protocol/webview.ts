@@ -29,7 +29,7 @@ export type ToWebviewFromIdeOrCoreProtocol = {
     void,
   ];
   didCloseFiles: [{ uris: string[] }, void];
-  isContinueInputFocused: [undefined, boolean];
+  isFirewallInputFocused: [undefined, boolean];
   addContextItem: [
     {
       historyIndex: number;

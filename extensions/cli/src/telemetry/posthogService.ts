@@ -64,13 +64,13 @@ export class PosthogService {
   }
 
   get isEnabled() {
-    if (process.env.CONTINUE_TELEMETRY_ENABLED === "0") {
+    if (process.env.AI_FIREWALL_TELEMETRY_ENABLED === "0") {
       return false;
     }
-    if (process.env.CONTINUE_TELEMETRY_ENABLED === "1") {
+    if (process.env.AI_FIREWALL_TELEMETRY_ENABLED === "1") {
       return true;
     }
-    return process.env.CONTINUE_ALLOW_ANONYMOUS_TELEMETRY !== "0";
+    return process.env.AI_FIREWALL_ALLOW_ANONYMOUS_TELEMETRY !== "0";
   }
 
   private _client: PostHogType | undefined;
@@ -79,7 +79,7 @@ export class PosthogService {
       this._client = undefined;
       if (this._telemetryBlocked && this.isEnabled) {
         loggers.warning(
-          "Telemetry appears to be blocked by your network. To disable telemetry entirely, set CONTINUE_TELEMETRY_ENABLED=0",
+          "Telemetry appears to be blocked by your network. To disable telemetry entirely, set AI_FIREWALL_TELEMETRY_ENABLED=0",
         );
       } else if (this.isEnabled) {
         logger.warn("No internet connection, skipping telemetry");
@@ -108,8 +108,8 @@ export class PosthogService {
    */
   private getEventUserId(): string {
     // When running as an agent, use the user ID from the environment
-    if (process.env.CONTINUE_USER_ID) {
-      return process.env.CONTINUE_USER_ID;
+    if (process.env.AI_FIREWALL_USER_ID) {
+      return process.env.AI_FIREWALL_USER_ID;
     }
 
     const authConfig = loadAuthConfig();

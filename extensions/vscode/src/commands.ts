@@ -208,11 +208,17 @@ const getCommandsMap: (
         streamId,
       );
     },
-    "aiFirewall.acceptVerticalDiffBlock": (fileUri?: string, index?: number) => {
+    "aiFirewall.acceptVerticalDiffBlock": (
+      fileUri?: string,
+      index?: number,
+    ) => {
       captureCommandTelemetry("acceptVerticalDiffBlock");
       verticalDiffManager.acceptRejectVerticalDiffBlock(true, fileUri, index);
     },
-    "aiFirewall.rejectVerticalDiffBlock": (fileUri?: string, index?: number) => {
+    "aiFirewall.rejectVerticalDiffBlock": (
+      fileUri?: string,
+      index?: number,
+    ) => {
       captureCommandTelemetry("rejectVerticalDiffBlock");
       verticalDiffManager.acceptRejectVerticalDiffBlock(false, fileUri, index);
     },
@@ -264,8 +270,8 @@ const getCommandsMap: (
       core.invoke("context/indexDocs", { reIndex: true });
     },
     "aiFirewall.focusContinueInput": async () => {
-      const isContinueInputFocused = await sidebar.webviewProtocol.request(
-        "isContinueInputFocused",
+      const isFirewallInputFocused = await sidebar.webviewProtocol.request(
+        "isFirewallInputFocused",
         undefined,
         false,
       );
@@ -287,7 +293,7 @@ const getCommandsMap: (
         false,
       );
 
-      if (isContinueInputFocused) {
+      if (isFirewallInputFocused) {
         if (historyLength === 0) {
           hideGUI();
         } else {
@@ -308,8 +314,8 @@ const getCommandsMap: (
       }
     },
     "aiFirewall.focusContinueInputWithoutClear": async () => {
-      const isContinueInputFocused = await sidebar.webviewProtocol.request(
-        "isContinueInputFocused",
+      const isFirewallInputFocused = await sidebar.webviewProtocol.request(
+        "isFirewallInputFocused",
         undefined,
         false,
       );
@@ -325,7 +331,7 @@ const getCommandsMap: (
         }
       }
 
-      if (isContinueInputFocused) {
+      if (isFirewallInputFocused) {
         hideGUI();
       } else {
         focusGUI();
@@ -889,7 +895,11 @@ const getCommandsMap: (
     "aiFirewall.toggleScanning": () => {
       const config = vscode.workspace.getConfiguration("aiFirewall");
       const current = config.get<boolean>("proxyEnabled", true);
-      config.update("proxyEnabled", !current, vscode.ConfigurationTarget.Global);
+      config.update(
+        "proxyEnabled",
+        !current,
+        vscode.ConfigurationTarget.Global,
+      );
       vscode.window.showInformationMessage(
         `AI Firewall: Scanning ${!current ? "enabled" : "disabled"}`,
       );
@@ -922,15 +932,11 @@ const getCommandsMap: (
     },
 
     "aiFirewall.viewDashboard": () => {
-      vscode.env.openExternal(
-        vscode.Uri.parse("http://localhost:3000"),
-      );
+      vscode.env.openExternal(vscode.Uri.parse("http://localhost:3000"));
     },
 
     "aiFirewall.viewExternalLogs": () => {
-      vscode.env.openExternal(
-        vscode.Uri.parse("http://localhost:3000/logs"),
-      );
+      vscode.env.openExternal(vscode.Uri.parse("http://localhost:3000/logs"));
     },
 
     "aiFirewall.scanExtensions": async () => {

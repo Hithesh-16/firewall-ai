@@ -37,7 +37,7 @@ test("resolveLsToolDirPath preserves forward slashes", () => {
 });
 
 test("resolveLsToolDirPath preserves hidden directory paths", () => {
-  expect(resolveLsToolDirPath(".continue/rules")).toBe(".continue/rules");
+  expect(resolveLsToolDirPath(".ai-firewall/rules")).toBe(".ai-firewall/rules");
 });
 
 test("resolveLsToolDirPath preserves hidden directory name only", () => {

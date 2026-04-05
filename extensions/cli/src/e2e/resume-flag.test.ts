@@ -34,7 +34,7 @@ describe("E2E: Resume Flag", () => {
       args: ["-p", "--config", context.configPath, "hello"],
       env: {
         // Use a fixed session ID so both CLI calls use the same session
-        CONTINUE_CLI_TEST_SESSION_ID: "test-session-123",
+        AI_FIREWALL_CLI_TEST_SESSION_ID: "test-session-123",
         AI_FIREWALL_GLOBAL_DIR: path.join(context.testDir, ".ai-firewall"),
       },
       timeout: 15000,
@@ -84,7 +84,7 @@ describe("E2E: Resume Flag", () => {
     const resumeResult = await runCLI(context, {
       args: ["-p", "--resume", "--config", context.configPath],
       env: {
-        CONTINUE_CLI_TEST_SESSION_ID: "test-session-123",
+        AI_FIREWALL_CLI_TEST_SESSION_ID: "test-session-123",
         AI_FIREWALL_GLOBAL_DIR: path.join(context.testDir, ".ai-firewall"),
       },
       timeout: 15000,
@@ -103,7 +103,7 @@ describe("E2E: Resume Flag", () => {
     const result = await runCLI(context, {
       args: ["-p", "--resume", "--config", context.configPath],
       env: {
-        CONTINUE_CLI_TEST_SESSION_ID: "no-session-456",
+        AI_FIREWALL_CLI_TEST_SESSION_ID: "no-session-456",
         AI_FIREWALL_GLOBAL_DIR: path.join(context.testDir, ".ai-firewall"),
       },
       timeout: 15000,
@@ -141,7 +141,7 @@ describe("E2E: Resume Flag", () => {
     const firstResult = await runCLI(context, {
       args: ["-p", "--config", context.configPath, "first message"],
       env: {
-        CONTINUE_CLI_TEST_SESSION_ID: sessionId,
+        AI_FIREWALL_CLI_TEST_SESSION_ID: sessionId,
         AI_FIREWALL_GLOBAL_DIR: path.join(context.testDir, ".ai-firewall"),
       },
       timeout: 15000,
@@ -180,7 +180,7 @@ describe("E2E: Resume Flag", () => {
         "second message",
       ],
       env: {
-        CONTINUE_CLI_TEST_SESSION_ID: sessionId,
+        AI_FIREWALL_CLI_TEST_SESSION_ID: sessionId,
         AI_FIREWALL_GLOBAL_DIR: path.join(context.testDir, ".ai-firewall"),
       },
       timeout: 15000,

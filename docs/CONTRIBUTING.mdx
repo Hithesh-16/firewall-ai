@@ -1,7 +1,7 @@
 ---
-title: "Contributing to Continue Documentation"
+title: "Contributing to AI Firewall Documentation"
 sidebarTitle: "Docs Contributions"
-description: "Welcome to the Continue documentation! We're excited that you want to contribute. This guide will help you get started with our documentation workflow and tools."
+description: "Welcome to the AI Firewall documentation! We're excited that you want to contribute. This guide will help you get started with our documentation workflow and tools."
 ---
 
 ## 🚀 Quick Start
@@ -18,7 +18,7 @@ description: "Welcome to the Continue documentation! We're excited that you want
 
    ```bash
    # Fork the repository (this will also clone it locally)
-   gh repo fork continuedev/continue
+   gh repo fork ai-firewall/ai-firewall
    cd continue/docs
    ```
 
@@ -42,7 +42,7 @@ Before creating any issues, we ask that you start with a GitHub Discussion. This
 
 <Steps>
   <Step title="Go to GitHub Discussions">
-    Visit the [Continue GitHub Discussions](https://github.com/continuedev/continue/discussions) page.
+    Visit the [Continue GitHub Discussions](https://github.com/ai-firewall/ai-firewall/discussions) page.
   </Step>
   
   <Step title="Choose the right category">
@@ -56,7 +56,7 @@ Before creating any issues, we ask that you start with a GitHub Discussion. This
     - Steps to reproduce (if applicable)
     - Expected vs. actual behavior
     - Screenshots or code examples when helpful
-    - Your environment (OS, IDE, Continue version)
+    - Your environment (OS, IDE, AI Firewall version)
   </Step>
 </Steps>
 
@@ -64,11 +64,11 @@ Before creating any issues, we ask that you start with a GitHub Discussion. This
 
 <Info>
   
-  **Important**: All issues should start as discussions. The Continue team will determine if and when a discussion should be escalated to a GitHub issue.
+  **Important**: All issues should start as discussions. The AI Firewall team will determine if and when a discussion should be escalated to a GitHub issue.
   
 </Info>
 
-The Continue team will review discussions and may:
+The AI Firewall team will review discussions and may:
 - Provide a solution or clarification directly in the discussion
 - Ask for additional information or testing
 - Convert the discussion to an issue if it requires code changes or is a confirmed bug
@@ -82,20 +82,20 @@ A discussion will typically be converted to an issue when:
 - Community consensus supports the proposed change
 - Technical implementation is required
 
-## 🤖 AI-Powered Documentation with Continue
+## 🤖 AI-Powered Documentation with AI Firewall
 
-We strongly encourage using Continue's AI assistance to maintain consistency and quality in our documentation. Here are three ways to set this up:
+We strongly encourage using AI Firewall's AI assistance to maintain consistency and quality in our documentation. Here are three ways to set this up:
 
 ### Option 1: Use the Pre-Built Documentation Agent (Recommended)
 
 The easiest way to get started is using our pre-configured documentation agent:
 
 <Steps>
-  <Step title="Install the agent from Continue Mission Control">
-    Visit [the Docs Assistant - Mintlify in Mission Control](https://continue.dev/continuedev/docs-mintlify) and click "Install" to add it to your Continue setup. This agent comes pre-configured with all our documentation standards.
+  <Step title="Install the agent from AI Firewall Mission Control">
+    Visit [the Docs Assistant - Mintlify in Mission Control](https://ai-firewall.dev/ai-firewall/docs-mintlify) and click "Install" to add it to your Continue setup. This agent comes pre-configured with all our documentation standards.
 
     <Info>
-    Learn more about Continue Configs in our [config documentation](/guides/understanding-configs).
+    Learn more about AI Firewall Configs in our [config documentation](/guides/understanding-configs).
     </Info>
   </Step>
   
@@ -103,21 +103,21 @@ The easiest way to get started is using our pre-configured documentation agent:
     <Tabs>
       <Tab title="Command Line">
         ```bash
-        # Install the Continue CLI if you haven't already
-        npm install -g @continuedev/cli
+        # Install the AI Firewall CLI if you haven't already
+        npm install -g @ai-firewall/cli
         
         # Use the agent from the command line
-        cn "Create a new guide for using the Continue CLI with Linear" --config continuedev/docs-mintlify
+        cn "Create a new guide for using the AI Firewall CLI with Linear" --config ai-firewall/docs-mintlify
         ```
       </Tab>
       
       <Tab title="IDE">
-        1. Open Continue in your IDE
+        1. Open AI Firewall in your IDE
         2. Select the "Docs Assistant - Mintlify" agent from the model dropdown
         3. Ask it to help you create or edit documentation
         
         Example prompts:
-        - "Create a new guide for using the Continue CLI with Linear"
+        - "Create a new guide for using the AI Firewall CLI with Linear"
         - "Update the getting-started guide with the new installation process"
         - "Format this documentation according to Mintlify standards"
       </Tab>
@@ -138,14 +138,14 @@ If you want more control or customization, you can create your own documentation
           Follow our [config creation guide](/mission-control/configs/create-a-config) to set up your own config.
   </Step>
   
-  <Step title="Add the Continue Docs MCP">
-    Install from Continue Mission Control: https://continue.dev/continuedev/continue-docs-mcp
+  <Step title="Add the AI Firewall Docs MCP">
+    Install from AI Firewall Mission Control: https://ai-firewall.dev/ai-firewall/ai-firewall-docs-mcp
     
-    This MCP provides context about Continue's documentation structure and standards.
+    This MCP provides context about AI Firewall's documentation structure and standards.
   </Step>
   
   <Step title="Add Mintlify formatting rules">
-    Install from Continue Mission Control: https://continue.dev/mintlify/technical-writing-rule
+    Install from AI Firewall Mission Control: https://ai-firewall.dev/mintlify/technical-writing-rule
     
     This rule ensures proper Mintlify component formatting.
   </Step>
@@ -154,8 +154,8 @@ If you want more control or customization, you can create your own documentation
     <Tabs>
       <Tab title="Command Line">
         ```bash
-        # Install the Continue CLI if you haven't already
-        npm install -g @continuedev/cli
+        # Install the AI Firewall CLI if you haven't already
+        npm install -g @ai-firewall/cli
         
         # Use your agent from the command line
         cn --config your-org/your-agent-name "Create a new guide for API authentication"
@@ -163,7 +163,7 @@ If you want more control or customization, you can create your own documentation
       </Tab>
       
       <Tab title="IDE">
-        1. Open Continue in your IDE
+        1. Open AI Firewall in your IDE
         2. Select your custom agent from the model dropdown
         3. Ask it to help you create or edit documentation
         
@@ -233,7 +233,7 @@ If you are creating a new guide, please test the steps yourself to ensure accura
    description: "Brief description of what this guide covers"
    ---
    ```
-3. Use the Continue agent to help format your content
+3. Use the AI Firewall agent to help format your content
 4. Update `docs.json` to include your new page in the navigation
 
 <Tip>
@@ -242,7 +242,7 @@ We have both guides and cookbooks. Use guides for step-by-step instructions and 
 
 ### Updating Existing Documentation
 
-1. Use the Continue agent with prompts like:
+1. Use the AI Firewall agent with prompts like:
    - "Update the installation guide with the new npm package"
    - "Add a troubleshooting section for connection issues"
 2. The agent will maintain consistent formatting automatically
@@ -254,7 +254,7 @@ Use language-specific code blocks:
 ````mdx
 ```typescript
 // Your TypeScript code here
-const example = "Hello, Continue!";
+const example = "Hello, AI Firewall!";
 ```
 ````
 
@@ -262,7 +262,7 @@ const example = "Hello, Continue!";
 
 1. **Local preview**: In the docs directory, run `npm run dev` and check your changes
 2. **Link validation**: Ensure all internal and external links work
-3. **Format check**: Use the Continue agent to validate Mintlify formatting
+3. **Format check**: Use the AI Firewall agent to validate Mintlify formatting
 4. **Build test**: Run `npm run build` to ensure no build errors
 
 ## 📤 Submitting Your Contribution
@@ -329,7 +329,7 @@ Learn more about linking PRs to issues in the [GitHub documentation](https://doc
 
 ## 💡 Tips for Success
 
-- **Use the Continue agent**: It knows our documentation standards and will save you time
+- **Use the AI Firewall agent**: It knows our documentation standards and will save you time
 - **Preview frequently**: Check your changes in the local dev server
 - **Ask questions**: Open an issue or discussion if you need clarification
 - **Small PRs are better**: Focus on one topic or fix per PR
@@ -338,10 +338,10 @@ Learn more about linking PRs to issues in the [GitHub documentation](https://doc
 
 ## 🆘 Getting Help
 
-- **Start a Discussion**: Use [GitHub Discussions](https://github.com/continuedev/continue/discussions) for documentation issues, suggestions, or questions
-- **Continue agent questions**: Check the [Continue Mission Control page](https://continue.dev/continuedev/docs-mintlify)
-- **GitHub Discussions**: Join the [GitHub Discussions](https://github.com/continuedev/continue/discussions) for community help
+- **Start a Discussion**: Use [GitHub Discussions](https://github.com/ai-firewall/ai-firewall/discussions) for documentation issues, suggestions, or questions
+- **AI Firewall agent questions**: Check the [AI Firewall Mission Control page](https://ai-firewall.dev/ai-firewall/docs-mintlify)
+- **GitHub Discussions**: Join the [GitHub Discussions](https://github.com/ai-firewall/ai-firewall/discussions) for community help
 - **Existing docs**: Review similar pages for formatting examples
 ---
 
-Thank you for contributing to Continue! Your efforts help make our documentation better for everyone. To learn more about contibuting to other parts of the project, check out our [main CONTRIBUTING guide](https://github.com/continuedev/continue/blob/main/CONTRIBUTING.md) 🎉
+Thank you for contributing to Continue! Your efforts help make our documentation better for everyone. To learn more about contibuting to other parts of the project, check out our [main CONTRIBUTING guide](https://github.com/ai-firewall/ai-firewall/blob/main/CONTRIBUTING.md) 🎉

@@ -5,7 +5,7 @@ import { getVersion } from "./version.js";
 const d = chalk.dim;
 const em = chalk.hex("#10b981");
 
-export const CONTINUE_ASCII_ART = `
+export const AI_FIREWALL_ASCII_ART = `
 ${em(` █████╗ ██╗    ███████╗██╗██████╗ ███████╗██╗    ██╗ █████╗ ██╗     ██╗
 ██╔══██╗██║    ██╔════╝██║██╔══██╗██╔════╝██║    ██║██╔══██╗██║     ██║
 ███████║██║    █████╗  ██║██████╔╝█████╗  ██║ █╗ ██║███████║██║     ██║
@@ -34,13 +34,13 @@ export function getDisplayableAsciiArt(): string {
   const terminalWidth = process.stdout.columns || 80;
 
   if (terminalWidth >= MIN_WIDTH_FOR_ASCII_ART) {
-    return CONTINUE_ASCII_ART;
+    return AI_FIREWALL_ASCII_ART;
   }
 
   return AF_ASCII_ART;
 }
 
-export const CONTINUE_LOGO_ASCII_ART = `
+export const AI_FIREWALL_LOGO_ASCII_ART = `
 ${em(`
      @@@@@@@@@@@@@@@@
    @@@@@@@@@@@@@@@@@@@@

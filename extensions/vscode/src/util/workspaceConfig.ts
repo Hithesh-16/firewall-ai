@@ -1,7 +1,7 @@
 import { workspace } from "vscode";
 
-export const CONTINUE_WORKSPACE_KEY = "continue";
+export const AI_FIREWALL_WORKSPACE_KEY = "aiFirewall";
 
-export function getContinueWorkspaceConfig() {
-  return workspace.getConfiguration(CONTINUE_WORKSPACE_KEY);
+export function getAiFirewallWorkspaceConfig() {
+  return workspace.getConfiguration(AI_FIREWALL_WORKSPACE_KEY);
 }

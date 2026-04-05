@@ -60,7 +60,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.queryByText("Try out the Continue CLI"),
+          screen.queryByText("Try out the AI Firewall CLI"),
         ).not.toBeInTheDocument();
       });
     });
@@ -70,7 +70,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -80,7 +80,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -157,7 +157,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -168,13 +168,15 @@ describe("CliInstallBanner", () => {
       await renderComponent(["", "not found"]);
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
 
     it("displays the title", () => {
-      expect(screen.getByText("Try out the Continue CLI")).toBeInTheDocument();
+      expect(
+        screen.getByText("Try out the AI Firewall CLI"),
+      ).toBeInTheDocument();
     });
 
     it("displays the description with 'cn' code element", () => {
@@ -201,7 +203,7 @@ describe("CliInstallBanner", () => {
     it("displays the CommandLine icon", () => {
       // The icon should be present in the component
       const banner = screen
-        .getByText("Try out the Continue CLI")
+        .getByText("Try out the AI Firewall CLI")
         .closest("div");
       expect(banner).toBeInTheDocument();
     });
@@ -212,7 +214,7 @@ describe("CliInstallBanner", () => {
       await renderComponent(["", "not found"]);
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -225,7 +227,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.queryByText("Try out the Continue CLI"),
+          screen.queryByText("Try out the AI Firewall CLI"),
         ).not.toBeInTheDocument();
       });
     });
@@ -281,7 +283,7 @@ describe("CliInstallBanner", () => {
 
       // Should not be visible immediately
       expect(
-        screen.queryByText("Try out the Continue CLI"),
+        screen.queryByText("Try out the AI Firewall CLI"),
       ).not.toBeInTheDocument();
     });
 
@@ -290,7 +292,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
 
@@ -301,7 +303,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.queryByText("Try out the Continue CLI"),
+          screen.queryByText("Try out the AI Firewall CLI"),
         ).not.toBeInTheDocument();
       });
 
@@ -314,7 +316,7 @@ describe("CliInstallBanner", () => {
 
       // Should still be hidden
       expect(
-        screen.queryByText("Try out the Continue CLI"),
+        screen.queryByText("Try out the AI Firewall CLI"),
       ).not.toBeInTheDocument();
     });
   });
@@ -325,7 +327,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -335,7 +337,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.queryByText("Try out the Continue CLI"),
+          screen.queryByText("Try out the AI Firewall CLI"),
         ).not.toBeInTheDocument();
       });
     });
@@ -345,7 +347,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -378,7 +380,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -388,7 +390,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.queryByText("Try out the Continue CLI"),
+          screen.queryByText("Try out the AI Firewall CLI"),
         ).not.toBeInTheDocument();
       });
     });
@@ -398,7 +400,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -408,7 +410,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
     });
@@ -437,7 +439,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.queryByText("Try out the Continue CLI"),
+          screen.queryByText("Try out the AI Firewall CLI"),
         ).not.toBeInTheDocument();
       });
     });
@@ -447,7 +449,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
 
@@ -477,7 +479,7 @@ describe("CliInstallBanner", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText("Try out the Continue CLI"),
+          screen.getByText("Try out the AI Firewall CLI"),
         ).toBeInTheDocument();
       });
 

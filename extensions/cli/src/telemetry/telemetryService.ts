@@ -73,12 +73,12 @@ class TelemetryService {
     );
 
     let telemetryEnabled = true;
-    if (process.env.CONTINUE_METRICS_ENABLED === "0") {
+    if (process.env.AI_FIREWALL_METRICS_ENABLED === "0") {
       telemetryEnabled = false;
-    } else if (process.env.CONTINUE_METRICS_ENABLED === "1") {
+    } else if (process.env.AI_FIREWALL_METRICS_ENABLED === "1") {
       telemetryEnabled = true;
     } else {
-      telemetryEnabled = process.env.CONTINUE_CLI_ENABLE_TELEMETRY !== "0";
+      telemetryEnabled = process.env.AI_FIREWALL_CLI_ENABLE_TELEMETRY !== "0";
     }
 
     const enabled = telemetryEnabled && hasOtelConfig;

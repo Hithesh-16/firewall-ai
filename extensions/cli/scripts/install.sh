@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Continue CLI Installer - Unix (macOS, Linux, WSL, Git Bash)
-# curl -fsSL https://continue.dev/install.sh | bash
+# AI Firewall CLI Installer - Unix (macOS, Linux, WSL, Git Bash)
+# curl -fsSL https://ai-firewall.dev/install.sh | bash
 
 REQUIRED_NODE_VERSION="20.19.0"
 PACKAGE_NAME="@continuedev/cli"
@@ -294,7 +294,7 @@ install_cli() {
 finalize() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    success "Continue CLI installation complete!"
+    success "AI Firewall CLI installation complete!"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
@@ -310,7 +310,7 @@ finalize() {
 main() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    printf "${BOLD}           Continue CLI Installer${NC}\n"
+    printf "${BOLD}           AI Firewall CLI Installer${NC}\n"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 

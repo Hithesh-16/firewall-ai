@@ -63,7 +63,6 @@ export const KNOWN_RULE_FILES = [
   ".cursorrules",
   ".windsurfrules",
   ".ai-firewall/rules",
-  ".continue/rules",
   "CLAUDE.md",
   "AGENTS.md",
   ".github/copilot-instructions.md",

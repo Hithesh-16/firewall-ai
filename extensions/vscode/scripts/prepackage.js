@@ -37,7 +37,9 @@ if (args[2] === "--target") {
 }
 if (!target) {
   const envTarget =
+    process.env.AI_FIREWALL_VSCODE_TARGET ||
     process.env.CONTINUE_VSCODE_TARGET ||
+    process.env.AI_FIREWALL_BUILD_TARGET ||
     process.env.CONTINUE_BUILD_TARGET ||
     process.env.VSCODE_TARGET;
   if (envTarget && typeof envTarget === "string") {
@@ -179,7 +181,9 @@ void (async () => {
   ];
   const onnxSrc = onnxCandidates.find((p) => fs.existsSync(p));
   if (!onnxSrc) {
-    console.warn("[info] onnxruntime-node/bin not found in any location, skipping");
+    console.warn(
+      "[info] onnxruntime-node/bin not found in any location, skipping",
+    );
   } else {
     await new Promise((resolve, reject) => {
       ncp(
@@ -364,7 +368,13 @@ void (async () => {
   console.log("[info] Copying sqlite node binding from core");
   await new Promise((resolve, reject) => {
     ncp(
-      (() => { const candidates = [path.join(__dirname, "../../../node_modules/sqlite3/build"), path.join(__dirname, "../../../core/node_modules/sqlite3/build")]; return candidates.find((p) => fs.existsSync(p)) || candidates[1]; })(),
+      (() => {
+        const candidates = [
+          path.join(__dirname, "../../../node_modules/sqlite3/build"),
+          path.join(__dirname, "../../../core/node_modules/sqlite3/build"),
+        ];
+        return candidates.find((p) => fs.existsSync(p)) || candidates[1];
+      })(),
       path.join(__dirname, "../out/build"),
       { dereference: true },
       (error) => {
@@ -381,7 +391,13 @@ void (async () => {
   // Copied here as well for the VS Code test suite
   await new Promise((resolve, reject) => {
     ncp(
-      (() => { const candidates = [path.join(__dirname, "../../../node_modules/sqlite3/build"), path.join(__dirname, "../../../core/node_modules/sqlite3/build")]; return candidates.find((p) => fs.existsSync(p)) || candidates[1]; })(),
+      (() => {
+        const candidates = [
+          path.join(__dirname, "../../../node_modules/sqlite3/build"),
+          path.join(__dirname, "../../../core/node_modules/sqlite3/build"),
+        ];
+        return candidates.find((p) => fs.existsSync(p)) || candidates[1];
+      })(),
       path.join(__dirname, "../out"),
       { dereference: true },
       (error) => {
@@ -483,7 +499,7 @@ void (async () => {
 
     // Tutorial
     "media/move-chat-panel-right.md",
-    "continue_tutorial.py",
+    "ai_firewall_tutorial.py",
     "config_schema.json",
 
     // Embeddings model

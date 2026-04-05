@@ -24,7 +24,7 @@ interface AddModelFormProps {
 const MODEL_PROVIDERS_URL =
   "https://docs.ai-firewall.dev/customize/model-providers";
 const CODESTRAL_URL = "https://console.mistral.ai/codestral";
-const CONTINUE_SETUP_URL = "https://docs.ai-firewall.dev/setup/overview";
+const AI_FIREWALL_SETUP_URL = "https://docs.ai-firewall.dev/setup/overview";
 
 export function AddModelForm({
   onDone,
@@ -132,9 +132,7 @@ export function AddModelForm({
       provider: selectedProvider.provider,
       title: selectedModel.title,
       // Vault-first: use apiKeyRef if vault succeeded, fall back to raw apiKey
-      ...(apiKeyRef
-        ? { apiKeyRef }
-        : hasValidApiKey ? { apiKey } : {}),
+      ...(apiKeyRef ? { apiKeyRef } : hasValidApiKey ? { apiKey } : {}),
     };
 
     ideMessenger.post("config/addModel", { model });

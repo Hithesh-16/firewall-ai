@@ -76,7 +76,7 @@ async function loadAndSetSession(
     }
 
     // Set the session ID so future operations use this session
-    process.env.CONTINUE_CLI_TEST_SESSION_ID = sessionId.replace(
+    process.env.AI_FIREWALL_CLI_TEST_SESSION_ID = sessionId.replace(
       "continue-cli-",
       "",
     );

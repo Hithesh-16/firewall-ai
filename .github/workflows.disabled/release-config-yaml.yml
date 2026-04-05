@@ -1,4 +1,4 @@
-name: Release @continuedev/config-yaml
+name: Release @ai-firewall/config-yaml
 
 on:
   push:
@@ -16,8 +16,8 @@ permissions:
 
 jobs:
   release:
-    # Only run this workflow on the main repository (continuedev/continue)
-    if: github.repository == 'continuedev/continue'
+    # Only run this workflow on the main repository (ai-firewall/ai-firewall)
+    if: github.repository == 'ai-firewall/ai-firewall'
     uses: ./.github/workflows/reusable-release.yml
     with:
       package-name: "config-yaml"

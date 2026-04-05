@@ -51,7 +51,7 @@ class NextEditStatusService(private val project: Project) {
             val sessionInfo = authService.loadControlPlaneSessionInfo()
             val userEmail = sessionInfo?.account?.id
 
-            if (userEmail == null || !userEmail.endsWith("@continue.dev")) {
+            if (userEmail == null || !userEmail.endsWith("@ai-firewall.dev")) {
                 return false
             }
 

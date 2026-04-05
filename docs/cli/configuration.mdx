@@ -6,7 +6,7 @@ title: "Configuration"
 
 1. **`--config` flag** — a file path or hub assistant slug passed at launch
 2. **Saved config** — the last-used configuration, persisted across sessions
-3. **Default** — your first assistant from [Continue](https://continue.dev), or `~/.continue/config.yaml` if you're not logged in
+3. **Default** — your first assistant from [Continue](https://ai-firewall.dev), or `~/.ai-firewall/config.yaml` if you're not logged in
 
 ## `--config` flag
 
@@ -34,7 +34,7 @@ This shows your available assistants and local configs. The selection is saved f
 
 ## `config.yaml`
 
-If you're not logged in to Continue, `cn` looks for `~/.continue/config.yaml`. This file uses the same format as the IDE extensions — see [config.yaml reference](/customize/deep-dives/configuration) for the full schema.
+If you're not logged in to Continue, `cn` looks for `~/.ai-firewall/config.yaml`. This file uses the same format as the IDE extensions — see [config.yaml reference](/customize/deep-dives/configuration) for the full schema.
 
 ## CLI-specific flags
 
@@ -60,7 +60,7 @@ All of these are repeatable — pass them multiple times to add multiple items.
 
 ## Organization
 
-If you belong to multiple organizations on Continue, use `--org` to specify which one:
+If you belong to multiple organizations on AI Firewall, use `--org` to specify which one:
 
 ```bash
 cn --org my-team -p "Review this PR"
@@ -70,7 +70,7 @@ In TUI mode, `/config` lets you switch organizations interactively.
 
 ## Secrets
 
-Store sensitive values (API keys, tokens) in [Continue → Settings → Secrets](https://continue.dev/settings/secrets). Reference them in config with:
+Store sensitive values (API keys, tokens) in [Continue → Settings → Secrets](https://ai-firewall.dev/settings/secrets). Reference them in config with:
 
 ```yaml
 ${{ secrets.MY_API_KEY }}

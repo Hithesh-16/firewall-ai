@@ -522,6 +522,23 @@ Agent triggers high-risk action (risk >= approval threshold in policy.json)
 | POST   | `/api/scan/multimodal/audio` | Scan audio transcript        |
 | POST   | `/api/scan/multimodal/file`  | Scan structured file content |
 
+### Privacy Settings
+
+| Method | Endpoint                | Description                       |
+| ------ | ----------------------- | --------------------------------- |
+| GET    | `/api/privacy/settings` | Read current privacy settings     |
+| POST   | `/api/privacy/settings` | Save privacy settings             |
+| DELETE | `/api/privacy/data`     | Permanently delete all audit data |
+
+### Plugin Management
+
+| Method | Endpoint                   | Description            |
+| ------ | -------------------------- | ---------------------- |
+| GET    | `/api/plugins`             | List installed plugins |
+| GET    | `/api/plugins/:id`         | Get plugin details     |
+| POST   | `/api/plugins/:id/enable`  | Enable a plugin        |
+| POST   | `/api/plugins/:id/disable` | Disable a plugin       |
+
 ### Auth, Policy, Gateway, Org (existing)
 
 | Method   | Endpoint                                  | Description                   |
@@ -565,6 +582,7 @@ Agent triggers high-risk action (risk >= approval threshold in policy.json)
 | `active_sessions`       | P4    | Cross-device session tracking (device, model, last activity)               |
 | `webhook_deliveries`    | P5    | Stripe-pattern delivery queue (status, attempts, retry, dead letter)       |
 | `tasks`                 | AC1   | Agent task tracking (7 types, state machine, progress, WebSocket events)   |
+| `settings`              | —     | Key-value settings store (privacy settings, feature config)                |
 
 ## Shared Packages
 
@@ -675,6 +693,8 @@ All proxy scanner files (`proxy/src/scanner/*.ts`) re-export from this package f
 | `piiVault.ts`                | Reversible PII tokenization (HMAC-SHA256, session-scoped, zero-knowledge)          | `proxy/src/redactor/`               |
 | `advancedScanners.test.ts`   | Tests for 8 advanced scanner modules (55 tests)                                    | `proxy/src/test/`                   |
 | `advancedFeatures.test.ts`   | Tests for 8 advanced feature modules (63 tests)                                    | `proxy/src/test/`                   |
+| `privacy.route.ts`           | Privacy settings CRUD, data retention, data deletion                               | `proxy/src/routes/`                 |
+| `plugin.route.ts`            | Plugin management REST API (list, enable/disable, details)                         | `proxy/src/routes/`                 |
 
 ## Conventions
 

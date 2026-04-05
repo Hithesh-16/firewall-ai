@@ -45,6 +45,8 @@ import { registerAgentRoutes } from "./routes/agent.route";
 import { registerCommandRoutes } from "./routes/command.route";
 import { registerSkillRoutes } from "./routes/skill.route";
 import { registerCronRoutes } from "./routes/cron.route";
+import { registerPrivacyRoutes } from "./routes/privacy.route";
+import { registerPluginRoutes } from "./routes/plugin.route";
 import { startWebhookPoller } from "./services/webhookQueue";
 import { startScheduledReports } from "./export/scheduledReports";
 import { logConfigSecurityWarnings } from "./middleware/configSecurityCheck";
@@ -181,6 +183,12 @@ async function bootstrap(): Promise<void> {
 
   // Pre-flight estimation
   await registerEstimateRoute(app);
+
+  // Privacy settings
+  await registerPrivacyRoutes(app);
+
+  // Plugin management (list, enable/disable)
+  await registerPluginRoutes(app);
 
   // Privacy audit (opt-in, Phase X)
   await registerAuditRoutes(app);

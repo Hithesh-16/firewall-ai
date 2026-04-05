@@ -943,4 +943,13 @@ CREATE INDEX IF NOT EXISTS idx_fr_team ON file_restrictions(team_id);
 CREATE INDEX IF NOT EXISTS idx_fr_user ON file_restrictions(user_id);
 `);
 
+// ── Settings KV table (privacy settings, feature config) ──────
+db.exec(`
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+);
+`);
+
 export default db;

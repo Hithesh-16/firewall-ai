@@ -51,10 +51,36 @@ Or use the "Export JSON" / "Export CSV" buttons on the Privacy page.
 Permanently delete all audit logs, usage data, and scan cache:
 
 ```bash
-curl -X DELETE http://localhost:8080/api/privacy/data
+curl -X DELETE http://localhost:8080/api/privacy/data \
+  -H "Authorization: Bearer <token>"
 ```
 
 <Warning>This action cannot be undone. All historical data will be permanently removed.</Warning>
+
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/privacy/settings` | Read current privacy settings |
+| POST | `/api/privacy/settings` | Save privacy settings (requires `settings:write`) |
+| DELETE | `/api/privacy/data` | Delete all audit data (requires `settings:write`) |
+| GET | `/api/export/json` | Export all data as JSON |
+| GET | `/api/export/csv` | Export all data as CSV |
+
+### Save Settings
+
+```bash
+curl -X POST http://localhost:8080/api/privacy/settings \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "telemetryEnabled": false,
+    "retentionDays": 30,
+    "anonymizeLogsEnabled": true
+  }'
+```
+
+When `retentionDays` is set to a value > 0, old audit logs beyond that window are pruned on save.
 
 ## What Data AI Firewall Stores
 

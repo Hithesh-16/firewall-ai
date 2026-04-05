@@ -24,8 +24,19 @@ const NAV_ITEMS: NavItem[] = [
     label: "Chat",
     section: "main",
     icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M2 3h12v8H4l-2 2V3z" strokeLinecap="round" strokeLinejoin="round" />
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path
+          d="M2 3h12v8H4l-2 2V3z"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     ),
   },
@@ -34,7 +45,14 @@ const NAV_ITEMS: NavItem[] = [
     label: "History",
     section: "main",
     icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
         <circle cx="8" cy="8" r="6" />
         <path d="M8 5v3l2 2" strokeLinecap="round" />
       </svg>
@@ -45,7 +63,14 @@ const NAV_ITEMS: NavItem[] = [
     label: "Settings",
     section: "main",
     icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
         <path d="M6.5 2h3l.5 2 1.5.5L13 3l2 2-1.5 1.5.5 1.5 2 .5v3l-2 .5-.5 1.5L15 13l-2 2-1.5-1.5-1.5.5-.5 2h-3l-.5-2-1.5-.5L3 15l-2-2 1.5-1.5L2 10l-2-.5v-3l2-.5.5-1.5L1 3l2-2 1.5 1.5L6 2l.5-2z" />
         <circle cx="8" cy="8" r="2" />
       </svg>
@@ -57,8 +82,19 @@ const NAV_ITEMS: NavItem[] = [
     label: "Security",
     section: "admin",
     icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M8 1L2 4v4c0 3.5 2.5 6.5 6 7.5 3.5-1 6-4 6-7.5V4L8 1z" strokeLinecap="round" strokeLinejoin="round" />
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path
+          d="M8 1L2 4v4c0 3.5 2.5 6.5 6 7.5 3.5-1 6-4 6-7.5V4L8 1z"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     ),
   },
@@ -67,7 +103,14 @@ const NAV_ITEMS: NavItem[] = [
     label: "Roles",
     section: "admin",
     icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
         <circle cx="6" cy="5" r="2.5" />
         <path d="M1 14c0-2.8 2.2-5 5-5s5 2.2 5 5" strokeLinecap="round" />
         <path d="M12 7l2 2 2-2" strokeLinecap="round" strokeLinejoin="round" />
@@ -79,7 +122,14 @@ const NAV_ITEMS: NavItem[] = [
     label: "Organization",
     section: "admin",
     icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
         <rect x="2" y="7" width="4" height="7" rx="1" />
         <rect x="6" y="2" width="4" height="12" rx="1" />
         <rect x="10" y="5" width="4" height="9" rx="1" />
@@ -91,10 +141,20 @@ const NAV_ITEMS: NavItem[] = [
     label: "Teams",
     section: "admin",
     icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
         <circle cx="5" cy="5" r="2" />
         <circle cx="11" cy="5" r="2" />
-        <path d="M1 13c0-2.2 1.8-4 4-4s4 1.8 4 4M7 13c0-2.2 1.8-4 4-4s4 1.8 4 4" strokeLinecap="round" />
+        <path
+          d="M1 13c0-2.2 1.8-4 4-4s4 1.8 4 4M7 13c0-2.2 1.8-4 4-4s4 1.8 4 4"
+          strokeLinecap="round"
+        />
       </svg>
     ),
   },
@@ -103,11 +163,114 @@ const NAV_ITEMS: NavItem[] = [
     label: "Agents",
     section: "admin",
     icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
         <rect x="3" y="3" width="10" height="10" rx="2" />
         <circle cx="6.5" cy="7" r="1" fill="currentColor" />
         <circle cx="9.5" cy="7" r="1" fill="currentColor" />
         <path d="M6 10c0 1.1.9 2 2 2s2-.9 2-2" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    path: ROUTES.TASKS,
+    label: "Tasks",
+    section: "admin",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <rect x="2" y="2" width="12" height="12" rx="2" />
+        <path d="M5 8l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    path: ROUTES.MEMORY,
+    label: "Memory",
+    section: "admin",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path d="M3 2h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" />
+        <path d="M5 6h6M5 9h4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    path: ROUTES.PLUGINS,
+    label: "Plugins",
+    section: "admin",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path
+          d="M6 2v3H4a1 1 0 00-1 1v2h2v6h6V8h2V6a1 1 0 00-1-1h-2V2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    path: ROUTES.SKILLS,
+    label: "Skills",
+    section: "admin",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path
+          d="M8 1l2 5h5l-4 3.5 1.5 5L8 11.5 3.5 14.5 5 9.5 1 6h5l2-5z"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    path: ROUTES.PRIVACY,
+    label: "Privacy",
+    section: "admin",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <circle cx="8" cy="7" r="3" />
+        <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round" />
+        <path d="M12 4l1-1M13 7h1.5" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -124,15 +287,16 @@ export default function WebNavSidebar() {
   const adminItems = NAV_ITEMS.filter((item) => item.section === "admin");
 
   const isActive = (path: string) => {
-    if (path === ROUTES.HOME) return location.pathname === "/" || location.pathname === "/index.html";
+    if (path === ROUTES.HOME)
+      return location.pathname === "/" || location.pathname === "/index.html";
     return location.pathname === path;
   };
 
   return (
-    <nav className="flex flex-col w-48 min-h-0 border-r border-border bg-secondary-background overflow-y-auto shrink-0">
+    <nav className="border-border bg-secondary-background flex min-h-0 w-48 shrink-0 flex-col overflow-y-auto border-r">
       {/* Logo / Brand */}
-      <div className="px-3 py-3 border-b border-border">
-        <span className="text-xs font-semibold uppercase tracking-wider text-description">
+      <div className="border-border border-b px-3 py-3">
+        <span className="text-description text-xs font-semibold uppercase tracking-wider">
           AI Firewall
         </span>
       </div>
@@ -150,9 +314,9 @@ export default function WebNavSidebar() {
       </div>
 
       {/* Admin section */}
-      <div className="py-1.5 border-t border-border">
+      <div className="border-border border-t py-1.5">
         <div className="px-3 py-1.5">
-          <span className="text-2xs uppercase tracking-wider text-description-muted">
+          <span className="text-2xs text-description-muted uppercase tracking-wider">
             Administration
           </span>
         </div>
@@ -181,7 +345,7 @@ function SidebarItem({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors ${
+      className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
         active
           ? "bg-list-active text-list-active-foreground"
           : "text-description hover:text-foreground hover:bg-list-hover"

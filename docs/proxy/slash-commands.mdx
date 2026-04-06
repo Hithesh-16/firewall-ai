@@ -5,7 +5,7 @@ description: "Built-in slash commands for diagnostics, cost tracking, memory man
 
 ## Overview
 
-AI Firewall includes 12 built-in slash commands accessible from the CLI, GUI chat, or via the API. Commands are loaded by the command registry and can be extended with skills and plugins.
+AI Firewall includes 13 built-in slash commands accessible from the CLI, GUI chat, or via the API. Commands are loaded by the command registry and can be extended with skills and plugins.
 
 ## Available Commands
 
@@ -135,6 +135,61 @@ List all available commands.
 ```
 /help
 ```
+
+### /security-audit
+
+Full-repository security audit. Aliases: `/audit`, `/sec-audit`.
+
+```
+/security-audit                    # Scan current project
+/security-audit /path/to/repo     # Scan specific directory
+```
+
+Scans up to 5,000 files for:
+- **Hardcoded secrets** — AWS keys, GitHub tokens, JWTs, DB URLs, private keys (12 patterns)
+- **OWASP vulnerabilities** — SQL injection, XSS, SSRF, command injection, path traversal, XXE, insecure deserialization
+- **Weak cryptography** — MD5, SHA-1, ECB mode, hardcoded IVs, weak PRNGs, deprecated ciphers
+- **Insecure configuration** — CORS wildcard, disabled TLS, debug mode, default credentials
+- **Dependency risks** — outdated packages, known vulnerable patterns
+- **PII exposure** — emails, phones, SSNs in source code
+- **Debug artifacts** — sensitive data in logs, TODO/FIXME markers
+- **Attack surface** — exposed endpoints, admin panels without auth
+
+Output includes a **risk score** (0-100), **letter grade** (A-F), technology stack detection, and prioritized findings with CWE references and remediation advice.
+
+#### API Usage
+
+```bash
+curl -X POST http://localhost:8080/api/security-audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectPath": "/path/to/project",
+    "maxFiles": 5000,
+    "maxFileSize": 1048576,
+    "includeInfoFindings": false,
+    "skipDirs": ["vendor", "third_party"]
+  }'
+```
+
+Response headers: `X-AF-Audit-Grade`, `X-AF-Audit-Risk-Score`, `X-AF-Audit-Total-Findings`, `X-AF-Audit-Files-Scanned`.
+
+#### Skill Usage
+
+The `/security-audit` skill provides an AI-guided 10-step audit that uses `read_file` and `grep_search` to scan systematically, producing a structured markdown report.
+
+### /security-review
+
+Security review scoped to changed files only. Aliases: `/sec-review`.
+
+```
+/security-review              # Review changes vs HEAD
+/security-review main..HEAD   # Review changes vs main branch
+/security-review abc123       # Review changes vs specific commit
+```
+
+Copies only the changed files to a temporary directory, runs the full security audit scanner on them, then reports findings. Useful for pre-commit or PR review workflows.
+
+Output includes risk score, grade, and findings limited to your changed files — so you see only what you introduced, not legacy issues.
 
 ## API Usage
 

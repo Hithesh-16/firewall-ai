@@ -7,32 +7,46 @@ import {
   listApiTokens,
   revokeApiToken,
   rotateApiToken,
-  updateUserRole
+  updateUserRole,
 } from "../auth/authService";
 import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import { assignOrgRole } from "../auth/rbacService";
+import { createOrg, assignUserToOrg } from "../org/orgService";
 import rawDb from "../db/database";
 import { db } from "../db/index";
 import { users } from "../db/schema";
 import { asc } from "drizzle-orm";
 
 const VALID_SCOPES = [
-  "chat:write", "chat:read", "logs:read", "logs:export",
-  "policy:read", "policy:write", "providers:read", "providers:write",
-  "teams:read", "teams:write", "users:read", "users:write",
-  "approvals:read", "approvals:write", "mcp:read", "mcp:write", "*",
+  "chat:write",
+  "chat:read",
+  "logs:read",
+  "logs:export",
+  "policy:read",
+  "policy:write",
+  "providers:read",
+  "providers:write",
+  "teams:read",
+  "teams:write",
+  "users:read",
+  "users:write",
+  "approvals:read",
+  "approvals:write",
+  "mcp:read",
+  "mcp:write",
+  "*",
 ] as const;
 
 const registerSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   password: z.string().min(8),
-  role: z.enum(["admin", "security_lead", "developer", "auditor"]).optional()
+  role: z.enum(["admin", "security_lead", "developer", "auditor"]).optional(),
 });
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string()
+  password: z.string(),
 });
 
 const tokenCreateSchema = z.object({
@@ -52,33 +66,54 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/auth/register", async (request, reply) => {
     const parsed = registerSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+      return reply
+        .status(400)
+        .send({ error: "Invalid payload", details: parsed.error.flatten() });
     }
 
     try {
+      // Any self-signup (no invitation) gets admin role
+      const role = parsed.data.role ?? "admin";
+
       const user = createUser(
         parsed.data.email,
         parsed.data.name,
         parsed.data.password,
-        parsed.data.role ?? "developer"
+        role,
       );
 
+      // Auto-create a personal org for the user if they don't have one
+      const slug = parsed.data.email
+        .split("@")[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-");
+      const org = createOrg(
+        `${parsed.data.name}'s Organization`,
+        `${slug}-${user.id}`,
+      );
+      assignUserToOrg(user.id, org.id);
+      user.orgId = org.id;
+
       // Assign org role in user_org_roles (required for capability-based RBAC)
-      if (user.orgId) {
-        const roleName = user.role ?? "developer";
-        const systemRole = rawDb.prepare(
-          "SELECT id FROM roles WHERE name = ? AND is_system = 1"
-        ).get(roleName) as { id: number } | undefined;
-        if (systemRole) {
-          assignOrgRole(user.id, user.orgId, systemRole.id);
-        }
+      const roleName = user.role ?? "developer";
+      const systemRole = rawDb
+        .prepare("SELECT id FROM roles WHERE name = ? AND is_system = 1")
+        .get(roleName) as { id: number } | undefined;
+      if (systemRole) {
+        assignOrgRole(user.id, org.id, systemRole.id);
       }
 
       const { token } = createApiToken(user.id, "default");
 
       return reply.status(201).send({
-        user: { id: user.id, email: user.email, name: user.name, role: user.role, orgId: user.orgId ?? null },
-        token
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          orgId: user.orgId ?? null,
+        },
+        token,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -92,7 +127,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/auth/login", async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+      return reply
+        .status(400)
+        .send({ error: "Invalid payload", details: parsed.error.flatten() });
     }
 
     const user = authenticateUser(parsed.data.email, parsed.data.password);
@@ -103,8 +140,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const { token } = createApiToken(user.id, "session");
 
     return {
-      user: { id: user.id, email: user.email, name: user.name, role: user.role, orgId: user.orgId ?? null },
-      token
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        orgId: user.orgId ?? null,
+      },
+      token,
     };
   });
 
@@ -116,93 +159,119 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         email: ctx.user.email,
         name: ctx.user.name,
         role: ctx.user.role,
-        orgId: ctx.user.orgId
-      }
+        orgId: ctx.user.orgId,
+      },
     };
   });
 
-  app.post("/api/auth/tokens", { preHandler: requireAuth }, async (request, reply) => {
-    const parsed = tokenCreateSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+  app.post(
+    "/api/auth/tokens",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const parsed = tokenCreateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    const ctx = request.authContext!;
-    const { token, record } = createApiToken(ctx.user.id, parsed.data.name, {
-      expiresInDays: parsed.data.expiresInDays,
-      scopes: parsed.data.scopes,
-      orgId: parsed.data.orgId,
-      teamId: parsed.data.teamId,
-    });
+      const ctx = request.authContext!;
+      const { token, record } = createApiToken(ctx.user.id, parsed.data.name, {
+        expiresInDays: parsed.data.expiresInDays,
+        scopes: parsed.data.scopes,
+        orgId: parsed.data.orgId,
+        teamId: parsed.data.teamId,
+      });
 
-    return reply.status(201).send({
-      token,
-      id: record.id,
-      name: record.name,
-      scopes: record.scopes,
-      orgId: record.orgId,
-      teamId: record.teamId,
-      expiresAt: record.expiresAt,
-    });
-  });
+      return reply.status(201).send({
+        token,
+        id: record.id,
+        name: record.name,
+        scopes: record.scopes,
+        orgId: record.orgId,
+        teamId: record.teamId,
+        expiresAt: record.expiresAt,
+      });
+    },
+  );
 
   app.get("/api/auth/tokens", { preHandler: requireAuth }, async (request) => {
     const ctx = request.authContext!;
     return { tokens: listApiTokens(ctx.user.id) };
   });
 
-  app.delete("/api/auth/tokens/:id", { preHandler: requireAuth }, async (request, reply) => {
-    const ctx = request.authContext!;
-    const { id } = request.params as { id: string };
-    const revoked = revokeApiToken(Number(id), ctx.user.id);
+  app.delete(
+    "/api/auth/tokens/:id",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const ctx = request.authContext!;
+      const { id } = request.params as { id: string };
+      const revoked = revokeApiToken(Number(id), ctx.user.id);
 
-    if (!revoked) {
-      return reply.status(404).send({ error: "Token not found" });
-    }
-    return { ok: true };
-  });
+      if (!revoked) {
+        return reply.status(404).send({ error: "Token not found" });
+      }
+      return { ok: true };
+    },
+  );
 
   /** POST /api/auth/tokens/rotate — Atomically revoke old + create new with same scopes */
-  app.post("/api/auth/tokens/rotate", { preHandler: requireAuth }, async (request, reply) => {
-    const parsed = tokenRotateSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+  app.post(
+    "/api/auth/tokens/rotate",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const parsed = tokenRotateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    const ctx = request.authContext!;
-    const result = rotateApiToken(parsed.data.tokenId, ctx.user.id, parsed.data.expiresInDays);
+      const ctx = request.authContext!;
+      const result = rotateApiToken(
+        parsed.data.tokenId,
+        ctx.user.id,
+        parsed.data.expiresInDays,
+      );
 
-    if (!result) {
-      return reply.status(404).send({ error: "Token not found or does not belong to you" });
-    }
+      if (!result) {
+        return reply
+          .status(404)
+          .send({ error: "Token not found or does not belong to you" });
+      }
 
-    return reply.status(201).send({
-      token: result.token,
-      id: result.record.id,
-      name: result.record.name,
-      scopes: result.record.scopes,
-      orgId: result.record.orgId,
-      teamId: result.record.teamId,
-      expiresAt: result.record.expiresAt,
-      rotatedFromId: result.record.rotatedFromId,
-    });
-  });
+      return reply.status(201).send({
+        token: result.token,
+        id: result.record.id,
+        name: result.record.name,
+        scopes: result.record.scopes,
+        orgId: result.record.orgId,
+        teamId: result.record.teamId,
+        expiresAt: result.record.expiresAt,
+        rotatedFromId: result.record.rotatedFromId,
+      });
+    },
+  );
 
   app.get(
     "/api/admin/users",
     { preHandler: [requireAuth, requireCapability("user:read")] },
     async () => {
-      const rows = db.select({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        role: users.role,
-        org_id: users.orgId,
-        created_at: users.createdAt
-      }).from(users).orderBy(asc(users.createdAt)).all();
-      
+      const rows = db
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+          org_id: users.orgId,
+          created_at: users.createdAt,
+        })
+        .from(users)
+        .orderBy(asc(users.createdAt))
+        .all();
+
       return { users: rows };
-    }
+    },
   );
 
   app.put(
@@ -217,8 +286,11 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ error: "Invalid role", validRoles });
       }
 
-      updateUserRole(Number(id), body.role as "admin" | "security_lead" | "developer" | "auditor");
+      updateUserRole(
+        Number(id),
+        body.role as "admin" | "security_lead" | "developer" | "auditor",
+      );
       return { ok: true };
-    }
+    },
   );
 }

@@ -1,0 +1,149 @@
+---
+title: "Security Audit"
+description: "Full-repository security scanning for secrets, vulnerabilities, weak crypto, and attack surface"
+---
+
+## Overview
+
+The Security Audit feature performs comprehensive, technology-agnostic scanning of entire repositories. It combines AI Firewall's secret and PII detection with OWASP vulnerability pattern matching, cryptographic analysis, configuration review, and attack surface mapping.
+
+Available via three interfaces:
+- **Slash command**: `/security-audit` in the CLI or chat
+- **REST API**: `POST /api/security-audit`
+- **AI Skill**: `/security-audit` skill for agent-guided audits
+- **Web Dashboard**: Security > Audit page
+
+## What It Scans
+
+### Hardcoded Secrets (via @ai-firewall/scanner)
+AWS access keys, private keys, JWTs, database connection strings, GitHub tokens, Slack tokens, Google/Azure credentials, bearer tokens, generic API keys, hardcoded passwords, environment variable leaks.
+
+### OWASP Vulnerability Patterns
+| Category | Examples |
+|----------|---------|
+| SQL Injection (CWE-89) | String concatenation in queries, f-string formatting, template literal interpolation |
+| XSS (CWE-79) | `innerHTML`, `dangerouslySetInnerHTML`, `v-html`, `document.write`, Blade `{!! !!}`, Jinja `\|safe` |
+| Command Injection (CWE-78) | `child_process` + dynamic input, `os.system`, `subprocess` with `shell=True`, `Runtime.exec` |
+| Path Traversal (CWE-22) | Unsanitized file paths from request parameters |
+| SSRF (CWE-918) | User-controlled URLs in HTTP requests |
+| XXE (CWE-611) | XML parsing without entity restrictions |
+| Insecure Deserialization (CWE-502) | `pickle.loads`, `yaml.load` without SafeLoader, `unserialize` |
+| Code Injection (CWE-95) | `eval()` with dynamic input, `new Function()` with concatenation |
+
+### Weak Cryptography
+MD5/SHA-1 for security, ECB cipher mode, hardcoded IVs/nonces, `Math.random()` for tokens, DES/RC4/Blowfish, deprecated cipher algorithms.
+
+### Insecure Configuration
+CORS wildcard origins, disabled SSL/TLS verification, debug mode enabled, default/weak credentials.
+
+### PII Exposure
+Emails, phone numbers, SSNs, Aadhaar numbers, PAN cards, credit card numbers, IP addresses found in source files.
+
+### Technology Stack Detection
+Automatically identifies: Node.js, TypeScript, Python, Go, Java, Rust, Ruby, PHP, C#, Docker, Docker Compose, Kubernetes, Terraform, and more — based on manifest files and file extensions.
+
+## Risk Scoring
+
+| Score Range | Grade | Meaning |
+|-------------|-------|---------|
+| 0-20 | A | No critical or high findings |
+| 21-40 | B | Minor issues only |
+| 41-60 | C | Some high-severity findings |
+| 61-80 | D | Critical findings present |
+| 81-100 | F | Multiple critical findings or active credential exposure |
+
+Scoring weights: Critical = 25 points, High = 10, Medium = 3, Low = 1, Info = 0. Capped at 100.
+
+## CLI Usage
+
+```bash
+/security-audit                    # Scan current project
+/security-audit /path/to/repo     # Scan specific directory
+```
+
+Aliases: `/audit`, `/sec-audit`
+
+Output includes risk score, grade, file/finding counts, tech stack, and the top 20 findings with severity, file location, and remediation advice.
+
+## API Reference
+
+### `POST /api/security-audit`
+
+<Info>
+This endpoint scans the filesystem — it requires the proxy to have read access to the target directory.
+</Info>
+
+**Request Body:**
+
+```json
+{
+  "projectPath": "/path/to/project",
+  "maxFiles": 5000,
+  "maxFileSize": 1048576,
+  "includeInfoFindings": false,
+  "skipDirs": ["vendor", "third_party"],
+  "path": "src/api"
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `projectPath` | string (required) | — | Absolute path to the project root |
+| `maxFiles` | number | 5000 | Maximum files to scan |
+| `maxFileSize` | number | 1048576 (1MB) | Skip files larger than this |
+| `includeInfoFindings` | boolean | false | Include informational findings (TODOs, etc.) |
+| `skipDirs` | string[] | — | Additional directories to skip |
+| `path` | string | — | Sub-path within project to scope the scan |
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "projectPath": "/path/to/project",
+    "scanStarted": "2025-01-15T10:30:00.000Z",
+    "scanDuration": 1463,
+    "filesScanned": 500,
+    "filesSkipped": 7,
+    "techStack": ["Node.js/JavaScript", "TypeScript", "Docker"],
+    "summary": {
+      "totalFindings": 42,
+      "bySeverity": { "critical": 3, "high": 8, "medium": 20, "low": 11 },
+      "byCategory": { "hardcoded_secret": 5, "vulnerability_pattern": 15, "weak_crypto": 10, "pii_exposure": 12 },
+      "riskScore": 68,
+      "grade": "D"
+    },
+    "findings": [
+      {
+        "category": "hardcoded_secret",
+        "severity": "critical",
+        "title": "Hardcoded AWS_KEY detected",
+        "description": "Found AWS_KEY in source file",
+        "filePath": "config/deploy.ts",
+        "lineNumber": 23,
+        "matchedText": "AKIA...LE",
+        "recommendation": "Move secrets to environment variables or a secrets manager",
+        "cweName": "CWE-798: Hardcoded Credentials"
+      }
+    ]
+  }
+}
+```
+
+**Response Headers:**
+
+| Header | Value |
+|--------|-------|
+| `X-AF-Audit-Grade` | A, B, C, D, or F |
+| `X-AF-Audit-Risk-Score` | 0-100 |
+| `X-AF-Audit-Total-Findings` | Number of findings |
+| `X-AF-Audit-Files-Scanned` | Number of files scanned |
+
+## Default Skip Directories
+
+The scanner automatically skips: `node_modules`, `.git`, `dist`, `build`, `vendor`, `__pycache__`, `.next`, `.nuxt`, `.venv`, `venv`, `target`, `out`, `bin`, `obj`, `.gradle`, `.idea`, `.vscode`, `coverage`, `.cache`, `bower_components`.
+
+## Binary Extensions Skipped
+
+Images, fonts, archives, executables, PDFs, media files, compiled files, databases, lock files, minified files, and source maps are automatically excluded.

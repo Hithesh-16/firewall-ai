@@ -731,6 +731,150 @@ const securityAuditCommand: ActionCommand = {
   },
 };
 
+// ── /security-review ──────────────────────────────────────────
+
+const securityReviewCommand: ActionCommand = {
+  name: "security-review",
+  aliases: ["sec-review"],
+  description:
+    "Security review on changed files — scans git diff for vulnerabilities",
+  type: "action",
+  source: "builtin",
+
+  async call(
+    args: string,
+    context: CommandContext,
+  ): Promise<LocalCommandResult> {
+    const { execSync } = await import("node:child_process");
+    const { writeFileSync, unlinkSync, mkdtempSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { runSecurityAudit } = await import(
+      "../scanner/securityAuditScanner"
+    );
+
+    const projectPath = context.projectPath || process.cwd();
+
+    // Get changed files from git
+    let changedFiles: string[];
+    try {
+      const scope = args.trim() || "HEAD";
+      const raw = execSync(`git diff --name-only ${scope}`, {
+        cwd: projectPath,
+        encoding: "utf-8",
+        timeout: 10_000,
+      }).trim();
+
+      if (!raw) {
+        return {
+          output: "No changed files found. Nothing to review.",
+          success: true,
+          data: { filesReviewed: 0 },
+        };
+      }
+
+      changedFiles = raw.split("\n").filter(Boolean);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("not a git repository")) {
+        return { output: "Not a git repository.", success: false };
+      }
+      return {
+        output: `Failed to get changed files: ${msg}`,
+        success: false,
+      };
+    }
+
+    // Create a temp dir with only the changed files (symlinked)
+    const tmpDir = mkdtempSync(join(tmpdir(), "afw-sec-review-"));
+    try {
+      for (const file of changedFiles) {
+        const srcPath = join(projectPath, file);
+        const destPath = join(tmpDir, file);
+        try {
+          const { mkdirSync, copyFileSync } = await import("node:fs");
+          const { dirname } = await import("node:path");
+          mkdirSync(dirname(destPath), { recursive: true });
+          copyFileSync(srcPath, destPath);
+        } catch {
+          // File might have been deleted in the diff
+        }
+      }
+
+      const result = await runSecurityAudit(tmpDir, {
+        maxFiles: 500,
+        maxFileSize: 1024 * 1024,
+        includeInfoFindings: false,
+      });
+
+      // Remap file paths back to project-relative
+      const findings = result.findings.map((f) => ({
+        ...f,
+        filePath: f.filePath,
+      }));
+
+      if (findings.length === 0) {
+        return {
+          output: [
+            `Security Review: ${changedFiles.length} changed file(s) scanned`,
+            `No security issues found in changed files.`,
+            `Grade: A`,
+          ].join("\n"),
+          success: true,
+          data: { filesReviewed: changedFiles.length, grade: "A" },
+        };
+      }
+
+      const s = result.summary;
+      const severityLine = [
+        s.bySeverity.critical > 0 ? `${s.bySeverity.critical} critical` : null,
+        s.bySeverity.high > 0 ? `${s.bySeverity.high} high` : null,
+        s.bySeverity.medium > 0 ? `${s.bySeverity.medium} medium` : null,
+        s.bySeverity.low > 0 ? `${s.bySeverity.low} low` : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      const topFindings = findings.slice(0, 15).map((f, i) => {
+        const sev = f.severity.toUpperCase();
+        const loc = f.lineNumber ? `${f.filePath}:${f.lineNumber}` : f.filePath;
+        return `  ${i + 1}. [${sev}] ${f.title}\n     ${loc}\n     ${f.recommendation}`;
+      });
+
+      const output = [
+        `Security Review: ${changedFiles.length} changed file(s)`,
+        `${"=".repeat(45)}`,
+        `Risk Score: ${s.riskScore}/100 (Grade: ${s.grade})`,
+        `Findings: ${s.totalFindings} (${severityLine || "none"})`,
+        ``,
+        ...topFindings,
+        ...(findings.length > 15
+          ? [``, `... and ${findings.length - 15} more.`]
+          : []),
+      ];
+
+      return {
+        output: output.join("\n"),
+        success: s.bySeverity.critical === 0,
+        data: {
+          grade: s.grade,
+          riskScore: s.riskScore,
+          totalFindings: s.totalFindings,
+          filesReviewed: changedFiles.length,
+        },
+      };
+    } finally {
+      // Cleanup temp dir
+      try {
+        const { rmSync } = await import("node:fs");
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        // Best effort cleanup
+      }
+    }
+  },
+};
+
 // ── Export all built-in commands ────────────────────────────────
 
 export const BUILTIN_COMMANDS: readonly Command[] = [
@@ -746,4 +890,5 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
   shareCommand,
   resumeCommand,
   securityAuditCommand,
+  securityReviewCommand,
 ];

@@ -1,0 +1,87 @@
+---
+title: "Authentication"
+description: "CLI login, registration, and token management"
+---
+
+## Overview
+
+The AI Firewall CLI authenticates against the local proxy server (`localhost:8080`). On login, it stores a session token at `~/.ai-firewall/auth.json`.
+
+## Login
+
+```bash
+ai-firewall login
+```
+
+You'll be prompted for email and password:
+
+```
+AI Firewall — Login
+
+Email: you@example.com
+Password: ********
+
+Logged in as you@example.com (admin)
+```
+
+### First-Time Registration
+
+If your credentials don't match an existing account, the CLI offers to register:
+
+```
+Login failed: Invalid credentials
+
+No account? Register now? (y/n): y
+Name: Your Name
+
+Registered and logged in as you@example.com (admin)
+```
+
+Self-signup users are assigned the **admin** role by default.
+
+### Environment Variable Auth
+
+Skip the interactive prompt by setting:
+
+```bash
+export AI_FIREWALL_API_KEY=afw_your_token_here
+```
+
+The CLI will use this token directly without prompting.
+
+### Custom Proxy URL
+
+If your proxy runs on a different host/port:
+
+```bash
+export AI_FIREWALL_PROXY_URL=http://my-proxy:9090
+ai-firewall login
+```
+
+## Logout
+
+```bash
+ai-firewall logout
+```
+
+Removes the saved token from `~/.ai-firewall/auth.json`.
+
+## Token Storage
+
+Tokens are saved to `~/.ai-firewall/auth.json`:
+
+```json
+{
+  "userId": "1",
+  "userEmail": "you@example.com",
+  "accessToken": "afw_...",
+  "expiresAt": 1712345678000,
+  "organizationId": null
+}
+```
+
+The token is sent as `Authorization: Bearer afw_...` on all API requests.
+
+## Fallback Auth
+
+If the proxy is not running (`ECONNREFUSED`), the CLI falls back to the legacy Continue.dev WorkOS device flow. This is for backward compatibility only — the proxy-based auth is preferred.

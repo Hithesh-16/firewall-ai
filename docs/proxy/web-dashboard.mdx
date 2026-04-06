@@ -1,0 +1,132 @@
+---
+title: "Web Dashboard"
+description: "Standalone web dashboard for managing AI Firewall — providers, security, teams, and monitoring"
+---
+
+## Overview
+
+AI Firewall ships a standalone **web dashboard** at `http://localhost:5173` that provides full management of security, providers, users, and monitoring without requiring VS Code or any IDE.
+
+## Getting Started
+
+```bash
+# Start the proxy (required)
+cd proxy && npm run build && npm start
+
+# Start the web dashboard
+cd web && npm run dev
+```
+
+Open `http://localhost:5173` in your browser. You'll see the login page.
+
+### First-Time Setup
+
+1. Click **Create Account** on the login page
+2. Enter your name, email, and password (min 8 chars)
+3. The first user who signs up is automatically assigned the **admin** role
+4. An organization is auto-created for you with full RBAC permissions
+
+### SSO Login
+
+If your proxy has SSO configured (Google, GitHub, Microsoft, or OIDC), SSO buttons appear automatically on the login page. Set the following env vars before starting the proxy:
+
+```bash
+# Google
+SSO_GOOGLE_CLIENT_ID=your-client-id
+SSO_GOOGLE_CLIENT_SECRET=your-secret
+
+# GitHub
+SSO_GITHUB_CLIENT_ID=your-client-id
+SSO_GITHUB_CLIENT_SECRET=your-secret
+
+# Microsoft
+SSO_MICROSOFT_CLIENT_ID=your-client-id
+SSO_MICROSOFT_CLIENT_SECRET=your-secret
+```
+
+The redirect URI is `http://localhost:8080/api/auth/sso/callback` — add this to your OAuth provider's authorized redirect URIs.
+
+## Pages
+
+### Security Dashboard (`/security`)
+- Shield status and proxy health
+- Risk gauge with letter grade (A-F)
+- Real-time scan feed via WebSocket
+- All-time statistics (scanned, blocked, redacted, allowed)
+- Credit limits and usage
+- Provider overview
+
+### Security Audit (`/security/audit`)
+- Run full-repo security audits from the browser
+- View findings by severity with CWE references
+- Filter by category (secrets, injection, crypto, config, PII)
+
+### Chat (`/`)
+- Chat with AI models through the firewall proxy
+- Every message is scanned before forwarding
+- Model picker with provider selection
+- Security indicator on each message
+
+### Organization (`/org`)
+- **Providers tab**: View, add, and delete AI providers
+- **Users tab**: Invite users, change roles (admin/security_lead/developer/auditor)
+- **Credits tab**: Usage and credit limits per provider
+- **Audit tab**: Request audit log with filtering and export (JSON/CSV)
+
+### Add Provider (`/providers/add`)
+- Catalog of 18+ providers with logos and descriptions
+- Fuzzy search across provider names
+- Popular section: OpenAI, Anthropic, Gemini, Mistral, OpenRouter, Ollama
+- API key input with links to each provider's key page
+- Customizable base URL for self-hosted endpoints
+- Model selection with context length and pricing info
+- API keys are encrypted with AES-256-GCM in the vault
+
+### Teams (`/team`)
+- Team overview with member count and stats
+- Member management with role assignment
+- Per-user usage breakdown
+
+### Roles & Permissions (`/rbac`)
+- View system roles and their capabilities
+- Edit role capabilities per category
+- Capability categories: Security, Organization, Billing, Audit, Tools
+
+### Tasks (`/tasks`)
+- View active and completed agent tasks
+- Kill running tasks
+- Progress tracking (tool calls, tokens)
+
+### Memory (`/memory`)
+- Browse persistent memories by type
+- Create, view, and delete memories
+- View MEMORY.md index
+
+### Other Pages
+- **Skills** (`/skills`) — View and invoke bundled skills
+- **Commands** (`/commands`) — List available slash commands
+- **Plugins** (`/plugins`) — Manage plugin lifecycle
+- **Privacy** (`/privacy`) — Data retention settings and data deletion
+- **Notifications** (`/notifications`) — Configure notification channels
+- **Scheduled Jobs** (`/cron`) — Manage cron jobs
+- **Usage & Billing** (`/usage`) — Token and cost tracking
+
+## Authentication
+
+The web dashboard uses token-based authentication:
+- Tokens are stored in `localStorage` as `afw_token`
+- On load, the `AppShell` validates the token against `GET /api/auth/me`
+- Invalid or missing tokens redirect to the login page
+- Logout clears the token and redirects to login
+
+## Architecture
+
+```
+Browser (localhost:5173)
+  ├── Vite dev server serves the React SPA
+  └── API calls proxied to localhost:8080
+        └── Fastify proxy (auth, scanning, routing)
+              └── SQLite database
+```
+
+The web app is a React + Vite + Tailwind SPA using Redux Toolkit for state management. It communicates with the proxy via the same REST API used by the VS Code extension and CLI.

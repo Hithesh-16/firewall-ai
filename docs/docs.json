@@ -34,13 +34,15 @@
               "security/grounding",
               "security/compliance",
               "security/threat-intelligence",
-              "security/red-team"
+              "security/red-team",
+              "security/security-audit"
             ]
           },
           {
             "group": "Features",
             "icon": "star",
             "pages": [
+              "proxy/web-dashboard",
               "proxy/slash-commands",
               "proxy/plugins-skills",
               "proxy/advanced-features",
@@ -139,6 +141,7 @@
               "cli/tui-mode",
               "cli/headless-mode",
               "cli/configuration",
+              "cli/authentication",
               "cli/tool-permissions"
             ]
           }

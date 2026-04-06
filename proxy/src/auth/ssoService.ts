@@ -2,8 +2,11 @@ import crypto from "node:crypto";
 import { db } from "../db/index";
 import { ssoSessions, users } from "../db/schema";
 import { createUser, createApiToken } from "./authService";
+import { assignOrgRole } from "./rbacService";
+import { createOrg, assignUserToOrg } from "../org/orgService";
 import { Role, User } from "../types";
 import { eq } from "drizzle-orm";
+import rawDb from "../db/database";
 
 export type SSOProvider = "google" | "github" | "microsoft" | "oidc";
 
@@ -23,12 +26,15 @@ interface SSOUserProfile {
 }
 
 export function getSSOConfig(providerOverride?: string): SSOConfig | null {
-  const provider = (providerOverride || process.env.SSO_PROVIDER || "") as SSOProvider;
+  const provider = (providerOverride ||
+    process.env.SSO_PROVIDER ||
+    "") as SSOProvider;
 
   if (!provider) return null;
 
   const prefix = `SSO_${provider.toUpperCase()}_`;
-  const clientId = process.env[`${prefix}CLIENT_ID`] || process.env.SSO_CLIENT_ID;
+  const clientId =
+    process.env[`${prefix}CLIENT_ID`] || process.env.SSO_CLIENT_ID;
   const clientSecret =
     process.env[`${prefix}CLIENT_SECRET`] || process.env.SSO_CLIENT_SECRET;
 
@@ -89,8 +95,7 @@ export async function exchangeCodeForProfile(
       userInfoUrl = "https://api.github.com/user";
       break;
     case "microsoft":
-      tokenUrl =
-        "https://login.microsoftonline.com/common/oauth2/v2/token";
+      tokenUrl = "https://login.microsoftonline.com/common/oauth2/v2/token";
       userInfoUrl = "https://graph.microsoft.com/v1.0/me";
       break;
     case "oidc":
@@ -121,9 +126,7 @@ export async function exchangeCodeForProfile(
   const accessToken = tokenData.access_token as string;
 
   if (!accessToken) {
-    throw new Error(
-      `SSO token exchange failed: ${JSON.stringify(tokenData)}`,
-    );
+    throw new Error(`SSO token exchange failed: ${JSON.stringify(tokenData)}`);
   }
 
   const profileRes = await fetch(userInfoUrl, {
@@ -153,10 +156,15 @@ export async function exchangeCodeForProfile(
   return { externalId, email, name, provider: config.provider };
 }
 
-export function findOrCreateSSOUser(
-  profile: SSOUserProfile,
-): { user: User; token: string } {
-  const existing = db.select().from(users).where(eq(users.email, profile.email)).get();
+export function findOrCreateSSOUser(profile: SSOUserProfile): {
+  user: User;
+  token: string;
+} {
+  const existing = db
+    .select()
+    .from(users)
+    .where(eq(users.email, profile.email))
+    .get();
 
   let user: User;
 
@@ -172,15 +180,41 @@ export function findOrCreateSSOUser(
     };
   } else {
     const randomPassword = crypto.randomBytes(32).toString("hex");
-    user = createUser(profile.email, profile.name, randomPassword, "developer" as Role);
+    user = createUser(
+      profile.email,
+      profile.name,
+      randomPassword,
+      "developer" as Role,
+    );
+
+    // Auto-create a personal org for SSO users
+    const slug = profile.email
+      .split("@")[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-");
+    const org = createOrg(
+      `${profile.name}'s Organization`,
+      `${slug}-${user.id}`,
+    );
+    assignUserToOrg(user.id, org.id);
+    user.orgId = org.id;
+
+    const systemRole = rawDb
+      .prepare("SELECT id FROM roles WHERE name = ? AND is_system = 1")
+      .get("developer") as { id: number } | undefined;
+    if (systemRole) {
+      assignOrgRole(user.id, org.id, systemRole.id);
+    }
   }
 
-  db.insert(ssoSessions).values({
-    userId: user.id,
-    provider: profile.provider,
-    externalId: profile.externalId,
-    createdAt: Date.now()
-  }).run();
+  db.insert(ssoSessions)
+    .values({
+      userId: user.id,
+      provider: profile.provider,
+      externalId: profile.externalId,
+      createdAt: Date.now(),
+    })
+    .run();
 
   const { token } = createApiToken(user.id, `sso-${profile.provider}`);
 

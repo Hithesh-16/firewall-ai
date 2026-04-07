@@ -49,7 +49,7 @@ export default tseslint.config(
       "no-alert": "error",
       "no-var": "error",
       "prefer-const": "error",
-      eqeqeq: ["error", "always"],
+      eqeqeq: ["error", "always", { null: "ignore" }],
       curly: ["error", "multi-line"],
       "no-nested-ternary": "warn",
       "no-eval": "error",

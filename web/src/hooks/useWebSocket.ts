@@ -27,7 +27,7 @@ export function useWebSocket(handlers?: Record<string, WsHandler>): {
       for (const unsub of unsubs) unsub();
       wsClient.disconnect();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   return { connected };
 }

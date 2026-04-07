@@ -6,11 +6,7 @@ import { Toggle } from "../../components/ui/Toggle";
 import { LoadingSpinner } from "../../components/ui/LoadingSpinner";
 import { ErrorBanner } from "../../components/ui/ErrorBanner";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
-import {
-  ShieldCheckIcon,
-  ArrowDownTrayIcon,
-  TrashIcon,
-} from "@heroicons/react/24/outline";
+import { ShieldCheckIcon, ArrowDownTrayIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 interface PrivacySettings {
   telemetryEnabled: boolean;
@@ -41,9 +37,7 @@ export function PrivacyPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiClient.get<PrivacySettings>(
-          "/api/privacy/settings",
-        );
+        const res = await apiClient.get<PrivacySettings>("/api/privacy/settings");
         setSettings(res);
       } catch {
         // Use defaults
@@ -65,12 +59,7 @@ export function PrivacyPage() {
 
   const handleExport = async (format: "json" | "csv") => {
     try {
-      const res = await fetch(`/api/export/${format}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("afw_token") ?? ""}`,
-        },
-      });
-      const blob = await res.blob();
+      const blob = await apiClient.download(`/api/export/${format}`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -94,43 +83,36 @@ export function PrivacyPage() {
     }
   };
 
-  if (loading)
+  if (loading) {
     return (
       <div className="flex justify-center py-12">
         <LoadingSpinner />
       </div>
     );
+  }
 
   return (
     <div className="mx-auto max-w-2xl p-6">
       <div className="mb-6 flex items-center gap-3">
         <ShieldCheckIcon className="text-primary h-6 w-6" />
-        <h1 className="text-foreground text-xl font-semibold">
-          Privacy Settings
-        </h1>
+        <h1 className="text-foreground text-xl font-semibold">Privacy Settings</h1>
       </div>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       <div className="space-y-6">
         <Card>
           <h2 className="text-foreground mb-4 font-medium">Telemetry</h2>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-foreground text-sm">
-                Send anonymous usage telemetry
-              </p>
+              <p className="text-foreground text-sm">Send anonymous usage telemetry</p>
               <p className="text-description-muted text-xs">
                 No PII, secrets, or code content is ever sent
               </p>
             </div>
             <Toggle
               enabled={settings.telemetryEnabled}
-              onChange={(v) =>
-                setSettings({ ...settings, telemetryEnabled: v })
-              }
+              onChange={(v) => setSettings({ ...settings, telemetryEnabled: v })}
             />
           </div>
         </Card>
@@ -139,9 +121,7 @@ export function PrivacyPage() {
           <h2 className="text-foreground mb-4 font-medium">Data Retention</h2>
           <div className="space-y-4">
             <div>
-              <label className="text-description mb-1 block text-sm">
-                Retain audit logs for
-              </label>
+              <label className="text-description mb-1 block text-sm">Retain audit logs for</label>
               <select
                 value={settings.retentionDays}
                 onChange={(e) =>
@@ -184,18 +164,10 @@ export function PrivacyPage() {
         <Card>
           <h2 className="text-foreground mb-4 font-medium">Data Export</h2>
           <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => handleExport("json")}
-            >
+            <Button variant="secondary" size="sm" onClick={() => handleExport("json")}>
               <ArrowDownTrayIcon className="mr-1 h-4 w-4" /> Export JSON
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => handleExport("csv")}
-            >
+            <Button variant="secondary" size="sm" onClick={() => handleExport("csv")}>
               <ArrowDownTrayIcon className="mr-1 h-4 w-4" /> Export CSV
             </Button>
           </div>
@@ -204,14 +176,10 @@ export function PrivacyPage() {
         <Card className="border-error/30">
           <h2 className="text-error mb-2 font-medium">Danger Zone</h2>
           <p className="text-description mb-4 text-sm">
-            Permanently delete all audit data, logs, and cached scan results.
-            This action cannot be undone.
+            Permanently delete all audit data, logs, and cached scan results. This action cannot be
+            undone.
           </p>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => setShowDelete(true)}
-          >
+          <Button variant="danger" size="sm" onClick={() => setShowDelete(true)}>
             <TrashIcon className="mr-1 h-4 w-4" /> Delete All Data
           </Button>
         </Card>

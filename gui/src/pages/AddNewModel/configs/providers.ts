@@ -88,7 +88,7 @@ export const providers: Partial<Record<string, ProviderInfo>> = {
     provider: "cometapi",
     description: "500+ AI Model API,All In One API. Just In CometAPI",
     longDescription:
-      "Unified Access to Leading AI Models, see [here](https://www.cometapi.com/?utm_source=continue&utm_medium=integration&utm_campaign=cometapi_integration&utm_content=continue_plugin) for more details.",
+      "Unified Access to Leading AI Models, see [here](https://www.cometapi.com/?utm_source=ai-firewall&utm_medium=integration&utm_campaign=cometapi_integration&utm_content=continue_plugin) for more details.",
     icon: "cometapi.png",
     tags: [ModelProviderTags.RequiresApiKey],
     collectInputFor: [
@@ -990,7 +990,7 @@ To get started, [register](https://dataplatform.cloud.ibm.com/registration/stepo
     refPage: "sambanova",
     description: "Use SambaNova Cloud for fast inference performance",
     icon: "sambanova.png",
-    longDescription: `The SambaNova Cloud is a cloud platform for running large open source AI models with the world record performance and zero data retention. You can sign up [here](http://cloud.sambanova.ai?utm_source=continue&utm_medium=external&utm_campaign=cloud_signup)`,
+    longDescription: `The SambaNova Cloud is a cloud platform for running large open source AI models with the world record performance and zero data retention. You can sign up [here](http://cloud.sambanova.ai?utm_source=ai-firewall&utm_medium=external&utm_campaign=cloud_signup)`,
     tags: [ModelProviderTags.RequiresApiKey, ModelProviderTags.OpenSource],
     params: {
       apiKey: "",

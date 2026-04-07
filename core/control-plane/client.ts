@@ -479,7 +479,7 @@ export class ControlPlaneClient {
     agent?: string,
   ): Promise<{ id: string }> {
     if (!(await this.isSignedIn())) {
-      throw new Error("Not signed in to Continue");
+      throw new Error("Not signed in to AI Firewall");
     }
 
     const requestBody: any = {

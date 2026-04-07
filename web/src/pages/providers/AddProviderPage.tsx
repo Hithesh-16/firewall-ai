@@ -16,11 +16,8 @@ import { showToast } from "../../store/slices/uiSlice";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
-import {
-  PROVIDER_CATALOG,
-  POPULAR_PROVIDER_IDS,
-  type CatalogProvider,
-} from "../../data/providerCatalog";
+import { PROVIDER_CATALOG, POPULAR_PROVIDER_IDS, type CatalogProvider } from "../../data/providers";
+import { ProviderCard } from "./ProviderCard";
 
 type Step = "select-provider" | "configure" | "select-models";
 
@@ -30,8 +27,7 @@ export function AddProviderPage() {
 
   const [step, setStep] = useState<Step>("select-provider");
   const [search, setSearch] = useState("");
-  const [selectedProvider, setSelectedProvider] =
-    useState<CatalogProvider | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<CatalogProvider | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
@@ -49,12 +45,8 @@ export function AddProviderPage() {
     );
   }, [search]);
 
-  const popularProviders = filteredProviders.filter((p) =>
-    POPULAR_PROVIDER_IDS.includes(p.id),
-  );
-  const otherProviders = filteredProviders.filter(
-    (p) => !POPULAR_PROVIDER_IDS.includes(p.id),
-  );
+  const popularProviders = filteredProviders.filter((p) => POPULAR_PROVIDER_IDS.includes(p.id));
+  const otherProviders = filteredProviders.filter((p) => !POPULAR_PROVIDER_IDS.includes(p.id));
 
   function handleSelectProvider(provider: CatalogProvider) {
     setSelectedProvider(provider);
@@ -98,9 +90,7 @@ export function AddProviderPage() {
       });
 
       // Add selected models
-      const modelsToAdd = selectedProvider.models.filter((m) =>
-        selectedModels.has(m.id),
-      );
+      const modelsToAdd = selectedProvider.models.filter((m) => selectedModels.has(m.id));
 
       for (const model of modelsToAdd) {
         try {
@@ -154,8 +144,7 @@ export function AddProviderPage() {
           <p className="text-description text-sm">
             {step === "select-provider" && "Choose an AI provider to connect"}
             {step === "configure" && `Configure ${selectedProvider?.name}`}
-            {step === "select-models" &&
-              `Select models for ${selectedProvider?.name}`}
+            {step === "select-models" && `Select models for ${selectedProvider?.name}`}
           </p>
         </div>
       </div>
@@ -184,11 +173,7 @@ export function AddProviderPage() {
               </h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {popularProviders.map((p) => (
-                  <ProviderCard
-                    key={p.id}
-                    provider={p}
-                    onClick={() => handleSelectProvider(p)}
-                  />
+                  <ProviderCard key={p.id} provider={p} onClick={() => handleSelectProvider(p)} />
                 ))}
               </div>
             </div>
@@ -202,11 +187,7 @@ export function AddProviderPage() {
               </h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {otherProviders.map((p) => (
-                  <ProviderCard
-                    key={p.id}
-                    provider={p}
-                    onClick={() => handleSelectProvider(p)}
-                  />
+                  <ProviderCard key={p.id} provider={p} onClick={() => handleSelectProvider(p)} />
                 ))}
               </div>
             </div>
@@ -235,17 +216,11 @@ export function AddProviderPage() {
                 }}
               />
               <div>
-                <h3 className="text-foreground text-lg font-semibold">
-                  {selectedProvider.name}
-                </h3>
-                <p className="text-description text-sm">
-                  {selectedProvider.description}
-                </p>
+                <h3 className="text-foreground text-lg font-semibold">{selectedProvider.name}</h3>
+                <p className="text-description text-sm">{selectedProvider.description}</p>
               </div>
               <div className="ml-auto flex gap-2">
-                {selectedProvider.isLocal && (
-                  <Badge variant="success">Local</Badge>
-                )}
+                {selectedProvider.isLocal && <Badge variant="success">Local</Badge>}
                 {selectedProvider.requiresApiKey && (
                   <Badge variant="warning">API Key Required</Badge>
                 )}
@@ -333,10 +308,8 @@ export function AddProviderPage() {
                       <p className="truncate font-medium">{model.name}</p>
                       <p className="text-description-muted text-xs">
                         {model.contextLength.toLocaleString()} tokens
-                        {model.inputCostPer1k != null &&
-                          ` | $${model.inputCostPer1k}/1K in`}
-                        {model.outputCostPer1k != null &&
-                          ` | $${model.outputCostPer1k}/1K out`}
+                        {model.inputCostPer1k != null && ` | $${model.inputCostPer1k}/1K in`}
+                        {model.outputCostPer1k != null && ` | $${model.outputCostPer1k}/1K out`}
                       </p>
                     </div>
                   </button>
@@ -366,46 +339,5 @@ export function AddProviderPage() {
         </Card>
       )}
     </div>
-  );
-}
-
-/* ──────────── Provider Card ──────────── */
-
-function ProviderCard({
-  provider,
-  onClick,
-}: {
-  provider: CatalogProvider;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="border-border bg-editor hover:border-border-focus hover:bg-list-hover flex items-start gap-3 rounded-xl border p-4 text-left transition-colors"
-    >
-      <img
-        src={`/logos/${provider.icon}`}
-        alt=""
-        className="h-8 w-8 shrink-0 rounded-lg object-contain"
-        onError={(e) => {
-          (e.target as HTMLImageElement).style.display = "none";
-        }}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="text-foreground text-sm font-semibold">
-            {provider.name}
-          </p>
-          {provider.isLocal && <Badge variant="success">Local</Badge>}
-        </div>
-        <p className="text-description mt-0.5 text-xs">
-          {provider.description}
-        </p>
-        <p className="text-description-muted mt-1 text-xs">
-          {provider.models.length} model
-          {provider.models.length !== 1 ? "s" : ""}
-        </p>
-      </div>
-    </button>
   );
 }

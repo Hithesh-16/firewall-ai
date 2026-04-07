@@ -17,7 +17,7 @@ sidebarTitle: "Pull Request Review Bot"
 
 <CardGroup cols={3}>
   <Card title="Privacy-First" icon="shield">
-    All logs and processing happen in your runner: AI Firewall CLI runs in GitHub Actions → code to your LLM provider (OpenAI, Anthropic, etc.). No hosted Continue service reads your code.
+    All logs and processing happen in your runner: AI Firewall CLI runs in GitHub Actions → code to your LLM provider (OpenAI, Anthropic, etc.). No hosted AI Firewall service reads your code.
 
   </Card>
 
@@ -208,7 +208,7 @@ jobs:
           cat >> review_comment.md <<'EOF'
           
           ---
-          *Powered by [Continue](https://ai-firewall.dev) • Need a focused review? Comment `@review-bot check for [specific concern]`*
+          *Powered by [AI Firewall](https://ai-firewall.dev) • Need a focused review? Comment `@review-bot check for [specific concern]`*
           EOF
           
           # Check for existing review comment
@@ -458,7 +458,7 @@ Here's what a typical review comment looks like:
 > 4. Document the JWT payload structure
 >
 > ---
-> *Powered by [Continue](https://ai-firewall.dev) • Need a focused review? Comment `@review-bot check for security`*
+> *Powered by [AI Firewall](https://ai-firewall.dev) • Need a focused review? Comment `@review-bot check for security`*
 
 ## What You've Built
 

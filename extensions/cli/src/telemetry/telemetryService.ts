@@ -99,7 +99,7 @@ class TelemetryService {
     try {
       // Create resource
       const resource = resourceFromAttributes({
-        [SEMRESATTRS_SERVICE_NAME]: "continue-cli",
+        [SEMRESATTRS_SERVICE_NAME]: "ai-firewall-cli",
         [SEMRESATTRS_SERVICE_VERSION]: getVersion(),
         [SEMRESATTRS_HOST_NAME]: os.hostname(),
         [SEMRESATTRS_DEPLOYMENT_ENVIRONMENT]:
@@ -162,7 +162,7 @@ class TelemetryService {
       });
 
       metrics.setGlobalMeterProvider(this.meterProvider);
-      this.meter = metrics.getMeter("continue-cli", getVersion());
+      this.meter = metrics.getMeter("ai-firewall-cli", getVersion());
 
       this.initializeMetrics();
 
@@ -232,7 +232,7 @@ class TelemetryService {
     });
 
     this.costCounter = this.meter.createCounter("continue_cli_cost_usage", {
-      description: "Cost of the Continue CLI session",
+      description: "Cost of the AI Firewall CLI session",
       unit: "USD",
     });
 
@@ -257,7 +257,7 @@ class TelemetryService {
       },
     );
 
-    // Additional Continue CLI specific metrics
+    // Additional AI Firewall CLI specific metrics
     this.authAttemptsCounter = this.meter.createCounter(
       "continue_cli_auth_attempts",
       {

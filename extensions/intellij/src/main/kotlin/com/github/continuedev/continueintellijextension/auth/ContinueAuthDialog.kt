@@ -18,7 +18,7 @@ class ContinueAuthDialog(
 
     init {
         init()
-        title = "Continue authentication"
+        title = "AI Firewall authentication"
     }
 
     override fun createCenterPanel(): JComponent {

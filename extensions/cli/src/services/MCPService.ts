@@ -466,7 +466,7 @@ Org-level secrets can only be used for MCP by Background Agents (https://docs.ai
     connection: ServerConnection,
   ): Promise<Client> {
     const client = new Client(
-      { name: "continue-cli-client", version: "1.0.0" },
+      { name: "ai-firewall-cli-client", version: "1.0.0" },
       { capabilities: {} },
     );
 

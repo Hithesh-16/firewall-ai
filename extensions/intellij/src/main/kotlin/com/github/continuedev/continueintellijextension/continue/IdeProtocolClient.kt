@@ -343,7 +343,7 @@ class IdeProtocolClient(
                     "closeSidebar" -> {
                         ApplicationManager.getApplication().invokeLater {
                             val toolWindowManager = ToolWindowManager.getInstance(project)
-                            val toolWindow = toolWindowManager.getToolWindow("Continue")
+                            val toolWindow = toolWindowManager.getToolWindow("AI Firewall")
                             toolWindow?.hide()
                         }
                     }

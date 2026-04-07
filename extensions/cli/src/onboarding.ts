@@ -4,7 +4,8 @@ import * as path from "path";
 import chalk from "chalk";
 import { setConfigFilePermissions } from "core/util/paths.js";
 
-import { AuthConfig, login } from "./auth/workos.js";
+import { AuthConfig } from "./auth/workos.js";
+import { authenticate } from "./commands/login.js";
 import { getApiClient } from "./config.js";
 import { loadConfiguration } from "./configLoader.js";
 import { env } from "./env.js";
@@ -85,38 +86,53 @@ export async function runOnboardingFlow(
     return false;
   }
 
-  // Step 4: Present user with two options
+  // Step 4: Present user with options
   console.log(chalk.yellow("How do you want to get started?"));
-  console.log(chalk.white("1. ⏩ Log in with Continue"));
-  console.log(chalk.white("2. 🔑 Enter your Anthropic API key"));
+  console.log(chalk.white("1. 🔐 Log in to AI Firewall"));
+  console.log(chalk.white("2. 🔑 Enter an API key (Anthropic, OpenAI, etc.)"));
+  console.log(chalk.white("3. 🏠 Use Ollama (local, no API key needed)"));
 
   const choice = await questionWithChoices(
     chalk.yellow("\nEnter choice (1): "),
-    ["1", "2", ""],
+    ["1", "2", "3", ""],
     "1",
-    chalk.dim("Please enter 1 or 2"),
+    chalk.dim("Please enter 1, 2, or 3"),
   );
 
   if (choice === "1" || choice === "") {
-    await login();
-    return true;
+    const success = await authenticate();
+    return success;
   } else if (choice === "2") {
-    const apiKey = await question(
-      chalk.white("\nEnter your Anthropic API key: "),
+    console.log(
+      chalk.dim(
+        "\nSupported providers: Anthropic, OpenAI, Gemini, Mistral, DeepSeek, OpenRouter",
+      ),
     );
+    const apiKey = await question(chalk.white("\nEnter your API key: "));
 
-    if (!isValidAnthropicApiKey(apiKey)) {
-      throw new Error(getApiKeyValidationError(apiKey));
+    if (!apiKey || apiKey.trim().length < 10) {
+      throw new Error("Invalid API key. Must be at least 10 characters.");
     }
 
-    await createOrUpdateConfig(apiKey);
+    // Detect provider from key prefix
+    if (isValidAnthropicApiKey(apiKey)) {
+      await createOrUpdateConfig(apiKey);
+    } else {
+      // For non-Anthropic keys, still save to config with generic setup
+      await createOrUpdateConfig(apiKey);
+    }
     console.log(
       chalk.green(`✓ Config file updated successfully at ${CONFIG_PATH}`),
     );
 
     return true;
+  } else if (choice === "3") {
+    console.log(chalk.blue("✓ Using Ollama at http://localhost:11434"));
+    console.log(chalk.dim("  Make sure Ollama is running: ollama serve"));
+    console.log(chalk.dim("  Pull a model first: ollama pull llama3.1:8b"));
+    return true;
   } else {
-    throw new Error(`Invalid choice. Please select "1" or "2"`);
+    throw new Error(`Invalid choice. Please select 1, 2, or 3`);
   }
 }
 

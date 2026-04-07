@@ -1,7 +1,7 @@
 {
   "name": "@ai-firewall/sdk",
   "version": "0.0.1",
-  "description": "SDK Generator for Continue.dev",
+  "description": "SDK Generator for AI Firewall",
   "type": "module",
   "scripts": {
     "build": "echo 'No build step needed'",

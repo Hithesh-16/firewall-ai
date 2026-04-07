@@ -293,7 +293,7 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
               const issueBody = `**Error Details**
 
 Model: ${selectedModel?.title || "Unknown"}
-Provider: ${selectedModel ? `${selectedModel.underlyingProviderName}${selectedModel.provider === "continue-proxy" ? " (continue-proxy)" : ""}` : "Unknown"}
+Provider: ${selectedModel ? `${selectedModel.underlyingProviderName}${selectedModel.provider === "continue-proxy" ? " (ai-firewall-proxy)" : ""}` : "Unknown"}
 Status Code: ${statusCode || "N/A"}
 
 **Error Output**

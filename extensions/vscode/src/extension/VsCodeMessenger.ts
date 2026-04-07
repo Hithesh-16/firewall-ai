@@ -396,7 +396,7 @@ export class VsCodeMessenger {
           errorMessage.includes("GitHub App")
         ) {
           const selection = await vscode.window.showErrorMessage(
-            "Background agents need GitHub access. Please connect your GitHub account to Continue.",
+            "Background agents need GitHub access. Please connect your GitHub account to AI Firewall.",
             "Connect GitHub",
             "Cancel",
           );

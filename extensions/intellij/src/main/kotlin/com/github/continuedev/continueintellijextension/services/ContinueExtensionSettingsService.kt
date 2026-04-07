@@ -224,5 +224,5 @@ class ContinueExtensionConfigurable : Configurable {
     }
 
     override fun getDisplayName(): String =
-        "Continue Extension Settings"
+        "AI Firewall Extension Settings"
 }

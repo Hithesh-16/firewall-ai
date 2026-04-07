@@ -1,9 +1,10 @@
 import { getToken } from "../utils/storage";
+import { config } from "../config/env";
 
 export class ApiClient {
   private baseUrl: string;
 
-  constructor(baseUrl = "") {
+  constructor(baseUrl = config.proxyBaseUrl) {
     this.baseUrl = baseUrl;
   }
 
@@ -14,11 +15,7 @@ export class ApiClient {
     return h;
   }
 
-  private async request<T>(
-    method: string,
-    path: string,
-    body?: unknown,
-  ): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const init: RequestInit = {
       method,
@@ -68,6 +65,15 @@ export class ApiClient {
 
   async del(path: string): Promise<void> {
     await this.request<void>("DELETE", path);
+  }
+
+  async download(path: string): Promise<Blob> {
+    const url = `${this.baseUrl}${path}`;
+    const res = await fetch(url, { headers: this.getHeaders() });
+    if (!res.ok) {
+      throw new Error(`Download failed: ${res.status} ${res.statusText}`);
+    }
+    return res.blob();
   }
 }
 

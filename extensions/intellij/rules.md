@@ -1,8 +1,8 @@
-# Continue JetBrains Extension
+# AI Firewall JetBrains Extension
 
 ## Project Purpose
 
-JetBrains/IntelliJ extension for Continue AI code agent. Provides chat, autocomplete, inline edit, and agent features within JetBrains IDEs.
+JetBrains/IntelliJ extension for AI Firewall code agent. Provides chat, autocomplete, inline edit, and agent features within JetBrains IDEs.
 
 ## Architecture
 

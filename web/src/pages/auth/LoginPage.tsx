@@ -16,13 +16,10 @@ interface SSOConfigResponse {
   providers: string[];
 }
 
-const SSO_ICONS: Record<
-  string,
-  { label: string; bg: string; icon: React.ReactNode }
-> = {
+const SSO_ICONS: Record<string, { label: string; bg: string; icon: React.ReactNode }> = {
   google: {
     label: "Google",
-    bg: "bg-white hover:bg-gray-50 text-gray-700 border border-gray-300",
+    bg: "bg-editor hover:bg-list-hover text-foreground border border-border",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24">
         <path
@@ -46,7 +43,7 @@ const SSO_ICONS: Record<
   },
   github: {
     label: "GitHub",
-    bg: "bg-[#24292f] hover:bg-[#32383f] text-white",
+    bg: "bg-secondary hover:bg-secondary-hover text-foreground",
     icon: (
       <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
         <path
@@ -59,7 +56,7 @@ const SSO_ICONS: Record<
   },
   microsoft: {
     label: "Microsoft",
-    bg: "bg-[#2f2f2f] hover:bg-[#3f3f3f] text-white",
+    bg: "bg-secondary hover:bg-secondary-hover text-foreground",
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 21 21">
         <rect x="1" y="1" width="9" height="9" fill="#f25022" />
@@ -71,7 +68,7 @@ const SSO_ICONS: Record<
   },
   oidc: {
     label: "SSO",
-    bg: "bg-indigo-600 hover:bg-indigo-700 text-white",
+    bg: "bg-primary hover:bg-primary-hover text-primary-foreground",
     icon: (
       <svg
         className="h-5 w-5"
@@ -90,7 +87,7 @@ const SSO_ICONS: Record<
   },
 };
 
-const PROXY_BASE = "http://localhost:8080";
+import { config } from "../../config/env";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -106,9 +103,9 @@ export function LoginPage() {
 
   // Fetch available SSO providers on mount
   useEffect(() => {
-    fetch(`${PROXY_BASE}/api/auth/sso/config`)
-      .then((res) => res.json())
-      .then((data: SSOConfigResponse) => {
+    apiClient
+      .get<SSOConfigResponse>("/api/auth/sso/config")
+      .then((data) => {
         if (data.enabled && data.providers.length > 0) {
           setSsoProviders(data.providers);
         }
@@ -127,11 +124,9 @@ export function LoginPage() {
 
       setToken(token);
       // Validate the token and get user info
-      fetch(`${PROXY_BASE}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
-        .then((data: { user: AuthResponse["user"] }) => {
+      apiClient
+        .get<{ user: AuthResponse["user"] }>("/api/auth/me")
+        .then((data) => {
           dispatch(setCredentials({ user: data.user, token }));
           navigate("/");
         })
@@ -146,7 +141,7 @@ export function LoginPage() {
 
   function handleSSOLogin(provider: string) {
     window.open(
-      `${PROXY_BASE}/api/auth/sso/login?provider=${provider}`,
+      `${config.proxyBaseUrl}/api/auth/sso/login?provider=${provider}`,
       "afw-sso",
       "width=500,height=700,popup=yes",
     );
@@ -196,9 +191,7 @@ export function LoginPage() {
           <div className="bg-primary/10 mb-4 flex h-16 w-16 items-center justify-center rounded-2xl">
             <ShieldCheckIcon className="text-primary h-9 w-9" />
           </div>
-          <h1 className="text-foreground text-2xl font-semibold">
-            Welcome to AI Firewall
-          </h1>
+          <h1 className="text-foreground text-2xl font-semibold">Welcome to AI Firewall</h1>
           <p className="text-description mt-2 text-sm">
             Secure your AI workflows with built-in protection
           </p>
@@ -236,9 +229,7 @@ export function LoginPage() {
                   <div className="border-border w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-editor text-description px-3">
-                    or continue with email
-                  </span>
+                  <span className="bg-editor text-description px-3">or continue with email</span>
                 </div>
               </div>
             </>
@@ -289,10 +280,7 @@ export function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {tab === "register" && (
               <div>
-                <label
-                  htmlFor="name"
-                  className="text-foreground mb-1.5 block text-sm font-medium"
-                >
+                <label htmlFor="name" className="text-foreground mb-1.5 block text-sm font-medium">
                   Name
                 </label>
                 <input
@@ -308,10 +296,7 @@ export function LoginPage() {
             )}
 
             <div>
-              <label
-                htmlFor="email"
-                className="text-foreground mb-1.5 block text-sm font-medium"
-              >
+              <label htmlFor="email" className="text-foreground mb-1.5 block text-sm font-medium">
                 Email
               </label>
               <input
@@ -337,11 +322,7 @@ export function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={
-                  tab === "register"
-                    ? "Create a password"
-                    : "Enter your password"
-                }
+                placeholder={tab === "register" ? "Create a password" : "Enter your password"}
                 required
                 minLength={tab === "register" ? 8 : undefined}
                 className="border-input-border bg-input text-input-foreground placeholder:text-input-placeholder focus:border-border-focus focus:ring-border-focus w-full rounded-lg border px-4 py-3 focus:outline-none focus:ring-1"
@@ -421,8 +402,7 @@ export function LoginPage() {
 
         {/* Bottom text */}
         <p className="text-description-muted mt-6 text-center text-xs">
-          Protected by AI Firewall. All requests are scanned for security
-          threats.
+          Protected by AI Firewall. All requests are scanned for security threats.
         </p>
       </div>
     </div>

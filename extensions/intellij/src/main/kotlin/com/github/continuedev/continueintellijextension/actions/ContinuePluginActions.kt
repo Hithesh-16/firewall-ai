@@ -94,7 +94,7 @@ class OpenConfigAction : ContinueToolbarAction() {
 
 class ReloadBrowserAction: ContinueToolbarAction() {
     override fun toolbarActionPerformed(project: Project) {
-        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Continue")
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("AI Firewall")
             ?: return
         val browserService = project.service<ContinueBrowserService>()
 

@@ -2,11 +2,11 @@
 title: "Run Checks in CI"
 ---
 
-Continue watches your repository for pull requests, runs each check defined in `.ai-firewall/checks/`, and reports results as GitHub status checks. A green check means the code passed; a red check means the code failed, with a suggested fix.
+AI Firewall watches your repository for pull requests, runs each check defined in `.ai-firewall/checks/`, and reports results as GitHub status checks. A green check means the code passed; a red check means the code failed, with a suggested fix.
 
 ## Prerequisites
 
-- A [Continue](https://ai-firewall.dev) account
+- An [AI Firewall](https://ai-firewall.dev) account
 - A GitHub repository with at least one check file in `.ai-firewall/checks/` (see [Write Your First Check](/checks/quickstart))
 
 ## Connect GitHub
@@ -20,7 +20,7 @@ Once connected, AI Firewall will start running checks on new pull requests in th
 
 ## How checks are discovered
 
-Continue reads the `.ai-firewall/checks/` directory from your repository's default branch. Every `.md` file in that directory becomes a check that runs on every PR. No additional configuration is needed — commit a check file and it is active.
+AI Firewall reads the `.ai-firewall/checks/` directory from your repository's default branch. Every `.md` file in that directory becomes a check that runs on every PR. No additional configuration is needed — commit a check file and it is active.
 
 ## The PR workflow
 

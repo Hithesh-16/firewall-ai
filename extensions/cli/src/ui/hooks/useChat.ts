@@ -273,9 +273,8 @@ export function useChat({
       isChatHistoryInitialized
     ) {
       const processPrompts = async () => {
-        const { processAndCombinePrompts } = await import(
-          "../../util/promptProcessor.js"
-        );
+        const { processAndCombinePrompts } =
+          await import("../../util/promptProcessor.js");
         const finalMessage = await processAndCombinePrompts(
           additionalPrompts,
           initialPrompt,
@@ -802,9 +801,8 @@ export function useChat({
     // Handle policy creation if requested
     if (approved && createPolicy && currentRequest) {
       try {
-        const { generatePolicyRule, addPolicyToYaml } = await import(
-          "../../permissions/policyWriter.js"
-        );
+        const { generatePolicyRule, addPolicyToYaml } =
+          await import("../../permissions/policyWriter.js");
 
         const policyRule = generatePolicyRule(
           currentRequest.toolName,
@@ -841,7 +839,7 @@ export function useChat({
             message: {
               role: "system",
               content:
-                "[Tool canceled - please tell Continue what to do differently]",
+                "[Tool canceled - please tell AI Firewall what to do differently]",
             },
             contextItems: [],
           },

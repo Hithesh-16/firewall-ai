@@ -110,7 +110,7 @@ class ContinueProxy extends OpenAI {
     const extensionVersion = ideInfo?.extensionVersion ?? "unknown";
     const ideName = ideInfo?.name ?? "unknown";
     const ideType = ideInfo?.ideType ?? "unknown";
-    return `Continue/${extensionVersion} (${ideName}; ${ideType})`;
+    return `AIFirewall/${extensionVersion} (${ideName}; ${ideType})`;
   }
 
   supportsCompletions(): boolean {

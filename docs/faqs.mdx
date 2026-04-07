@@ -60,7 +60,7 @@ This will restart VS Code and reload all extensions, which should make your conf
 
 ## I installed AI Firewall, but don't see the sidebar window
 
-By default the AI Firewall window is on the left side of VS Code, but it can be dragged to right side as well, which we recommend in our tutorial. In the situation where you have previously installed AI Firewall and moved it to the right side, it may still be there. You can reveal Continue either by using cmd/ctrl+L or by clicking the button in the top right of VS Code to open the right sidebar.
+By default the AI Firewall window is on the left side of VS Code, but it can be dragged to right side as well, which we recommend in our tutorial. In the situation where you have previously installed AI Firewall and moved it to the right side, it may still be there. You can reveal AI Firewall either by using cmd/ctrl+L or by clicking the button in the top right of VS Code to open the right sidebar.
 
 ## I'm getting a 404 error from OpenAI
 
@@ -68,7 +68,7 @@ If you have entered a valid API key and model, but are still getting a 404 error
 
 ## I'm getting a 404 error from OpenRouter
 
-If you have entered a valid API key and model, but are still getting a 404 error from OpenRouter, this may be because models that do not support function calling will return an error to Continue when a request is sent. Example error: `HTTP 404 Not Found from https://openrouter.ai/api/v1/chat/completions`
+If you have entered a valid API key and model, but are still getting a 404 error from OpenRouter, this may be because models that do not support function calling will return an error to AI Firewall when a request is sent. Example error: `HTTP 404 Not Found from https://openrouter.ai/api/v1/chat/completions`
 
 ## Indexing issues
 
@@ -260,12 +260,12 @@ If you're getting parse errors with remote Ollama:
 
 ### Managing Local Secrets and Environment Variables
 
-For running AI Firewall completely offline without internet access, see the [Running Continue Without Internet guide](/guides/running-continue-without-internet).
+For running AI Firewall completely offline without internet access, see the [Running AI Firewall Without Internet guide](/guides/running-continue-without-internet).
 
 AI Firewall supports multiple methods for managing secrets locally, searched in this order:
 
 1. **Workspace `.env` files**: Place a `.env` file in your workspace root directory
-2. **Workspace Continue folder**: Place a `.env` file in `<workspace-root>/.ai-firewall/.env`  
+2. **Workspace AI Firewall folder**: Place a `.env` file in `<workspace-root>/.ai-firewall/.env`  
 3. **Global `.env` file**: Place a `.env` file in `~/.ai-firewall/.env` for user-wide secrets
 4. **Process environment variables**: Use standard system environment variables
 
@@ -322,7 +322,7 @@ You can leverage model addons from the AI Firewall Mission Control in your local
 
 #### Requirements
 
-- You must be logged in to Continue
+- You must be logged in to AI Firewall
 - Internet connection is required (model addons are fetched from Mission Control)
 
 #### Usage

@@ -478,7 +478,7 @@ export async function login(): Promise<AuthConfig> {
     };
   }
 
-  console.info(chalk.white("\nSigning in with Continue..."));
+  console.info(chalk.white("\nSigning in with AI Firewall..."));
 
   // Request device authorization
   const deviceAuth = await requestDeviceAuthorization();

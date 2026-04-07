@@ -499,7 +499,7 @@ void (async () => {
 
     // Tutorial
     "media/move-chat-panel-right.md",
-    "ai_firewall_tutorial.py",
+    "continue_tutorial.py",
     "config_schema.json",
 
     // Embeddings model

@@ -1,7 +1,7 @@
 {
   "name": "@ai-firewall/sdk",
   "version": "0.0.13",
-  "description": "SDK for Continue.dev",
+  "description": "SDK for AI Firewall",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "type": "module",

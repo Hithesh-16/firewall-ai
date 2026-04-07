@@ -44,9 +44,7 @@ export function UsagePage() {
       try {
         const [usageRes, creditRes] = await Promise.allSettled([
           apiClient.get<UsageSummary>("/api/usage/summary"),
-          apiClient.get<{ credits: CreditLimit[] } | CreditLimit[]>(
-            "/api/credits",
-          ),
+          apiClient.get<{ credits: CreditLimit[] } | CreditLimit[]>("/api/credits"),
         ]);
         if (usageRes.status === "fulfilled") setSummary(usageRes.value);
         if (creditRes.status === "fulfilled") {
@@ -61,39 +59,29 @@ export function UsagePage() {
     })();
   }, []);
 
-  if (loading)
+  if (loading) {
     return (
       <div className="flex justify-center py-12">
         <LoadingSpinner />
       </div>
     );
+  }
 
-  const totalTokens =
-    (summary?.totalInputTokens ?? 0) + (summary?.totalOutputTokens ?? 0);
+  const totalTokens = (summary?.totalInputTokens ?? 0) + (summary?.totalOutputTokens ?? 0);
 
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center gap-3">
         <ChartBarIcon className="text-primary h-6 w-6" />
-        <h1 className="text-foreground text-xl font-semibold">
-          Usage & Billing
-        </h1>
+        <h1 className="text-foreground text-xl font-semibold">Usage & Billing</h1>
       </div>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          label="Total Requests"
-          value={String(summary?.totalRequests ?? 0)}
-        />
+        <StatCard label="Total Requests" value={String(summary?.totalRequests ?? 0)} />
         <StatCard label="Total Tokens" value={formatTokens(totalTokens)} />
-        <StatCard
-          label="Total Cost"
-          value={formatCost(summary?.totalCost ?? 0)}
-        />
+        <StatCard label="Total Cost" value={formatCost(summary?.totalCost ?? 0)} />
         <StatCard
           label="Avg Cost/Request"
           value={
@@ -150,17 +138,11 @@ export function UsagePage() {
                 ? Math.min(100, (c.usedDollars / c.maxDollars) * 100)
                 : 0;
               const barColor =
-                pctDollars >= 90
-                  ? "bg-error"
-                  : pctDollars >= 70
-                    ? "bg-warning"
-                    : "bg-success";
+                pctDollars >= 90 ? "bg-error" : pctDollars >= 70 ? "bg-warning" : "bg-success";
               return (
                 <Card key={c.providerId}>
                   <div className="flex items-center justify-between">
-                    <span className="text-foreground font-medium">
-                      {c.providerName}
-                    </span>
+                    <span className="text-foreground font-medium">{c.providerName}</span>
                     <span className="text-description text-sm">
                       {formatCost(c.usedDollars)} /{" "}
                       {c.maxDollars ? formatCost(c.maxDollars) : "Unlimited"}

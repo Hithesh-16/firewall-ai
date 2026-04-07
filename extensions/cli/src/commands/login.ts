@@ -56,14 +56,18 @@ function prompt(question: string, isPassword = false): Promise<string> {
   });
 }
 
-export async function login() {
+/**
+ * Authenticate against the proxy (or WorkOS fallback).
+ * Returns true if auth succeeded, false if the user aborted.
+ * Does NOT start chat — callers decide what to do next.
+ */
+export async function authenticate(): Promise<boolean> {
   console.info(chalk.yellow("AI Firewall — Login\n"));
 
   // Check for env var shortcut
   if (process.env.AI_FIREWALL_API_KEY) {
     console.info(chalk.green("Using AI_FIREWALL_API_KEY from environment."));
-    await chat();
-    return;
+    return true;
   }
 
   // Try proxy-based auth first
@@ -73,8 +77,7 @@ export async function login() {
 
     if (!email || !password) {
       console.error(chalk.red("Email and password are required."));
-      await gracefulExit(1);
-      return;
+      return false;
     }
 
     const res = await fetch(`${PROXY_BASE}/api/auth/login`, {
@@ -120,8 +123,7 @@ export async function login() {
                 `\nRegistered and logged in as ${data.user.email} (${data.user.role})`,
               ),
             );
-            await chat();
-            return;
+            return true;
           }
           const regBody = await regRes.json().catch(() => ({}));
           console.error(
@@ -129,11 +131,9 @@ export async function login() {
               `Registration failed: ${(regBody as { error?: string }).error ?? regRes.statusText}`,
             ),
           );
-          await gracefulExit(1);
-          return;
+          return false;
         }
-        await gracefulExit(1);
-        return;
+        return false;
       }
 
       throw new Error(errMsg);
@@ -156,27 +156,44 @@ export async function login() {
     console.info(
       chalk.green(`\nLogged in as ${data.user.email} (${data.user.role})`),
     );
-    await chat();
-  } catch (error: any) {
+    return true;
+  } catch (error: unknown) {
+    const err = error as {
+      code?: string;
+      cause?: { code?: string };
+      message?: string;
+    };
     // If proxy is unreachable, fall back to WorkOS
-    if (error.code === "ECONNREFUSED" || error.cause?.code === "ECONNREFUSED") {
+    if (err.code === "ECONNREFUSED" || err.cause?.code === "ECONNREFUSED") {
       console.info(
         chalk.yellow(
-          "\nProxy not running on localhost:8080. Falling back to Continue auth...",
+          "\nProxy not running on localhost:8080. Falling back to legacy auth...",
         ),
       );
       try {
         await workosLogin();
         console.info(chalk.green("Successfully logged in!"));
-        await chat();
-      } catch (fallbackErr: any) {
-        console.error(chalk.red(`Login failed: ${fallbackErr.message}`));
-        await gracefulExit(1);
+        return true;
+      } catch (fallbackErr: unknown) {
+        const fbErr = fallbackErr as { message?: string };
+        console.error(chalk.red(`Login failed: ${fbErr.message}`));
+        return false;
       }
-      return;
     }
 
-    console.error(chalk.red(`Login failed: ${error.message}`));
+    console.error(chalk.red(`Login failed: ${err.message}`));
+    return false;
+  }
+}
+
+/**
+ * Login command — authenticates and then starts chat.
+ */
+export async function login() {
+  const success = await authenticate();
+  if (success) {
+    await chat();
+  } else {
     await gracefulExit(1);
   }
 }

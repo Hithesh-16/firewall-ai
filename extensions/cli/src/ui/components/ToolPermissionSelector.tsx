@@ -39,14 +39,14 @@ const getPermissionOptions = (): PermissionOption[] => {
     { id: "approve", name: "AI Firewall", color: "green", approved: true },
     {
       id: "approve_policy",
-      name: "Continue + don't ask again",
+      name: "AI Firewall + don't ask again",
       color: "cyan",
       approved: true,
       createPolicy: true,
     },
     {
       id: "deny_stop",
-      name: "No, and tell Continue what to do differently",
+      name: "No, and tell AI Firewall what to do differently",
       color: "yellow",
       approved: false,
       stopStream: true,

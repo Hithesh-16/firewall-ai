@@ -23,7 +23,7 @@ class CoreMessengerManager(
             try {
                 delay(backoffIntervalSeconds.seconds)
                 backoffIntervalSeconds *= 2
-                log.warn("Continue process terminated externally, retrying in $backoffIntervalSeconds seconds")
+                log.warn("AI Firewall process terminated externally, retrying in $backoffIntervalSeconds seconds")
                 coreMessenger.restart()
             } catch (e: Exception) {
                 service<ContinuePostHogService>().capture("jetbrains_core_start_error", mapOf("error" to e))

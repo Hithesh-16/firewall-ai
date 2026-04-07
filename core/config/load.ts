@@ -727,7 +727,7 @@ async function handleEsbuildInstallation(
       await ide.showToast(
         "error",
         [
-          "config.ts has been deprecated and esbuild is no longer automatically installed by Continue.",
+          "config.ts has been deprecated and esbuild is no longer automatically installed by AI Firewall.",
           "To use config.ts, install esbuild manually:",
           "",
           `    ${installCmd}`,

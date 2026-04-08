@@ -13,9 +13,8 @@ import { setCodeToEdit } from "../redux/slices/editState";
 import { setDialogMessage, setShowDialog } from "../redux/slices/uiSlice";
 import { enterEdit, exitEdit } from "../redux/thunks/edit";
 import { saveCurrentSession } from "../redux/thunks/session";
-import { fontSize, isMetaEquivalentKeyPressed, isStandaloneWeb } from "../util";
+import { fontSize, isMetaEquivalentKeyPressed } from "../util";
 import { ROUTES } from "../util/navigation";
-import WebNavSidebar from "./WebNavSidebar";
 import { FatalErrorIndicator } from "./config/FatalErrorNotice";
 import TextDialog from "./dialogs";
 import { GenerateRuleDialog } from "./GenerateRuleDialog";
@@ -243,10 +242,8 @@ const Layout = () => {
     }
   }, [isHome]);
 
-  const standaloneWeb = isStandaloneWeb();
-
   const mainContent = (
-    <LayoutTopDiv className={standaloneWeb ? "min-w-0 flex-1" : ""}>
+    <LayoutTopDiv>
       {showStagingIndicator && (
         <span
           title="Staging environment"
@@ -290,16 +287,7 @@ const Layout = () => {
   return (
     <LocalStorageProvider>
       <AuthProvider>
-        <TelemetryProviders>
-          {standaloneWeb ? (
-            <div className="flex h-screen overflow-hidden">
-              <WebNavSidebar />
-              {mainContent}
-            </div>
-          ) : (
-            mainContent
-          )}
-        </TelemetryProviders>
+        <TelemetryProviders>{mainContent}</TelemetryProviders>
       </AuthProvider>
     </LocalStorageProvider>
   );

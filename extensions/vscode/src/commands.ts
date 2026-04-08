@@ -966,11 +966,23 @@ const getCommandsMap: (
     },
 
     "aiFirewall.viewDashboard": () => {
-      vscode.env.openExternal(vscode.Uri.parse("http://localhost:3000"));
+      // Opens the standalone AI Firewall web dashboard (web/ app, not gui/).
+      // Base URL is configurable via `aiFirewall.webDashboardUrl` setting and
+      // defaults to http://localhost:5174 (the Vite dev server for web/).
+      const base = vscode.workspace
+        .getConfiguration("aiFirewall")
+        .get<string>("webDashboardUrl", "http://localhost:5174")
+        .replace(/\/+$/, "");
+      vscode.env.openExternal(vscode.Uri.parse(base));
     },
 
     "aiFirewall.viewExternalLogs": () => {
-      vscode.env.openExternal(vscode.Uri.parse("http://localhost:3000/logs"));
+      // Deep-links to the security audit page in the web dashboard.
+      const base = vscode.workspace
+        .getConfiguration("aiFirewall")
+        .get<string>("webDashboardUrl", "http://localhost:5174")
+        .replace(/\/+$/, "");
+      vscode.env.openExternal(vscode.Uri.parse(`${base}/security/audit`));
     },
 
     "aiFirewall.scanExtensions": async () => {

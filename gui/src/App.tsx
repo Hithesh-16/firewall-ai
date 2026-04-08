@@ -27,6 +27,7 @@ import SetupWizardPage from "./pages/setup";
 import ThemePage from "./styles/ThemePage";
 import { ROUTES } from "./util/navigation";
 import { isInIde } from "./util";
+import IdeOnlyGate from "./components/IdeOnlyGate";
 
 // ── Route definitions ──────────────────────────────────────────────────
 
@@ -87,6 +88,16 @@ const router = createMemoryRouter([
   most of which interact with redux etc.
 */
 function App() {
+  // The `gui/` app is the IDE chat experience for VS Code / JetBrains.
+  // If it's loaded outside an IDE webview (i.e., a plain browser hitting
+  // 5173 directly), short-circuit to a friendly redirect page that points
+  // users at the standalone `web/` dashboard. The IDE webview providers
+  // set `localStorage.ide` to "vscode" / "jetbrains" before mount, so
+  // this gate is invisible to legitimate IDE traffic.
+  if (!isInIde()) {
+    return <IdeOnlyGate />;
+  }
+
   return (
     <VscThemeProvider>
       <MainEditorProvider>

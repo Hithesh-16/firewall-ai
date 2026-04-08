@@ -1,11 +1,8 @@
-import {
-  createBrowserRouter,
-  RouterProvider,
-  Navigate,
-} from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { ROUTES } from "./utils/routes";
 import { AppShell } from "./components/layout/AppShell";
 import { LoginPage } from "./pages/auth/LoginPage";
+import { LandingPage } from "./pages/landing/LandingPage";
 import { ChatPage } from "./pages/chat/ChatPage";
 import { SecurityDashboard } from "./pages/security/SecurityDashboard";
 import { SecurityAuditPage } from "./pages/security/SecurityAuditPage";
@@ -26,6 +23,12 @@ import { UsagePage } from "./pages/usage/UsagePage";
 import { AddProviderPage } from "./pages/providers/AddProviderPage";
 
 const router = createBrowserRouter([
+  // Public — landing page (no auth required)
+  {
+    path: "/",
+    element: <LandingPage />,
+  },
+  // Public — auth
   {
     path: ROUTES.LOGIN,
     element: <LoginPage />,
@@ -34,11 +37,18 @@ const router = createBrowserRouter([
     path: ROUTES.REGISTER,
     element: <LoginPage />,
   },
+  // Authenticated dashboard — moved from "/" to "/dashboard" so the
+  // landing page can live at "/" for unauthenticated users.
+  {
+    path: "/dashboard",
+    element: <AppShell />,
+    children: [{ index: true, element: <ChatPage /> }],
+  },
+  // All other authenticated surfaces live under the same AppShell
   {
     path: "/",
     element: <AppShell />,
     children: [
-      { index: true, element: <ChatPage /> },
       { path: "security", element: <SecurityDashboard /> },
       { path: "security/audit", element: <SecurityAuditPage /> },
       { path: "policy", element: <PolicyEditor /> },
@@ -56,9 +66,10 @@ const router = createBrowserRouter([
       { path: "cron", element: <CronPage /> },
       { path: "usage", element: <UsagePage /> },
       { path: "providers/add", element: <AddProviderPage /> },
-      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
+  // Fallback — anything unknown goes back to landing
+  { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
 export function App() {

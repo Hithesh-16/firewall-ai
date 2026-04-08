@@ -48,6 +48,8 @@ export function AppShell() {
   }
 
   if (!isAuthenticated) {
+    // Send unauthenticated visitors to the login page; they can click
+    // "Back to home" from there to reach the public landing page.
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 

@@ -72,10 +72,12 @@ async function bootstrap(): Promise<void> {
 
   // SECURITY: Only allow known origins — never use { origin: true } in production
   const ALLOWED_ORIGINS = [
-    "http://localhost:3000", // GUI dev server
-    "http://localhost:5173", // Vite dev server
+    "http://localhost:3000", // GUI dev server (legacy)
+    "http://localhost:5173", // gui/ Vite dev server (IDE webview)
+    "http://localhost:5174", // web/ Vite dev server (admin dashboard)
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
     ...(env.CORS_ORIGINS
       ? env.CORS_ORIGINS.split(",").map((o: string) => o.trim())
       : []),

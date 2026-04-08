@@ -73,11 +73,14 @@ export function isInIde(): boolean {
 }
 
 /**
- * Returns true when running as a standalone web dashboard (not inside an IDE).
- * All pages are available in standalone mode.
+ * The `gui/` app is now IDE-only — admin/dashboard usage lives in the
+ * separate `web/` Vite app on port 5174. This helper used to return true
+ * outside the IDE (and surfaced a `WebNavSidebar` with every page), but
+ * we no longer want users to reach the IDE chat UI from a plain browser.
+ * Always return false so the standalone-web layout branch is dead code.
  */
 export function isStandaloneWeb(): boolean {
-  return !isInIde();
+  return false;
 }
 
 export const isShareSessionSupported = () => !isJetBrains();

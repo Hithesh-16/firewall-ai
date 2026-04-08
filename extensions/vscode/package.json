@@ -202,6 +202,11 @@
           "type": "number",
           "default": 60,
           "description": "The period of time in minutes between automatic syncs."
+        },
+        "aiFirewall.webDashboardUrl": {
+          "type": "string",
+          "default": "http://localhost:5174",
+          "markdownDescription": "Base URL of the AI Firewall **web dashboard** (the standalone admin UI). Used by commands that open the dashboard in your browser (e.g. _AI Firewall: View Dashboard_, _View Logs_). The IDE chat UI is **not** affected by this setting — it runs in the webview."
         }
       }
     },

@@ -1,0 +1,130 @@
+---
+title: "Authentication"
+description: "Login, logout, Google OAuth, and SSO across VS Code, CLI, and Web"
+---
+
+## Overview
+
+AI Firewall provides unified authentication across all surfaces — VS Code extension, CLI, and web dashboard. Users can sign in with email/password or via Google, GitHub, and Microsoft OAuth (SSO).
+
+## Authentication Methods
+
+### Email & Password
+
+Register and log in with email and password. The proxy handles registration, password hashing (scrypt), and API token generation.
+
+### Google OAuth (SSO)
+
+Sign in with your Google account. Requires proxy environment configuration:
+
+```bash
+# In proxy/.env
+SSO_GOOGLE_CLIENT_ID=your-google-client-id
+SSO_GOOGLE_CLIENT_SECRET=your-google-client-secret
+SSO_REDIRECT_URI=http://localhost:8080/api/auth/sso/callback
+```
+
+<Steps>
+  <Step title="User clicks 'Continue with Google'">
+    From the login page, VS Code command palette, or CLI menu.
+  </Step>
+  <Step title="Browser opens Google consent screen">
+    The proxy redirects to Google's OAuth authorization endpoint.
+  </Step>
+  <Step title="Google redirects back to proxy">
+    After consent, Google sends an authorization code to the proxy callback.
+  </Step>
+  <Step title="Proxy creates user and token">
+    The proxy exchanges the code for a Google profile, creates or finds the user, generates an API token, and returns it to the client.
+  </Step>
+</Steps>
+
+### GitHub & Microsoft OAuth
+
+Same flow as Google. Configure the corresponding environment variables:
+
+```bash
+# GitHub
+SSO_GITHUB_CLIENT_ID=...
+SSO_GITHUB_CLIENT_SECRET=...
+
+# Microsoft
+SSO_MICROSOFT_CLIENT_ID=...
+SSO_MICROSOFT_CLIENT_SECRET=...
+```
+
+## VS Code Extension
+
+### Sign In
+
+Open the command palette (`Cmd+Shift+P`) and run:
+
+```
+AI Firewall: Sign In
+```
+
+This navigates to the login page in the AI Firewall sidebar, where you can use email/password or OAuth.
+
+### Sign Out
+
+```
+AI Firewall: Sign Out
+```
+
+Revokes the current session token on the proxy and clears the local token.
+
+## CLI
+
+See the [CLI Authentication](/cli/authentication) guide for detailed instructions.
+
+```bash
+# Login (interactive — choose email/password or OAuth)
+ai-firewall login
+
+# Logout (revokes token on proxy + clears local auth)
+ai-firewall logout
+```
+
+## Web Dashboard
+
+The web dashboard at `http://localhost:3000` shows the login page automatically when no token is stored. After authentication, the token is saved in `localStorage` as `afw_token`.
+
+## Slash Commands
+
+From any AI Firewall chat (VS Code, CLI, or web):
+
+| Command | Description |
+|---------|-------------|
+| `/login` | Navigate to the login page |
+| `/logout` | Sign out and revoke current session |
+| `/logout all` | Sign out from all devices |
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/register` | Create account (email, name, password) |
+| `POST` | `/api/auth/login` | Sign in with email/password |
+| `POST` | `/api/auth/logout` | Revoke current session token |
+| `POST` | `/api/auth/logout/all` | Revoke all tokens for current user |
+| `GET` | `/api/auth/me` | Get current user profile |
+| `GET` | `/api/auth/sso/login?provider=google` | Start OAuth flow |
+| `GET` | `/api/auth/sso/callback` | OAuth callback (handled by proxy) |
+| `GET` | `/api/auth/sso/config` | Check which SSO providers are enabled |
+
+## Token Format
+
+API tokens use the `afw_` prefix followed by 64 hex characters:
+
+```
+afw_a1b2c3d4e5f6...
+```
+
+Tokens are stored as SHA-256 hashes in the database — the raw token is only returned once at creation time.
+
+## Security
+
+- Passwords are hashed with **scrypt** (16-byte salt + 64-byte hash)
+- OAuth state parameter uses **CSRF protection** (DB-backed, 10-minute TTL)
+- SSO users who don't exist are auto-created with a random password and `developer` role
+- All tokens can be revoked individually or all at once via the logout endpoints

@@ -58,7 +58,7 @@ continue-main/
 │   ├── src/commands/         — Command system (10 built-in slash commands)
 │   │   ├── commandTypes.ts   — Command type definitions
 │   │   ├── commandLoader.ts  — Discover + load commands
-│   │   └── builtinCommands.ts — /doctor, /compact, /cost, /stats, /memory, /tasks, /review, /diff, /help, /share, /resume
+│   │   └── builtinCommands.ts — /doctor, /compact, /cost, /stats, /memory, /tasks, /review, /diff, /help, /share, /resume, /login, /logout
 │   ├── src/skills/           — Skills system (SKILL.md format, bundled skills)
 │   │   ├── skillTypes.ts     — Skill type definitions + frontmatter schema
 │   │   ├── skillLoader.ts    — Discover + load skills from SKILL.md files
@@ -164,7 +164,7 @@ cd extensions/cli && npm run build
 - **Tool Permissions** — 3-level check: config rules (pattern matching) -> auto-classifier (dangerous file/command detection) -> user dialog. `core/tools/toolPermissions.ts` for rules, `proxy/src/permissions/toolPermissions.ts` for proxy-side enforcement.
 - **Agent Service** — `proxy/src/services/agentService.ts` manages sub-agent lifecycle: spawn, kill, worktree isolation, inter-agent messaging
 - **Compact Service** — `proxy/src/services/compactService.ts` provides 3 conversation compaction strategies: clear old tool results, summarize old messages, drop oldest
-- **Command System** — `proxy/src/commands/` provides 10 built-in slash commands (`/doctor`, `/compact`, `/cost`, `/stats`, `/memory`, `/tasks`, `/review`, `/help`, `/share`, `/resume`). Loaded via `commandLoader.ts`, commands reuse existing proxy services.
+- **Command System** — `proxy/src/commands/` provides 12 built-in slash commands (`/doctor`, `/compact`, `/cost`, `/stats`, `/memory`, `/tasks`, `/review`, `/help`, `/share`, `/resume`, `/login`, `/logout`). Loaded via `commandLoader.ts`, commands reuse existing proxy services.
 - **Skills System** — `proxy/src/skills/` supports SKILL.md files with YAML frontmatter. Bundled skills: `commit`, `explain`. Loaded via `skillLoader.ts`.
 - **Plugin System** — `proxy/src/plugins/` supports `plugin.json` manifests for discover/load/enable/disable lifecycle
 - **Hook Service** — `proxy/src/services/hookService.ts` fires shell commands on 13 event types with variable expansion and safe environment
@@ -544,6 +544,8 @@ Agent triggers high-risk action (risk >= approval threshold in policy.json)
 | Method   | Endpoint                                  | Description                   |
 | -------- | ----------------------------------------- | ----------------------------- |
 | POST     | `/api/auth/register`, `/api/auth/login`   | User auth                     |
+| POST     | `/api/auth/logout`                        | Revoke current session token  |
+| POST     | `/api/auth/logout/all`                    | Revoke all user tokens        |
 | GET/PUT  | `/api/policy`                             | Policy CRUD                   |
 | POST/GET | `/api/providers`                          | AI provider management (BYOK) |
 | POST/GET | `/api/credits`                            | Credit limits                 |

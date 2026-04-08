@@ -42,6 +42,7 @@
             "group": "Features",
             "icon": "star",
             "pages": [
+              "proxy/authentication",
               "proxy/web-dashboard",
               "proxy/slash-commands",
               "proxy/plugins-skills",

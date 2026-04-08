@@ -16,7 +16,7 @@ function createSSOState(provider?: string): string {
   const expiresAt = now + 600_000; // 10 min TTL
 
   db.prepare(
-    "INSERT OR REPLACE INTO sso_pending_states (state, provider, created_at, expires_at) VALUES (?, ?, ?, ?)"
+    "INSERT OR REPLACE INTO sso_pending_states (state, provider, created_at, expires_at) VALUES (?, ?, ?, ?)",
   ).run(state, provider ?? null, now, expiresAt);
 
   // Cleanup expired states
@@ -26,9 +26,11 @@ function createSSOState(provider?: string): string {
 }
 
 function validateAndConsumeSSOState(state: string): boolean {
-  const row = db.prepare(
-    "SELECT state FROM sso_pending_states WHERE state = ? AND expires_at > ?"
-  ).get(state, Date.now()) as { state: string } | undefined;
+  const row = db
+    .prepare(
+      "SELECT state FROM sso_pending_states WHERE state = ? AND expires_at > ?",
+    )
+    .get(state, Date.now()) as { state: string } | undefined;
 
   if (!row) return false;
 
@@ -71,12 +73,16 @@ export async function registerSSORoutes(app: FastifyInstance): Promise<void> {
     };
 
     if (!code || !state) {
-      return reply.status(400).send({ error: "Missing code or state parameter" });
+      return reply
+        .status(400)
+        .send({ error: "Missing code or state parameter" });
     }
 
     // Validate state for CSRF protection (DB-backed, survives restart)
     if (!validateAndConsumeSSOState(state)) {
-      return reply.status(403).send({ error: "Invalid or expired state parameter" });
+      return reply
+        .status(403)
+        .send({ error: "Invalid or expired state parameter" });
     }
 
     try {
@@ -85,6 +91,7 @@ export async function registerSSORoutes(app: FastifyInstance): Promise<void> {
 
       // Return HTML that stores the token and closes the window
       // (For browser-based SSO flow)
+      // Also notify the CLI local callback server if running (port 19836)
       return reply.type("text/html").send(`
         <!DOCTYPE html>
         <html>
@@ -97,13 +104,14 @@ export async function registerSSORoutes(app: FastifyInstance): Promise<void> {
             <h2>Welcome, ${user.name}!</h2>
             <p>You are now logged in as <strong>${user.email}</strong> (${user.role})</p>
             <p style="font-size: 12px; color: #94a3b8;">Your API token has been generated. You can close this window.</p>
-            <pre style="background: #1e293b; padding: 12px; border-radius: 8px; font-size: 11px; word-break: break-all;">${token}</pre>
             <script>
-              // Store token for the extension to pick up
+              // Store token for the GUI/extension to pick up
               if (window.opener) {
                 window.opener.postMessage({ type: 'afw-sso-token', token: '${token}' }, '*');
                 setTimeout(() => window.close(), 2000);
               }
+              // Notify the CLI local callback server if running
+              fetch('http://127.0.0.1:19836/?token=${token}').catch(() => {});
             </script>
           </div>
         </body>

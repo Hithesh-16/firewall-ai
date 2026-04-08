@@ -31,20 +31,23 @@ export function createUser(
   name: string,
   password: string,
   role: Role = "developer",
-  orgId: number | null = null
+  orgId: number | null = null,
 ): User {
   const now = Date.now();
   const passwordHash = hashPassword(password);
 
-  const result = db.insert(users).values({
-    email,
-    name,
-    passwordHash,
-    role,
-    orgId,
-    createdAt: now,
-    updatedAt: now
-  }).run();
+  const result = db
+    .insert(users)
+    .values({
+      email,
+      name,
+      passwordHash,
+      role,
+      orgId,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
 
   return {
     id: result.lastInsertRowid as number,
@@ -53,7 +56,7 @@ export function createUser(
     role,
     orgId,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
 }
 
@@ -72,12 +75,20 @@ export function getUserById(id: number): User | null {
 }
 
 export function getUsersByOrg(orgId: number): User[] {
-  const rows = db.select().from(users).where(eq(users.orgId, orgId)).orderBy(asc(users.createdAt)).all();
+  const rows = db
+    .select()
+    .from(users)
+    .where(eq(users.orgId, orgId))
+    .orderBy(asc(users.createdAt))
+    .all();
   return rows.map(rowToUser);
 }
 
 export function updateUserRole(userId: number, role: Role): void {
-  db.update(users).set({ role, updatedAt: Date.now() }).where(eq(users.id, userId)).run();
+  db.update(users)
+    .set({ role, updatedAt: Date.now() })
+    .where(eq(users.id, userId))
+    .run();
 }
 
 export function deleteUser(userId: number): void {
@@ -94,7 +105,7 @@ export function createApiToken(
     scopes?: TokenScope[];
     orgId?: number;
     teamId?: number;
-  }
+  },
 ): { token: string; record: ApiToken } {
   const raw = generateToken();
   const hashed = hashToken(raw);
@@ -104,16 +115,19 @@ export function createApiToken(
     : null;
   const scopesJson = options?.scopes ? JSON.stringify(options.scopes) : null;
 
-  const result = db.insert(apiTokens).values({
-    userId,
-    tokenHash: hashed,
-    name,
-    scopes: scopesJson,
-    orgId: options?.orgId ?? null,
-    teamId: options?.teamId ?? null,
-    createdAt: now,
-    expiresAt,
-  }).run();
+  const result = db
+    .insert(apiTokens)
+    .values({
+      userId,
+      tokenHash: hashed,
+      name,
+      scopes: scopesJson,
+      orgId: options?.orgId ?? null,
+      teamId: options?.teamId ?? null,
+      createdAt: now,
+      expiresAt,
+    })
+    .run();
 
   return {
     token: raw,
@@ -129,13 +143,19 @@ export function createApiToken(
       createdAt: now,
       expiresAt,
       rotatedFromId: null,
-    }
+    },
   };
 }
 
-export function validateApiToken(raw: string): { user: User; token: ApiToken } | null {
+export function validateApiToken(
+  raw: string,
+): { user: User; token: ApiToken } | null {
   const hashed = hashToken(raw);
-  const tokenRow = db.select().from(apiTokens).where(eq(apiTokens.tokenHash, hashed)).get();
+  const tokenRow = db
+    .select()
+    .from(apiTokens)
+    .where(eq(apiTokens.tokenHash, hashed))
+    .get();
 
   if (!tokenRow) return null;
 
@@ -146,7 +166,10 @@ export function validateApiToken(raw: string): { user: User; token: ApiToken } |
   const user = getUserById(token.userId);
   if (!user) return null;
 
-  db.update(apiTokens).set({ lastUsedAt: Date.now() }).where(eq(apiTokens.id, token.id)).run();
+  db.update(apiTokens)
+    .set({ lastUsedAt: Date.now() })
+    .where(eq(apiTokens.id, token.id))
+    .run();
 
   return { user, token };
 }
@@ -155,7 +178,10 @@ export function validateApiToken(raw: string): { user: User; token: ApiToken } |
  * Check if a token has a specific scope.
  * Tokens with no scopes (null) or wildcard ("*") have full access.
  */
-export function tokenHasScope(token: ApiToken, requiredScope: TokenScope): boolean {
+export function tokenHasScope(
+  token: ApiToken,
+  requiredScope: TokenScope,
+): boolean {
   if (!token.scopes) return true; // null scopes = full access (backward compat)
   return token.scopes.includes("*") || token.scopes.includes(requiredScope);
 }
@@ -169,7 +195,9 @@ export function rotateApiToken(
   userId: number,
   expiresInDays?: number,
 ): { token: string; record: ApiToken } | null {
-  const oldRow = db.select().from(apiTokens)
+  const oldRow = db
+    .select()
+    .from(apiTokens)
     .where(and(eq(apiTokens.id, oldTokenId), eq(apiTokens.userId, userId)))
     .get();
 
@@ -187,17 +215,20 @@ export function rotateApiToken(
 
   const scopesJson = oldToken.scopes ? JSON.stringify(oldToken.scopes) : null;
 
-  const result = db.insert(apiTokens).values({
-    userId,
-    tokenHash: hashed,
-    name: oldToken.name,
-    scopes: scopesJson,
-    orgId: oldToken.orgId,
-    teamId: oldToken.teamId,
-    createdAt: now,
-    expiresAt,
-    rotatedFromId: oldTokenId,
-  }).run();
+  const result = db
+    .insert(apiTokens)
+    .values({
+      userId,
+      tokenHash: hashed,
+      name: oldToken.name,
+      scopes: scopesJson,
+      orgId: oldToken.orgId,
+      teamId: oldToken.teamId,
+      createdAt: now,
+      expiresAt,
+      rotatedFromId: oldTokenId,
+    })
+    .run();
 
   // Revoke old token
   db.delete(apiTokens).where(eq(apiTokens.id, oldTokenId)).run();
@@ -220,24 +251,34 @@ export function rotateApiToken(
   };
 }
 
-export function listApiTokens(userId: number): Array<Omit<ApiToken, "tokenHash">> {
-  const rows = db.select({
-    id: apiTokens.id,
-    userId: apiTokens.userId,
-    name: apiTokens.name,
-    scopes: apiTokens.scopes,
-    orgId: apiTokens.orgId,
-    teamId: apiTokens.teamId,
-    lastUsedAt: apiTokens.lastUsedAt,
-    createdAt: apiTokens.createdAt,
-    expiresAt: apiTokens.expiresAt,
-    rotatedFromId: apiTokens.rotatedFromId,
-  }).from(apiTokens).where(eq(apiTokens.userId, userId)).all();
+export function listApiTokens(
+  userId: number,
+): Array<Omit<ApiToken, "tokenHash">> {
+  const rows = db
+    .select({
+      id: apiTokens.id,
+      userId: apiTokens.userId,
+      name: apiTokens.name,
+      scopes: apiTokens.scopes,
+      orgId: apiTokens.orgId,
+      teamId: apiTokens.teamId,
+      lastUsedAt: apiTokens.lastUsedAt,
+      createdAt: apiTokens.createdAt,
+      expiresAt: apiTokens.expiresAt,
+      rotatedFromId: apiTokens.rotatedFromId,
+    })
+    .from(apiTokens)
+    .where(eq(apiTokens.userId, userId))
+    .all();
 
   return rows.map((r) => {
     let scopes: TokenScope[] | null = null;
     if (r.scopes) {
-      try { scopes = JSON.parse(r.scopes as string) as TokenScope[]; } catch { scopes = null; }
+      try {
+        scopes = JSON.parse(r.scopes as string) as TokenScope[];
+      } catch {
+        scopes = null;
+      }
     }
     return {
       id: r.id as number,
@@ -255,8 +296,16 @@ export function listApiTokens(userId: number): Array<Omit<ApiToken, "tokenHash">
 }
 
 export function revokeApiToken(tokenId: number, userId: number): boolean {
-  const result = db.delete(apiTokens).where(and(eq(apiTokens.id, tokenId), eq(apiTokens.userId, userId))).run();
+  const result = db
+    .delete(apiTokens)
+    .where(and(eq(apiTokens.id, tokenId), eq(apiTokens.userId, userId)))
+    .run();
   return result.changes > 0;
+}
+
+export function revokeAllUserTokens(userId: number): number {
+  const result = db.delete(apiTokens).where(eq(apiTokens.userId, userId)).run();
+  return result.changes;
 }
 
 // --- Row mappers ---
@@ -269,7 +318,7 @@ function rowToUser(row: any): User {
     role: row.role as Role,
     orgId: (row.orgId as number | null) ?? null,
     createdAt: row.createdAt as number,
-    updatedAt: row.updatedAt as number
+    updatedAt: row.updatedAt as number,
   };
 }
 

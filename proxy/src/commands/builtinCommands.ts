@@ -659,9 +659,8 @@ const securityAuditCommand: ActionCommand = {
     args: string,
     context: CommandContext,
   ): Promise<LocalCommandResult> {
-    const { runSecurityAudit } = await import(
-      "../scanner/securityAuditScanner"
-    );
+    const { runSecurityAudit } =
+      await import("../scanner/securityAuditScanner");
 
     const projectPath = args.trim() || context.projectPath || process.cwd();
 
@@ -749,9 +748,8 @@ const securityReviewCommand: ActionCommand = {
     const { writeFileSync, unlinkSync, mkdtempSync } = await import("node:fs");
     const { join } = await import("node:path");
     const { tmpdir } = await import("node:os");
-    const { runSecurityAudit } = await import(
-      "../scanner/securityAuditScanner"
-    );
+    const { runSecurityAudit } =
+      await import("../scanner/securityAuditScanner");
 
     const projectPath = context.projectPath || process.cwd();
 
@@ -875,6 +873,90 @@ const securityReviewCommand: ActionCommand = {
   },
 };
 
+// ── /login ────────────────────────────────────────────────────
+
+const loginCommand: ActionCommand = {
+  name: "login",
+  description: "Sign in to AI Firewall (opens login page)",
+  type: "action",
+  source: "builtin",
+  userInvocable: true,
+
+  async call(
+    _args: string,
+    _context: CommandContext,
+  ): Promise<LocalCommandResult> {
+    return {
+      output: "Navigating to login page...",
+      success: true,
+      data: { navigate: "/login" },
+    };
+  },
+};
+
+// ── /logout ───────────────────────────────────────────────────
+
+const logoutCommand: ActionCommand = {
+  name: "logout",
+  aliases: ["signout"],
+  description: "Sign out of AI Firewall and revoke current session",
+  type: "action",
+  source: "builtin",
+  userInvocable: true,
+
+  async call(
+    args: string,
+    context: CommandContext,
+  ): Promise<LocalCommandResult> {
+    const token = context.extra?.token as string | undefined;
+
+    if (!token) {
+      return {
+        output: "Not authenticated. Use /login to sign in.",
+        success: true,
+        data: { navigate: "/login" },
+      };
+    }
+
+    try {
+      const res = await fetch("http://localhost:8080/api/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        return {
+          output: "Logout failed. Clearing local session anyway.",
+          success: true,
+          data: { navigate: "/login", clearToken: true },
+        };
+      }
+
+      const revokeAll = args.trim() === "all";
+      if (revokeAll) {
+        await fetch("http://localhost:8080/api/auth/logout/all", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+
+      return {
+        output: revokeAll
+          ? "Logged out from all devices."
+          : "Logged out successfully.",
+        success: true,
+        data: { navigate: "/login", clearToken: true },
+      };
+    } catch {
+      return {
+        output: "Could not reach proxy. Clearing local session.",
+        success: true,
+        data: { navigate: "/login", clearToken: true },
+      };
+    }
+  },
+};
+
 // ── Export all built-in commands ────────────────────────────────
 
 export const BUILTIN_COMMANDS: readonly Command[] = [
@@ -891,4 +973,6 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
   resumeCommand,
   securityAuditCommand,
   securityReviewCommand,
+  loginCommand,
+  logoutCommand,
 ];

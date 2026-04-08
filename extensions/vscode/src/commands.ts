@@ -485,6 +485,40 @@ const getCommandsMap: (
     "aiFirewall.applyCodeFromChat": () => {
       void sidebar.webviewProtocol.request("applyCodeFromChat", undefined);
     },
+    "aiFirewall.login": () => {
+      vscode.commands.executeCommand("aiFirewall.navigateTo", "/login", false);
+    },
+    "aiFirewall.logout": async () => {
+      const confirm = await vscode.window.showWarningMessage(
+        "Sign out of AI Firewall?",
+        { modal: true },
+        "Sign Out",
+      );
+      if (confirm !== "Sign Out") return;
+
+      // Try to revoke token on the proxy
+      const settings = vscode.workspace.getConfiguration("aiFirewall");
+      const token = settings.get<string | null>("userToken", null);
+      if (token) {
+        try {
+          await fetch("http://localhost:8080/api/auth/logout", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } catch {
+          // Proxy may be offline — proceed with local cleanup
+        }
+        await settings.update(
+          "userToken",
+          undefined,
+          vscode.ConfigurationTarget.Global,
+        );
+      }
+
+      // Navigate to login page
+      vscode.commands.executeCommand("aiFirewall.navigateTo", "/login", false);
+      vscode.window.showInformationMessage("Signed out of AI Firewall.");
+    },
     "aiFirewall.openConfigPage": () => {
       vscode.commands.executeCommand("aiFirewall.navigateTo", "/config", false);
     },

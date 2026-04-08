@@ -67,31 +67,41 @@
             "id": "chat",
             "title": "Chat with AI",
             "description": "Open the sidebar and start chatting. Ask questions, get code suggestions, and let the agent use tools.\n\n[Open AI Firewall](command:aiFirewall.focusContinueInput)",
-            "media": { "markdown": "Every message is scanned for secrets and PII before reaching the LLM." }
+            "media": {
+              "markdown": "Every message is scanned for secrets and PII before reaching the LLM."
+            }
           },
           {
             "id": "security",
             "title": "Security Scanning",
             "description": "AI Firewall scans every request through 6 scanners: secrets, PII, entropy, prompt injection, context-aware severity, and policy engine.\n\nLook for the shield icon in the status bar — it shows scan results in real-time.",
-            "media": { "markdown": "**12 secret patterns** (AWS keys, JWTs, DB URLs) + **7 PII patterns** (email, SSN, credit card) + **13 injection categories**" }
+            "media": {
+              "markdown": "**12 secret patterns** (AWS keys, JWTs, DB URLs) + **7 PII patterns** (email, SSN, credit card) + **13 injection categories**"
+            }
           },
           {
             "id": "tokens",
             "title": "Token Intelligence",
             "description": "Every response shows real token counts and cost. The context reducer can save up to 75% of tokens by stripping comments and irrelevant code.\n\nCheck the response headers: `X-AF-Input-Tokens`, `X-AF-Estimated-Cost`.",
-            "media": { "markdown": "Real tiktoken counting — not character heuristics. See exactly what you're spending." }
+            "media": {
+              "markdown": "Real tiktoken counting — not character heuristics. See exactly what you're spending."
+            }
           },
           {
             "id": "tools",
             "title": "Agent Tools",
             "description": "The AI can read files, search your codebase, run terminal commands, and more — all through the firewall.\n\n26 built-in tools, each with configurable permission policies.",
-            "media": { "markdown": "Tools like `read_file`, `grep_search`, `run_terminal_command` all pass through scanning." }
+            "media": {
+              "markdown": "Tools like `read_file`, `grep_search`, `run_terminal_command` all pass through scanning."
+            }
           },
           {
             "id": "approvals",
             "title": "Permission Control",
             "description": "You approve every file access and tool use. High-risk actions show a prominent permission card with the reason and risk level.\n\nKeyboard shortcuts: **Cmd+Enter** to Accept, **Cmd+Backspace** to Reject.",
-            "media": { "markdown": "Accept/Reject every tool call. Or set tools to auto-approve in Settings > Tools." }
+            "media": {
+              "markdown": "Accept/Reject every tool call. Or set tools to auto-approve in Settings > Tools."
+            }
           }
         ]
       }
@@ -403,6 +413,20 @@
         "category": "AI Firewall",
         "title": "Focus AI Firewall Chat",
         "icon": "$(comment-discussion)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.login",
+        "category": "AI Firewall",
+        "title": "Sign In",
+        "icon": "$(sign-in)",
+        "group": "AI Firewall"
+      },
+      {
+        "command": "aiFirewall.logout",
+        "category": "AI Firewall",
+        "title": "Sign Out",
+        "icon": "$(sign-out)",
         "group": "AI Firewall"
       },
       {

@@ -6,6 +6,7 @@ import {
   createUser,
   listApiTokens,
   revokeApiToken,
+  revokeAllUserTokens,
   rotateApiToken,
   updateUserRole,
 } from "../auth/authService";
@@ -250,6 +251,24 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         expiresAt: result.record.expiresAt,
         rotatedFromId: result.record.rotatedFromId,
       });
+    },
+  );
+
+  /** POST /api/auth/logout — Revoke the current session token */
+  app.post("/api/auth/logout", { preHandler: requireAuth }, async (request) => {
+    const ctx = request.authContext!;
+    revokeApiToken(ctx.token.id, ctx.user.id);
+    return { ok: true, message: "Logged out successfully" };
+  });
+
+  /** POST /api/auth/logout/all — Revoke all tokens for the current user */
+  app.post(
+    "/api/auth/logout/all",
+    { preHandler: requireAuth },
+    async (request) => {
+      const ctx = request.authContext!;
+      const count = revokeAllUserTokens(ctx.user.id);
+      return { ok: true, message: `Revoked ${count} token(s)` };
     },
   );
 

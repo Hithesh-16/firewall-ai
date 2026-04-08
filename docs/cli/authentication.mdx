@@ -1,6 +1,6 @@
 ---
 title: "Authentication"
-description: "CLI login, registration, and token management"
+description: "CLI login, registration, Google OAuth, and token management"
 ---
 
 ## Overview
@@ -13,16 +13,51 @@ The AI Firewall CLI authenticates against the local proxy server (`localhost:808
 ai-firewall login
 ```
 
-You'll be prompted for email and password:
+If the proxy has SSO providers configured (e.g., Google OAuth), the CLI presents a choice:
 
 ```
 AI Firewall — Login
 
+Choose sign-in method:
+
+  1) Email & Password
+  2) Google OAuth
+  3) GitHub OAuth
+
+Enter choice (1):
+```
+
+### Email & Password (Default)
+
+Select option `1` (or just press Enter). You'll be prompted for email and password:
+
+```
 Email: you@example.com
 Password: ********
 
 Logged in as you@example.com (admin)
 ```
+
+### Google OAuth
+
+Select option `2` to sign in with Google:
+
+```
+Opening browser for Google sign-in...
+Waiting for authentication in browser...
+
+Logged in as you@example.com (developer)
+```
+
+The CLI opens your browser for Google OAuth. After you authenticate, the browser redirects back and the CLI receives your token automatically.
+
+<Info>
+Google OAuth requires the proxy to have `SSO_GOOGLE_CLIENT_ID` and `SSO_GOOGLE_CLIENT_SECRET` configured in its environment.
+</Info>
+
+### GitHub OAuth
+
+Select option `3` to sign in with GitHub. Works identically to Google OAuth.
 
 ### First-Time Registration
 
@@ -64,7 +99,7 @@ ai-firewall login
 ai-firewall logout
 ```
 
-Removes the saved token from `~/.ai-firewall/auth.json`.
+Revokes the session token on the proxy, then removes it from `~/.ai-firewall/auth.json`.
 
 ## Token Storage
 
@@ -85,3 +120,19 @@ The token is sent as `Authorization: Bearer afw_...` on all API requests.
 ## Fallback Auth
 
 If the proxy is not running (`ECONNREFUSED`), the CLI falls back to the legacy AI Firewall WorkOS device flow. This is for backward compatibility only — the proxy-based auth is preferred.
+
+## OAuth Technical Flow
+
+When using Google/GitHub OAuth from the CLI:
+
+1. CLI starts a temporary local HTTP server on port `19836`
+2. CLI opens the proxy's SSO login URL in the browser
+3. Proxy redirects to Google/GitHub for consent
+4. After consent, Google/GitHub redirects back to the proxy callback
+5. Proxy creates/finds the user, generates an API token
+6. Proxy callback page sends the token to the CLI's local server
+7. CLI receives the token, verifies it via `GET /api/auth/me`, and saves it
+
+<Warning>
+Port `19836` must be available on your machine for CLI OAuth to work. If it's in use, the OAuth flow will fail with a connection error.
+</Warning>

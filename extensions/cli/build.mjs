@@ -18,6 +18,20 @@ const external = [
   "@sentry/profiling-node", // Contains native profiler bindings (optional)
   "fsevents", // macOS native file watcher (optional dependency)
   "./xhr-sync-worker.js", // JSDOM worker file that needs to be copied separately
+  // yoga-layout ships an Emscripten-generated WASM loader that uses
+  // `fetch(dataURL, { credentials: "same-origin" })`. When bundled by esbuild
+  // and run under Node 22 + undici, that call hangs forever, so the top-level
+  // `await loadYoga()` never settles. Externalizing it lets Node load yoga
+  // straight from node_modules (where it works fine in ~60ms).
+  "yoga-layout",
+  // Ink + react-reconciler also produce ESM modules with top-level await
+  // that, when wrapped by esbuild's lazy `__esm` init pattern, never settle
+  // under Node 22. Externalize them so Node loads them directly from
+  // node_modules with native module init.
+  "ink",
+  "react-reconciler",
+  "react",
+  "react-devtools-core",
 ];
 
 console.log("Building CLI with esbuild...");

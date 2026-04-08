@@ -402,9 +402,8 @@ program.on("command:*", () => {
 export async function runCli(): Promise<void> {
   // Handle internal worker subprocess for cn review
   if (process.argv.includes("--internal-review-worker")) {
-    const { runReviewWorker } = await import(
-      "./commands/review/reviewWorker.js"
-    );
+    const { runReviewWorker } =
+      await import("./commands/review/reviewWorker.js");
     await runReviewWorker();
     return;
   }
@@ -423,4 +422,14 @@ export async function runCli(): Promise<void> {
   process.on("SIGTERM", async () => {
     await gracefulExit(0);
   });
+}
+
+// When this file is executed directly (e.g. `node dist/index.js`), run the CLI.
+// When loaded via `dist/cn.js`, it will not be the main module and this no-ops.
+if (
+  typeof process !== "undefined" &&
+  process.argv[1] &&
+  import.meta.url === `file://${process.argv[1]}`
+) {
+  runCli();
 }

@@ -5,8 +5,6 @@ import http from "node:http";
 import { login as workosLogin, saveAuthConfig } from "../auth/workos.js";
 import { gracefulExit } from "../util/exit.js";
 
-import { chat } from "./chat.js";
-
 const PROXY_BASE = process.env.AI_FIREWALL_PROXY_URL || "http://localhost:8080";
 
 function prompt(question: string, isPassword = false): Promise<string> {
@@ -405,6 +403,7 @@ async function authenticateWithSSO(provider: string): Promise<boolean> {
 export async function login() {
   const success = await authenticate();
   if (success) {
+    const { chat } = await import("./chat.js");
     await chat();
   } else {
     await gracefulExit(1);

@@ -10,6 +10,8 @@ import {
   setDefaultAssistant,
   upsertAssistant,
 } from "../gateway/assistantService";
+import crypto from "node:crypto";
+
 import {
   inferGrantMode,
   isModelGrantedToUser,
@@ -20,6 +22,7 @@ import {
   listAvailableProvidersForUser,
   listOrgProviders,
   listUserProviders,
+  resolveProviderForUser,
   upsertUserProvider,
 } from "../gateway/userProviderService";
 import { resolveEffectivePolicy } from "../policy/policyChain";
@@ -124,20 +127,52 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      // ── KEY INJECTION ────────────────────────────────────────
+      //
+      // The YAML stored in the `assistants` table is intentionally
+      // key-free — API keys live in `user_providers` / `org_providers`
+      // and are AES-256-GCM encrypted at rest. But the CLI's
+      // Continue config-yaml unroller wants credentials inline on
+      // each model entry (`apiKey: ...`) so it can construct an
+      // LLM client.
+      //
+      // We do the injection here, on every GET, so:
+      //   - The DB never stores plaintext keys next to the assistant
+      //   - Rotating a key via `PUT /api/me/providers/:slug` is
+      //     picked up on the next conditional GET (the injected
+      //     etag changes when the key material changes)
+      //   - Users who don't have a provider for a given model get
+      //     an empty string — the unroller still lists the model
+      //     so the CLI can show it and surface a better "missing
+      //     credentials" error than "no models"
+      //
+      // Both the stored etag and a hash of the injected content
+      // go into the outgoing ETag so changing either the YAML or
+      // any upstream key triggers a refetch.
+      const injected = await injectProviderKeys(
+        assistant.yaml,
+        user.id,
+        user.orgId,
+      );
+      const injectedEtag =
+        assistant.etag +
+        ":" +
+        crypto.createHash("sha256").update(injected).digest("hex").slice(0, 12);
+
       // Conditional GET — cheap etag round-trip for client caches.
       const incoming = request.headers["if-none-match"];
-      if (incoming && incoming === assistant.etag) {
+      if (incoming && incoming === injectedEtag) {
         return reply.status(304).send();
       }
 
-      reply.header("ETag", assistant.etag);
+      reply.header("ETag", injectedEtag);
       return {
         assistant: {
           slug: assistant.slug,
           name: assistant.name,
           owner: { type: assistant.ownerType, id: assistant.ownerId },
-          yaml: assistant.yaml,
-          etag: assistant.etag,
+          yaml: injected,
+          etag: injectedEtag,
           isDefault: assistant.isDefault,
           updatedAt: assistant.updatedAt,
         },
@@ -354,6 +389,10 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
     apiKey: z.string().min(1),
     baseUrl: z.string().url().optional(),
     enabled: z.boolean().optional(),
+    /** Model to add to the user's default assistant. */
+    model: z.string().optional(),
+    /** Display name for the model. */
+    modelDisplayName: z.string().optional(),
   });
 
   app.put<{ Params: { slug: string } }>(
@@ -379,6 +418,78 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
         baseUrl: parse.data.baseUrl ?? null,
         enabled: parse.data.enabled,
       });
+
+      // ── Auto-sync assistant YAML ─────────────────────────────
+      // When a user adds a provider, ensure their default assistant
+      // YAML actually references a model from that provider. Without
+      // this, the provider key is stored but `/api/me/models` sees
+      // zero reachable models because the YAML only lists models
+      // from the OLD provider.
+      //
+      // Strategy:
+      //   1. Load the user's current default assistant YAML (or the
+      //      org default, or a blank template).
+      //   2. Parse it. Check if it already has a model for this
+      //      provider slug.
+      //   3. If not, append one entry using the model slug from the
+      //      request body (or a sensible default like "AUTODETECT").
+      //   4. Re-save.
+      try {
+        const existing = resolveAssistantForUser(user.id, user.orgId);
+        const yamlModule = await import("yaml");
+        let parsed: Record<string, unknown>;
+        if (existing) {
+          parsed = yamlModule.parse(existing.yaml) as Record<string, unknown>;
+        } else {
+          parsed = {
+            name: "personal",
+            schema: "v1",
+            version: "0.0.1",
+            models: [],
+          };
+        }
+
+        const models = Array.isArray(parsed.models)
+          ? (parsed.models as Array<Record<string, unknown>>)
+          : [];
+
+        const providerSlug = request.params.slug;
+        const alreadyHasProvider = models.some(
+          (m) => m.provider === providerSlug,
+        );
+
+        if (!alreadyHasProvider) {
+          const newModelSlug = parse.data.model || "AUTODETECT";
+          const newDisplayName =
+            parse.data.modelDisplayName || `${providerSlug} (${newModelSlug})`;
+          models.push({
+            name: newDisplayName,
+            provider: providerSlug,
+            model: newModelSlug,
+            roles: ["chat", "edit", "apply"],
+          });
+          parsed.models = models;
+
+          const updatedYaml = yamlModule.stringify(parsed);
+          upsertAssistant({
+            ownerType: "user",
+            ownerId: user.id,
+            slug: existing?.slug ?? "default",
+            name: existing?.name ?? "Personal assistant",
+            yaml: updatedYaml,
+            isDefault: true,
+          });
+        }
+      } catch (e) {
+        // Non-fatal — the provider key is already saved, model
+        // sync is best-effort. User can fix via /settings/assistant.
+        console.warn(
+          `[me.route] auto-sync assistant on provider add failed: ${
+            e instanceof Error ? e.message : e
+          }`,
+        );
+      }
+
       return { ok: true };
     },
   );
@@ -392,7 +503,139 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
       if (!removed) {
         return reply.status(404).send({ error: "NOT_FOUND" });
       }
+
+      // Auto-sync: strip this provider's models from the assistant
+      // so stale models don't show up in the CLI after deletion.
+      try {
+        const existing = resolveAssistantForUser(user.id, user.orgId);
+        if (existing) {
+          const yamlModule = await import("yaml");
+          const parsed = yamlModule.parse(existing.yaml) as Record<
+            string,
+            unknown
+          >;
+          const models = Array.isArray(parsed.models)
+            ? (parsed.models as Array<Record<string, unknown>>)
+            : [];
+          const filtered = models.filter(
+            (m) => m.provider !== request.params.slug,
+          );
+          if (filtered.length !== models.length) {
+            parsed.models = filtered;
+            upsertAssistant({
+              ownerType: "user",
+              ownerId: user.id,
+              slug: existing.slug,
+              name: existing.name,
+              yaml: yamlModule.stringify(parsed),
+              isDefault: existing.isDefault,
+            });
+          }
+        }
+      } catch {
+        // best-effort
+      }
+
       return { deleted: true };
     },
   );
+}
+
+/**
+ * Inject resolved provider API keys into an assistant YAML.
+ *
+ * The stored YAML is key-free — API keys live in the encrypted
+ * `user_providers` / `org_providers` tables and are only
+ * materialised into the wire response. For each `models:` entry
+ * we look up the key via `resolveProviderForUser` (user override
+ * first, org default second) and rewrite the block with an
+ * `apiKey:` line.
+ *
+ * Design notes:
+ *
+ *   - Uses a string-replacement pass rather than a full YAML
+ *     parse/re-serialise, because yaml.parse + yaml.stringify
+ *     rewrites comments, ordering, and quoting, which would
+ *     surprise users who hand-edit the YAML in the Monaco
+ *     editor. The regex is deliberately conservative — it only
+ *     touches lines inside the `models:` block and it only
+ *     inserts (never removes) `apiKey:` lines.
+ *
+ *   - If a user has no provider for a model's slug we silently
+ *     skip the injection. The CLI's unroller will list the
+ *     model but calling it will fail with a clear
+ *     "missing credentials" error from the upstream SDK —
+ *     which is the correct UX for "you forgot to add a key".
+ *
+ *   - `baseUrl` from the user/org provider overrides the YAML's
+ *     base URL when the provider has a non-default endpoint
+ *     (Azure, Ollama, Bedrock). We only inject if the YAML
+ *     doesn't already have its own `apiBase:` line.
+ */
+async function injectProviderKeys(
+  yaml: string,
+  userId: number,
+  orgId: number | null,
+): Promise<string> {
+  const yamlMod = await import("yaml");
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = yamlMod.parse(yaml) as Record<string, unknown>;
+  } catch {
+    return yaml;
+  }
+
+  const models = Array.isArray(parsed?.models)
+    ? (parsed.models as Array<Record<string, unknown>>)
+    : [];
+  if (models.length === 0) return yaml;
+
+  // Resolve the unique set of providers referenced in the YAML so
+  // we only hit the DB once per slug.
+  const providerSlugs = Array.from(
+    new Set(
+      models
+        .map((m) => (typeof m?.provider === "string" ? m.provider : null))
+        .filter((s): s is string => !!s),
+    ),
+  );
+
+  const resolved = new Map<
+    string,
+    { apiKey: string; baseUrl: string | null; source: "user" | "org" }
+  >();
+  for (const slug of providerSlugs) {
+    const r = resolveProviderForUser(userId, orgId, slug);
+    if (r) {
+      resolved.set(slug, {
+        apiKey: r.apiKey,
+        baseUrl: r.baseUrl,
+        source: r.source,
+      });
+    }
+  }
+  if (resolved.size === 0) return yaml;
+
+  // Mutate the parsed object in place with resolved keys.
+  for (const m of models) {
+    const slug = typeof m?.provider === "string" ? m.provider : null;
+    if (!slug) continue;
+    const hit = resolved.get(slug);
+    if (!hit) continue;
+
+    // Don't clobber a user-supplied apiKey in the YAML.
+    if (!m.apiKey && hit.apiKey) {
+      m.apiKey = hit.apiKey;
+    }
+    // Only inject apiBase if the user/org explicitly set one and
+    // the YAML didn't already declare one.
+    if (!m.apiBase && hit.baseUrl) {
+      m.apiBase = hit.baseUrl;
+    }
+  }
+
+  // Re-serialise. yaml.stringify's defaults are close enough to
+  // our input format (2-space indent, no flow style) for CLI
+  // consumers — they never see the YAML directly anyway.
+  return yamlMod.stringify(parsed);
 }

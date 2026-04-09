@@ -6,6 +6,9 @@ import {
   isAuthenticatedConfig,
   loadAuthConfig,
 } from "./auth/workos.js";
+import { loadAuthFile } from "@ai-firewall/shared-auth";
+
+import { loadAssistantYamlFromApi } from "./apiAssistantLoader.js";
 import { getAllSlashCommands } from "./commands/commands.js";
 import { handleInit } from "./commands/init.js";
 import { authenticate as webAuthenticate } from "./commands/login.js";
@@ -202,6 +205,95 @@ function handleSessions() {
   return { openSessionSelector: true };
 }
 
+/**
+ * `/sync` — pull the latest assistant (models) and effective
+ * policy from the proxy and reload all downstream services. This
+ * is the in-TUI equivalent of restarting the CLI after changing
+ * something in the web dashboard.
+ *
+ * What it does:
+ *   1. Fetch GET /api/me/assistant (with key injection) — writes
+ *      the ETag cache AND ~/.ai-firewall/config.yaml.
+ *   2. Fetch GET /api/me/policy — updates the scanner cache.
+ *   3. Reload the CONFIG service → cascades to MODEL + MCP.
+ *   4. Report what changed in a concise summary.
+ */
+async function handleSync(): Promise<SlashCommandResult> {
+  const auth = loadAuthFile();
+  if (!auth?.accessToken) {
+    return {
+      output: chalk.red("Not signed in. Run /login first, then /sync."),
+    };
+  }
+  const proxyUrl = auth.proxyUrl || "http://localhost:8080";
+  const lines: string[] = [];
+
+  // ── 1. Sync assistant (models) ────────────────────────────
+  try {
+    const yaml = await loadAssistantYamlFromApi();
+    // Write to config.yaml so the config service picks it up
+    const fs = await import("fs");
+    const path = await import("path");
+    const os = await import("os");
+    const configPath = path.join(os.homedir(), ".ai-firewall", "config.yaml");
+    const header =
+      "# Managed by AI Firewall — edit via the web dashboard.\n" +
+      "# Add `# user-managed: true` on the first line to prevent auto-sync.\n";
+    fs.writeFileSync(configPath, header + yaml, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    // Count models in the YAML for the summary
+    const modelCount = (yaml.match(/^\s+-\s+name:/gm) || []).length;
+    lines.push(
+      chalk.green(
+        `✓ Assistant synced (${modelCount} model${modelCount === 1 ? "" : "s"})`,
+      ),
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    lines.push(chalk.red(`✗ Assistant sync failed: ${msg}`));
+  }
+
+  // ── 2. Sync effective policy ──────────────────────────────
+  try {
+    const res = await fetch(`${proxyUrl}/api/me/policy`, {
+      headers: { Authorization: `Bearer ${auth.accessToken}` },
+    });
+    if (res.ok) {
+      const body = (await res.json()) as { policy: Record<string, unknown> };
+      const blocklist =
+        ((body.policy?.file_scope as Record<string, unknown>)?.blocklist as
+          | string[]
+          | undefined) ?? [];
+      lines.push(
+        chalk.green(
+          `✓ Policy synced (${blocklist.length} blocked pattern${blocklist.length === 1 ? "" : "s"})`,
+        ),
+      );
+    } else {
+      lines.push(chalk.yellow(`⚠ Policy sync: HTTP ${res.status}`));
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    lines.push(chalk.yellow(`⚠ Policy sync failed: ${msg}`));
+  }
+
+  // ── 3. Reload services ────────────────────────────────────
+  try {
+    await reloadService(SERVICE_NAMES.CONFIG);
+    await reloadService(SERVICE_NAMES.MODEL);
+    lines.push(chalk.green("✓ Config and model services reloaded"));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    lines.push(chalk.yellow(`⚠ Service reload failed: ${msg}`));
+  }
+
+  return {
+    output: lines.join("\n"),
+  };
+}
+
 const commandHandlers: Record<string, CommandHandler> = {
   help: handleHelp,
   clear: () => {
@@ -217,6 +309,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   logout: handleLogout,
   whoami: handleWhoami,
   info: handleInfoSlashCommand,
+  sync: handleSync,
   model: () => ({ openModelSelector: true }),
   compact: () => {
     return { compact: true };

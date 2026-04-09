@@ -52,14 +52,35 @@ const CACHE_ETAG_PATH = path.join(CACHE_DIR, "assistant.etag");
 const CACHE_META_PATH = path.join(CACHE_DIR, "assistant.meta.json");
 
 /**
- * Feature gate — set `AI_FIREWALL_USE_API_ASSISTANT=1` to opt in.
- * Off by default so this ships without breaking anyone's current
- * `~/.ai-firewall/config.yaml` workflow. The default will flip in
- * a follow-up release once this path is battle-tested.
+ * Should the CLI load its assistant from `/api/me/assistant` instead
+ * of the legacy `~/.ai-firewall/config.yaml` file?
+ *
+ * Default rule (after the Phase G sync fix):
+ *
+ *   1. `AI_FIREWALL_USE_API_ASSISTANT=0` → always OFF (manual opt-out)
+ *   2. `AI_FIREWALL_USE_API_ASSISTANT=1` → always ON (explicit opt-in)
+ *   3. Otherwise → ON whenever a shared-auth token exists on disk.
+ *      This is the sensible default: if the user just signed in via
+ *      the web dashboard (`cn login`), we already know they have a
+ *      token, and the models they configured on the web are in the
+ *      proxy DB — loading the legacy YAML would silently miss them.
+ *
+ * This is the fix for the "I configured a model in web but the CLI
+ * says 'No chat models available'" bug. Before, users had to know
+ * to set the env var; now the API loader kicks in automatically
+ * for every signed-in session.
  */
 export function isApiAssistantEnabled(): boolean {
   const flag = process.env.AI_FIREWALL_USE_API_ASSISTANT;
-  return flag === "1" || flag === "true";
+  if (flag === "0" || flag === "false") return false;
+  if (flag === "1" || flag === "true") return true;
+  // Auto-detect: enable whenever ~/.ai-firewall/auth.json exists.
+  try {
+    const authFile = loadAuthFile();
+    return !!authFile?.accessToken;
+  } catch {
+    return false;
+  }
 }
 
 interface CachedMeta {

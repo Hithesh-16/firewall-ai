@@ -155,22 +155,41 @@ function determineConfigSource(
     }
   }
 
-  // Priority 3: Default resolution based on auth state
+  // Priority 3: Default resolution based on auth state.
+  //
+  // SIMPLIFIED (Phase G sync fix): the old code had a 4-way split
+  // here (unauthenticated → config.yaml or remote-default; headless
+  // → remote-default; authenticated → user-assistant from the
+  // Continue platform). That split was the root cause of "I added a
+  // model in the web dashboard but the CLI shows Loading…" — the
+  // `user-assistant` path called the CONTINUE PLATFORM API (not our
+  // proxy), which always failed because we're not running on
+  // Continue's cloud, and then fell back to `loadDefaultConfig`
+  // which fetched `continuedev/default-cli-config` from the registry
+  // — also unrelated to the user's actual models.
+  //
+  // New rule: if the user has an auth token (signed in to AI
+  // Firewall), ALWAYS try `/api/me/assistant` from our proxy first.
+  // If that fails, fall back to the local `config.yaml`. That's it.
+  // The Continue platform paths (`user-assistant`, `remote-default-
+  // config`) stay reachable only for unauthenticated users or via
+  // explicit --config slug.
   if (authConfig === null) {
-    // Unauthenticated: check for default config.yaml, then fallback to default config
+    // Unauthenticated: local config.yaml first, then nothing.
     const defaultConfigPath = path.join(env.continueHome, "config.yaml");
     if (fs.existsSync(defaultConfigPath)) {
       return { type: "local-config-yaml" };
     }
     return { type: "remote-default-config" };
-  } else {
-    // In headless, user assistant fallback behavior isn't supported
-    if (isHeadless) {
-      return { type: "remote-default-config" };
-    }
-    // Authenticated: try user assistants first
-    return { type: "user-assistant", slug: "" }; // Empty slug means "first available"
   }
+
+  // Authenticated: always use the API-sourced assistant. The
+  // isApiAssistantEnabled() check at Priority 1.5 should have
+  // caught this, but as a defence-in-depth fallback we duplicate
+  // it here so no authenticated user can accidentally fall
+  // through to `user-assistant` (which talks to the Continue
+  // platform, not our proxy).
+  return { type: "api-me-assistant" };
 }
 
 /**
@@ -248,7 +267,36 @@ async function loadFromSource(
         throw new Error(`Unknown config source type: ${(source as any).type}`);
     }
   } catch (error) {
-    // If we're trying user assistants and it fails, fall back to default agent
+    // Phase G sync fix: when the API-sourced assistant fails
+    // (proxy offline, 404 no assistant, unroll error), fall
+    // back gracefully to the local config.yaml instead of
+    // crashing the CLI. This is the user-visible recovery path
+    // for "proxy is down but I still want to use my CLI".
+    if (source.type === "api-me-assistant") {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.warn(
+        chalk.yellow(
+          `Could not load assistant from proxy (${msg}). ` +
+            `Falling back to ~/.ai-firewall/config.yaml`,
+        ),
+      );
+      const defaultConfigPath = path.join(env.continueHome, "config.yaml");
+      if (fs.existsSync(defaultConfigPath)) {
+        return await loadLocalConfigYaml(
+          accessToken,
+          organizationId,
+          apiClient,
+          injectBlocks,
+        );
+      }
+      // No config.yaml either — re-throw so the CLI shows a
+      // clear error instead of silently starting with zero models.
+      throw error;
+    }
+
+    // Legacy user-assistant path (Continue platform) — fall
+    // back to default agent. Kept for backward compatibility
+    // with unauthenticated slug-based configs.
     if (source.type === "user-assistant") {
       console.warn(
         chalk.yellow(

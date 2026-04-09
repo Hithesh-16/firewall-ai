@@ -116,6 +116,11 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
     description: "Show all chat sessions",
     category: "system",
   },
+  {
+    name: "sync",
+    description: "Sync models and policy from the web dashboard",
+    category: "system",
+  },
 ];
 
 // Remote mode specific commands

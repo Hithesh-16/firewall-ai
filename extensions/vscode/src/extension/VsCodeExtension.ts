@@ -211,6 +211,31 @@ export class VsCodeExtension {
     // we try SecretStorage, then fall back to ~/.ai-firewall/auth.json
     // so a user who signs in via `cn login` is already signed in here.
     this.aiFirewallAuth = new AiFirewallAuthService(context);
+
+    // Phase F2+ — pull the assistant YAML from /api/me/assistant and
+    // write it to ~/.ai-firewall/config.yaml so Continue core's
+    // ConfigHandler picks up the user's models. This is the VS Code
+    // equivalent of the CLI's Phase G apiAssistantLoader — without it,
+    // adding a model in the web dashboard would NOT show up in the
+    // VS Code chat view.
+    const runAssistantSync = async (token: string) => {
+      try {
+        const { syncAssistantToConfigYaml } =
+          await import("../security/assistantSync");
+        const proxyUrl = this.proxyManager.proxyUrl ?? "http://localhost:8080";
+        const status = await syncAssistantToConfigYaml(proxyUrl, token);
+        if (status.kind === "ok" && status.fresh) {
+          // Ask the config handler to re-load the now-updated file.
+          void this.core.invoke("config/refreshProfiles", {
+            reason: "AI Firewall assistant sync",
+          });
+        }
+      } catch {
+        // Non-fatal — the extension stays usable with whatever
+        // config is currently on disk.
+      }
+    };
+
     void this.aiFirewallAuth.initialize().then(async (state) => {
       // Phase E: whenever the auth state resolves, push the bearer
       // into the file-restriction checker so file-scope enforcement
@@ -223,6 +248,8 @@ export class VsCodeExtension {
           this.proxyManager.proxyUrl ?? undefined,
           state.token,
         );
+        // Initial assistant pull.
+        await runAssistantSync(state.token);
       }
     });
     this.aiFirewallAuth.onDidChangeAuth(async (state) => {
@@ -233,12 +260,33 @@ export class VsCodeExtension {
           this.proxyManager.proxyUrl ?? undefined,
           state.token,
         );
+        // Sign-in or token change → re-sync the assistant YAML
+        // so new models show up without a VS Code restart.
+        await runAssistantSync(state.token);
       } else {
         clearFileScope();
       }
     });
+
+    // Background sync every 10 minutes as a safety net for changes
+    // the user makes in the web dashboard while VS Code is open.
+    // The fetch is a conditional GET (304 on no change) so it's
+    // effectively free. Cleared on dispose so we don't leak a
+    // timer across reloads.
+    const assistantSyncTimer = setInterval(
+      () => {
+        const s = this.aiFirewallAuth.getState();
+        if (s.signedIn && s.token) {
+          void runAssistantSync(s.token);
+        }
+      },
+      10 * 60 * 1000,
+    );
     context.subscriptions.push({
-      dispose: () => this.aiFirewallAuth.dispose(),
+      dispose: () => {
+        clearInterval(assistantSyncTimer);
+        this.aiFirewallAuth.dispose();
+      },
     });
 
     this.editDecorationManager = new EditDecorationManager(context);

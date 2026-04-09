@@ -1,5 +1,6 @@
 package com.github.continuedev.continueintellijextension.auth
 
+import com.github.continuedev.continueintellijextension.security.AiFirewallAssistantSyncService
 import com.github.continuedev.continueintellijextension.security.AiFirewallFileScopeService
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -42,6 +43,11 @@ class AiFirewallSignInAction : AnAction() {
                         // shared pool thread so the sign-in action
                         // returns immediately.
                         AiFirewallFileScopeService.scheduleRefresh()
+
+                        // Phase F2+: sync the assistant YAML to
+                        // ~/.ai-firewall/config.yaml so Continue
+                        // core picks up the user's models.
+                        service<AiFirewallAssistantSyncService>().scheduleSync()
 
                         val who = state.email ?: "AI Firewall"
                         ApplicationManager.getApplication().invokeLater {

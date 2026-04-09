@@ -13,6 +13,9 @@
  *         No file storage, no upload management, no file modification.
  */
 
+import crypto from "node:crypto";
+import path from "node:path";
+import picomatch from "picomatch";
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/authMiddleware";
@@ -26,6 +29,8 @@ import {
   getCacheStats,
 } from "../scanner/fileScanCache";
 import type { FileScanResult, BatchScanResult } from "../types";
+import { logRequest } from "../logger/logger";
+import { broadcastAll } from "../ws/wsManager";
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -81,6 +86,40 @@ export async function registerFileScanRoutes(
 
     // Check cache (by path + hash)
     const cached = getCachedScan(filePath, result.fileHash);
+    const effective = cached ?? result;
+
+    // Log file scan to DB + broadcast (so dashboards show file events)
+    logRequest({
+      timestamp: Date.now(),
+      model: filePath,
+      provider: "file-scan",
+      originalHash:
+        effective.fileHash ||
+        crypto.createHash("sha256").update(filePath).digest("hex"),
+      sanitizedText: "",
+      secretsFound: effective.secretsFound ?? 0,
+      piiFound: effective.piiFound ?? 0,
+      entropyFound: effective.entropyFound ?? 0,
+      filesBlocked: effective.action === "BLOCK" ? 1 : 0,
+      riskScore: effective.riskScore ?? 0,
+      action: effective.action,
+      reasons: effective.reasons ?? [],
+      responseTimeMs: effective.scanDurationMs ?? 0,
+    });
+    broadcastAll({
+      type: "scan_result",
+      payload: {
+        action: effective.action,
+        riskScore: effective.riskScore ?? 0,
+        secretsFound: effective.secretsFound ?? 0,
+        piiFound: effective.piiFound ?? 0,
+        entropyFound: effective.entropyFound ?? 0,
+        model: filePath,
+        timestamp: Date.now(),
+      },
+      timestamp: Date.now(),
+    });
+
     if (cached) {
       return {
         ...cached,
@@ -96,6 +135,92 @@ export async function registerFileScanRoutes(
     cacheScanResult(filePath, result.fileHash, result.fileSize, result);
 
     return result;
+  });
+
+  /**
+   * GET /api/scan/file/status?path=<absolutePath>&projectRoot=<root>
+   *
+   * Lightweight check: is this file restricted by file_scope policy?
+   * Does NOT read file contents — only checks path against blocklist/allowlist.
+   * Used by IDE extensions to grey out files in the explorer view.
+   */
+  app.get("/api/scan/file/status", async (request, reply) => {
+    const query = request.query as { path?: string; projectRoot?: string };
+    if (!query.path) {
+      return reply.status(400).send({ error: "Missing 'path' query param" });
+    }
+
+    const globalPolicy = loadPolicyConfig();
+    const policy = mergeProjectPolicy(globalPolicy, query.projectRoot);
+
+    // Resolve the path relative to the supplied project root so that
+    // globs like ".env" (root-only) and "**/*.pem" (any depth) both work
+    // the way users expect when called from IDEs.
+    const root = query.projectRoot
+      ? path.resolve(query.projectRoot)
+      : process.cwd();
+    const absolute = path.resolve(query.path);
+    let relativePath = absolute.startsWith(root)
+      ? path.relative(root, absolute)
+      : query.path;
+    relativePath = relativePath.replace(/\\/g, "/");
+
+    const scope = policy.file_scope;
+    const blocklist = scope?.blocklist ?? [];
+    const allowlist = scope?.allowlist ?? [];
+    const mode = scope?.mode ?? "allow_all";
+
+    const matchesAny = (patterns: string[]): string | null => {
+      for (const pat of patterns) {
+        if (picomatch(pat, { dot: true })(relativePath)) return pat;
+      }
+      return null;
+    };
+
+    let restricted = false;
+    let reason: string | null = null;
+
+    if (mode === "allowlist") {
+      const match = matchesAny(allowlist);
+      if (!match) {
+        restricted = true;
+        reason = `Path not in allowlist: ${relativePath}`;
+      }
+    } else if (mode === "blocklist") {
+      const match = matchesAny(blocklist);
+      if (match) {
+        restricted = true;
+        reason = `Matched blocklist pattern: ${match}`;
+      }
+    }
+
+    return {
+      path: query.path,
+      relativePath,
+      restricted,
+      reason,
+      mode,
+    };
+  });
+
+  /**
+   * GET /api/scan/file/restricted-patterns?projectRoot=<root>
+   *
+   * Returns the full list of restricted glob patterns from file_scope
+   * policy. Used by dashboards to show "these files/folders are
+   * restricted from LLM access".
+   */
+  app.get("/api/scan/file/restricted-patterns", async (request) => {
+    const query = request.query as { projectRoot?: string };
+    const globalPolicy = loadPolicyConfig();
+    const policy = mergeProjectPolicy(globalPolicy, query.projectRoot);
+
+    return {
+      mode: policy.file_scope?.mode ?? "allow_all",
+      blocklist: policy.file_scope?.blocklist ?? [],
+      allowlist: policy.file_scope?.allowlist ?? [],
+      maxFileSizeKb: policy.file_scope?.max_file_size_kb ?? null,
+    };
   });
 
   /**

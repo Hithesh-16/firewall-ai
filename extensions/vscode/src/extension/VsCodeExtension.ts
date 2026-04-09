@@ -31,6 +31,10 @@ import { registerAllPromptFilesCompletionProviders } from "../lang-server/prompt
 import EditDecorationManager from "../quickEdit/EditDecorationManager";
 import { QuickEdit } from "../quickEdit/QuickEditQuickPick";
 import { AiFirewallAuthService } from "../auth/aiFirewallAuthService";
+import {
+  registerRestrictedFileDecorator,
+  refreshRestrictedFileDecorations,
+} from "../security/restrictedFileDecorator";
 import { setupRemoteConfigSync } from "../stubs/activation";
 import { UriEventHandler } from "../stubs/uriHandler";
 import {
@@ -182,6 +186,10 @@ export class VsCodeExtension {
   }
 
   constructor(context: vscode.ExtensionContext) {
+    // Register the Explorer badge for restricted files BEFORE the proxy
+    // starts so the decorator is ready the moment the file scope loads.
+    registerRestrictedFileDecorator(context);
+
     // Start AI Firewall proxy sidecar — deferred to avoid blocking extension activation
     this.proxyManager = new ProxyManager(context.extensionPath);
     // Defer proxy spawn by 1s so extension host stays responsive during activation
@@ -192,6 +200,7 @@ export class VsCodeExtension {
         const { refreshFileScope } =
           await import("../security/fileRestrictionChecker");
         await refreshFileScope(this.proxyManager.proxyUrl ?? undefined);
+        refreshRestrictedFileDecorations();
       } catch {
         // Non-fatal — file restrictions checked server-side as fallback
       }
@@ -248,6 +257,7 @@ export class VsCodeExtension {
           this.proxyManager.proxyUrl ?? undefined,
           state.token,
         );
+        refreshRestrictedFileDecorations();
         // Initial assistant pull.
         await runAssistantSync(state.token);
       }
@@ -266,6 +276,7 @@ export class VsCodeExtension {
       } else {
         clearFileScope();
       }
+      refreshRestrictedFileDecorations();
     });
 
     // Background sync every 10 minutes as a safety net for changes

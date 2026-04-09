@@ -6,6 +6,9 @@ import { LandingPage } from "./pages/landing/LandingPage";
 import { OnboardingRoot } from "./pages/onboarding/OnboardingRoot";
 import { ForbiddenPage } from "./pages/ForbiddenPage";
 import { AppInitializer } from "./components/shared/AppInitializer";
+import ModelGate from "./components/shared/ModelGate";
+import SetupModelPage from "./pages/setup/SetupModelPage";
+import AssistantPage from "./pages/settings/AssistantPage";
 import { ChatPage } from "./pages/chat/ChatPage";
 import { SecurityDashboard } from "./pages/security/SecurityDashboard";
 import { SecurityAuditPage } from "./pages/security/SecurityAuditPage";
@@ -48,17 +51,33 @@ const router = createBrowserRouter([
     path: "/onboarding",
     element: <OnboardingRoot />,
   },
+  // Mandatory-model fix-it page. Lives OUTSIDE ModelGate so a user
+  // with no models configured has a way to fix their own state
+  // without an infinite redirect. See ModelGate's BYPASS_PATHS.
+  {
+    path: "/setup-model",
+    element: <SetupModelPage />,
+  },
   // Authenticated dashboard — moved from "/" to "/dashboard" so the
   // landing page can live at "/" for unauthenticated users.
   {
     path: "/dashboard",
-    element: <AppShell />,
+    element: (
+      <ModelGate>
+        <AppShell />
+      </ModelGate>
+    ),
     children: [{ index: true, element: <ChatPage /> }],
   },
-  // All other authenticated surfaces live under the same AppShell
+  // All other authenticated surfaces live under the same AppShell,
+  // wrapped by the same mandatory-model gate.
   {
     path: "/",
-    element: <AppShell />,
+    element: (
+      <ModelGate>
+        <AppShell />
+      </ModelGate>
+    ),
     children: [
       { path: "security", element: <SecurityDashboard /> },
       { path: "security/audit", element: <SecurityAuditPage /> },
@@ -78,6 +97,7 @@ const router = createBrowserRouter([
       { path: "cron", element: <CronPage /> },
       { path: "usage", element: <UsagePage /> },
       { path: "providers/add", element: <AddProviderPage /> },
+      { path: "settings/assistant", element: <AssistantPage /> },
     ],
   },
   // Public 403 — rendered by <ProtectedRoute> when the user lacks a

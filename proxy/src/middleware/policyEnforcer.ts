@@ -34,12 +34,12 @@ import type {
 // ── File path extraction from message content ─────────────────────────
 
 const FILE_PATH_PATTERNS = [
-  /^\/\/\s*File:\s*(.+)$/gm,                       // // File: /path/to/file
-  /^#\s*File:\s*(.+)$/gm,                           // # File: /path/to/file
-  /```\w*\s+(\S+\.\w{1,10})\s*\n/g,                 // ```ts src/index.ts
-  /^---\s*(\S+\.\w{1,10})\s*---$/gm,               // --- config.json ---
-  /^\+\+\+\s+[ab]\/(.+)$/gm,                       // +++ b/src/file.ts (diff format)
-  /^diff --git a\/(.+)\s+b\//gm,                    // diff --git a/file b/file
+  /^\/\/\s*File:\s*(.+)$/gm, // // File: /path/to/file
+  /^#\s*File:\s*(.+)$/gm, // # File: /path/to/file
+  /```\w*\s+(\S+\.\w{1,10})\s*\n/g, // ```ts src/index.ts
+  /^---\s*(\S+\.\w{1,10})\s*---$/gm, // --- config.json ---
+  /^\+\+\+\s+[ab]\/(.+)$/gm, // +++ b/src/file.ts (diff format)
+  /^diff --git a\/(.+)\s+b\//gm, // diff --git a/file b/file
 ];
 
 /**
@@ -48,7 +48,7 @@ const FILE_PATH_PATTERNS = [
  * This prevents bypass by omitting file paths from metadata.
  */
 function extractFilePathsFromMessages(
-  messages: Array<{ content: string | unknown }>
+  messages: Array<{ content: string | unknown }>,
 ): string[] {
   const paths = new Set<string>();
 
@@ -111,24 +111,33 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
 
   return async function policyEnforcerHook(
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ): Promise<void> {
     const url = request.url.split("?")[0];
     if (skipPaths.has(url)) return;
 
     const body = request.body as
-      | (ChatCompletionRequest & { metadata?: { projectRoot?: string; filePaths?: string[] } })
+      | (ChatCompletionRequest & {
+          metadata?: { projectRoot?: string; filePaths?: string[] };
+        })
       | undefined;
 
     if (!body?.messages) return;
 
     try {
-      // ── Load policy (full inheritance chain: global → org → team → project) ──
+      // ── Load policy (full inheritance chain: global → org → role → team → project) ──
+      // CRITICAL: pass the user's role so role-level policies actually
+      // take effect. Before Phase C, this call omitted `role` and the
+      // entire `role_policies` table was silently dead — every role
+      // policy the admin configured was ignored at enforcement time.
+      // teamId still hardcoded to null here because team membership
+      // lookup isn't wired through authContext yet; TODO in Phase D.
       const authCtxForPolicy = request.authContext;
       const policy = resolveEffectivePolicy(
         authCtxForPolicy?.user.orgId ?? null,
-        null, // teamId resolved from user context when team_members lookup is available
-        body.metadata?.projectRoot
+        authCtxForPolicy?.user.role ?? null,
+        null, // teamId
+        body.metadata?.projectRoot,
       );
 
       // ── Scanner pipeline ─────────────────────────────────────
@@ -137,8 +146,10 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
       // Unicode normalization: MUST run before all scanners (ASI04 defense)
       // Strips zero-width chars, maps confusable Cyrillic/Greek to Latin,
       // removes bidi overrides. Original rawText preserved for audit hash.
-      const unicodeConfig = (policy as Record<string, unknown>).unicode_normalization as
-        { enabled?: boolean; block_on_anomaly?: boolean } | undefined;
+      const unicodeConfig = (policy as Record<string, unknown>)
+        .unicode_normalization as
+        | { enabled?: boolean; block_on_anomaly?: boolean }
+        | undefined;
       let scanText = rawText;
       const unicodeReasons: string[] = [];
       if (unicodeConfig?.enabled !== false) {
@@ -146,7 +157,7 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
         scanText = normResult.normalizedText;
         if (normResult.hasAnomalies) {
           unicodeReasons.push(
-            `Unicode anomalies detected: ${normResult.findings.length} (${[...new Set(normResult.findings.map((f) => f.type))].join(", ")})`
+            `Unicode anomalies detected: ${normResult.findings.length} (${[...new Set(normResult.findings.map((f) => f.type))].join(", ")})`,
           );
         }
       }
@@ -160,17 +171,29 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
       const authCtx = request.authContext;
       let effectiveFileScope = policy.file_scope;
       if (authCtx?.user.orgId) {
-        const effective = getEffectiveFilePolicy(authCtx.user.orgId, null, authCtx.user.id);
+        const effective = getEffectiveFilePolicy(
+          authCtx.user.orgId,
+          null,
+          authCtx.user.id,
+        );
         effectiveFileScope = {
           ...policy.file_scope,
-          blocklist: [...new Set([...policy.file_scope.blocklist, ...effective.blocklist])],
-          allowlist: effective.allowlist.length > 0 ? effective.allowlist : policy.file_scope.allowlist,
+          blocklist: [
+            ...new Set([
+              ...policy.file_scope.blocklist,
+              ...effective.blocklist,
+            ]),
+          ],
+          allowlist:
+            effective.allowlist.length > 0
+              ? effective.allowlist
+              : policy.file_scope.allowlist,
         };
       }
 
       const fileScopeResults = validateFilePaths(
         allFilePaths.length > 0 ? allFilePaths : undefined,
-        effectiveFileScope
+        effectiveFileScope,
       );
 
       const secretResult = scanSecrets(scanText);
@@ -213,9 +236,16 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
       }
 
       // ── Policy evaluation ────────────────────────────────────
-      const decision = evaluatePolicy(secretResult, piiResult, policy, fileScopeResults);
+      const decision = evaluatePolicy(
+        secretResult,
+        piiResult,
+        policy,
+        fileScopeResults,
+      );
       if (contextReasons.length > 0) {
-        decision.reasons = [...new Set([...decision.reasons, ...contextReasons])];
+        decision.reasons = [
+          ...new Set([...decision.reasons, ...contextReasons]),
+        ];
       }
 
       // Merge unicode findings into reasons
@@ -231,11 +261,16 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
       // Prompt injection detection
       const piConfig = policy.prompt_injection;
       if (piConfig?.enabled !== false) {
-        const piResult = scanPromptInjection(scanText, piConfig?.threshold ?? 60);
+        const piResult = scanPromptInjection(
+          scanText,
+          piConfig?.threshold ?? 60,
+        );
         if (piResult.isInjection) {
           decision.action = "BLOCK";
           decision.riskScore = Math.max(decision.riskScore, piResult.score);
-          decision.reasons.push(`Prompt injection detected (score: ${piResult.score})`);
+          decision.reasons.push(
+            `Prompt injection detected (score: ${piResult.score})`,
+          );
         }
       }
 
@@ -248,23 +283,25 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
 
         // Include restriction source levels if available
         const restrictionSources = authCtx?.user.orgId
-          ? getEffectiveFilePolicy(authCtx.user.orgId, null, authCtx.user.id).sources
+          ? getEffectiveFilePolicy(authCtx.user.orgId, null, authCtx.user.id)
+              .sources
           : [];
 
-        const errorPayload = decision.filesBlocked.length > 0
-          ? {
-              error: "Request blocked by file scope policy",
-              code: "FILE_SCOPE_BLOCKED" as const,
-              reasons: decision.reasons,
-              files_blocked: decision.filesBlocked,
-              restricted_by: restrictionSources.map((s) => s.level),
-            }
-          : {
-              error: "Request blocked due to sensitive data",
-              code: "FIREWALL_BLOCKED" as const,
-              reasons: decision.reasons,
-              risk_score: decision.riskScore,
-            };
+        const errorPayload =
+          decision.filesBlocked.length > 0
+            ? {
+                error: "Request blocked by file scope policy",
+                code: "FILE_SCOPE_BLOCKED" as const,
+                reasons: decision.reasons,
+                files_blocked: decision.filesBlocked,
+                restricted_by: restrictionSources.map((s) => s.level),
+              }
+            : {
+                error: "Request blocked due to sensitive data",
+                code: "FIREWALL_BLOCKED" as const,
+                reasons: decision.reasons,
+                risk_score: decision.riskScore,
+              };
 
         return reply.status(403).send(errorPayload);
       }
@@ -272,7 +309,8 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
       // REQUIRE_APPROVAL: call approval service, await human decision
       if (decision.action === "REQUIRE_APPROVAL") {
         try {
-          const { requestApproval } = await import("../services/approvalService");
+          const { requestApproval } =
+            await import("../services/approvalService");
           const userId = (request as any).userId ?? null;
           const { decision: approvalDecision, source } = await requestApproval(
             userId,
@@ -281,14 +319,18 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
             { riskScore: decision.riskScore, reasons: decision.reasons },
           );
 
-          if (approvalDecision === "deny" || approvalDecision === "deny_always") {
+          if (
+            approvalDecision === "deny" ||
+            approvalDecision === "deny_always"
+          ) {
             reply.header("X-AF-Action", "BLOCK");
             reply.header("X-AF-Risk-Score", String(decision.riskScore));
 
             return reply.status(403).send({
-              error: source === "timeout"
-                ? "Approval timed out — default deny"
-                : "Denied by approval",
+              error:
+                source === "timeout"
+                  ? "Approval timed out — default deny"
+                  : "Denied by approval",
               code: "APPROVAL_DENIED" as const,
               reasons: decision.reasons,
               risk_score: decision.riskScore,
@@ -319,8 +361,12 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
       };
     } catch (err: unknown) {
       // Scanner failure → 503 default-deny (not 500, not pass-through)
-      const message = err instanceof Error ? err.message : "Scanner pipeline failure";
-      request.log.error({ err }, "Policy enforcer scanner failure — default deny");
+      const message =
+        err instanceof Error ? err.message : "Scanner pipeline failure";
+      request.log.error(
+        { err },
+        "Policy enforcer scanner failure — default deny",
+      );
 
       reply.header("Retry-After", "1");
       return reply.status(503).send({

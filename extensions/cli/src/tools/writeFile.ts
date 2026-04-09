@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
+import { scanFileViaProxy } from "core/util/fileScanProxy.js";
 import { createTwoFilesPatch } from "diff";
 
 import { telemetryService } from "../telemetry/telemetryService.js";
@@ -57,6 +58,22 @@ export const writeFileTool: Tool = {
     if (typeof content !== "string") {
       throw new Error("New file content must be a string");
     }
+
+    // Phase E: block writes to any path the effective policy's
+    // file_scope.blocklist rejects. Without this, an agent can
+    // create/overwrite an .env file even when the role policy
+    // forbids reading one. We scan the *target* path (which may
+    // not exist yet) — the proxy's scan returns BLOCK purely on
+    // path-pattern match when the file is missing, which is what
+    // we want here.
+    const writeScan = await scanFileViaProxy(filepath);
+    if (writeScan.action === "BLOCK") {
+      throw new ContinueError(
+        ContinueErrorReason.FileIsSecurityConcern,
+        `Write blocked by security scan: ${writeScan.reasons.join("; ")} (risk: ${writeScan.riskScore})`,
+      );
+    }
+
     try {
       if (fs.existsSync(filepath)) {
         const oldContent = fs.readFileSync(filepath, "utf-8");

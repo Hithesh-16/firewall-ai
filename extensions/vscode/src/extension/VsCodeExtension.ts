@@ -189,9 +189,8 @@ export class VsCodeExtension {
       await this.proxyManager.start();
       // Fetch file restriction policy from proxy after it's healthy
       try {
-        const { refreshFileScope } = await import(
-          "../security/fileRestrictionChecker"
-        );
+        const { refreshFileScope } =
+          await import("../security/fileRestrictionChecker");
         await refreshFileScope(this.proxyManager.proxyUrl ?? undefined);
       } catch {
         // Non-fatal — file restrictions checked server-side as fallback
@@ -212,7 +211,32 @@ export class VsCodeExtension {
     // we try SecretStorage, then fall back to ~/.ai-firewall/auth.json
     // so a user who signs in via `cn login` is already signed in here.
     this.aiFirewallAuth = new AiFirewallAuthService(context);
-    void this.aiFirewallAuth.initialize();
+    void this.aiFirewallAuth.initialize().then(async (state) => {
+      // Phase E: whenever the auth state resolves, push the bearer
+      // into the file-restriction checker so file-scope enforcement
+      // reflects the signed-in user's role policy (not the legacy
+      // unauthenticated global scope).
+      if (state.signedIn && state.token) {
+        const { refreshFileScope } =
+          await import("../security/fileRestrictionChecker");
+        await refreshFileScope(
+          this.proxyManager.proxyUrl ?? undefined,
+          state.token,
+        );
+      }
+    });
+    this.aiFirewallAuth.onDidChangeAuth(async (state) => {
+      const { refreshFileScope, clearFileScope } =
+        await import("../security/fileRestrictionChecker");
+      if (state.signedIn && state.token) {
+        await refreshFileScope(
+          this.proxyManager.proxyUrl ?? undefined,
+          state.token,
+        );
+      } else {
+        clearFileScope();
+      }
+    });
     context.subscriptions.push({
       dispose: () => this.aiFirewallAuth.dispose(),
     });

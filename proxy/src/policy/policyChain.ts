@@ -37,10 +37,15 @@ export type PartialPolicy = Omit<Partial<PolicyConfig>, "rules"> & {
 
 // ── DB Operations ─────────────────────────────────────────────────────
 
-function getPolicyForScope(scopeType: string, scopeId: number | null): PartialPolicy | null {
-  const row = db.prepare(
-    "SELECT policy_json FROM policies WHERE scope_type = ? AND scope_id IS ?"
-  ).get(scopeType, scopeId) as { policy_json: string } | undefined;
+function getPolicyForScope(
+  scopeType: string,
+  scopeId: number | null,
+): PartialPolicy | null {
+  const row = db
+    .prepare(
+      "SELECT policy_json FROM policies WHERE scope_type = ? AND scope_id IS ?",
+    )
+    .get(scopeType, scopeId) as { policy_json: string } | undefined;
 
   if (!row) return null;
 
@@ -54,41 +59,48 @@ function getPolicyForScope(scopeType: string, scopeId: number | null): PartialPo
 export function saveScopedPolicy(
   scopeType: string,
   scopeId: number | null,
-  policy: PartialPolicy
+  policy: PartialPolicy,
 ): void {
   const now = Date.now();
   const json = JSON.stringify(policy);
 
-  const existing = db.prepare(
-    "SELECT id FROM policies WHERE scope_type = ? AND scope_id IS ?"
-  ).get(scopeType, scopeId) as { id: number } | undefined;
+  const existing = db
+    .prepare("SELECT id FROM policies WHERE scope_type = ? AND scope_id IS ?")
+    .get(scopeType, scopeId) as { id: number } | undefined;
 
   if (existing) {
     db.prepare(
-      "UPDATE policies SET policy_json = ?, updated_at = ? WHERE id = ?"
+      "UPDATE policies SET policy_json = ?, updated_at = ? WHERE id = ?",
     ).run(json, now, existing.id);
   } else {
     db.prepare(
-      "INSERT INTO policies (scope_type, scope_id, policy_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO policies (scope_type, scope_id, policy_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
     ).run(scopeType, scopeId, json, now, now);
   }
 }
 
-export function deleteScopedPolicy(scopeType: string, scopeId: number | null): boolean {
-  const result = db.prepare(
-    "DELETE FROM policies WHERE scope_type = ? AND scope_id IS ?"
-  ).run(scopeType, scopeId);
+export function deleteScopedPolicy(
+  scopeType: string,
+  scopeId: number | null,
+): boolean {
+  const result = db
+    .prepare("DELETE FROM policies WHERE scope_type = ? AND scope_id IS ?")
+    .run(scopeType, scopeId);
   return result.changes > 0;
 }
 
 export function listScopedPolicies(orgId: number): StoredPolicy[] {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT id, scope_type, scope_id, policy_json, created_at, updated_at
     FROM policies
     WHERE scope_type = 'org' AND scope_id = ?
        OR scope_type = 'team' AND scope_id IN (SELECT id FROM teams WHERE org_id = ?)
     ORDER BY scope_type, scope_id
-  `).all(orgId, orgId) as Array<Record<string, unknown>>;
+  `,
+    )
+    .all(orgId, orgId) as Array<Record<string, unknown>>;
 
   return rows.map((r) => ({
     id: r.id as number,
@@ -244,7 +256,10 @@ export function deleteRolePolicy(orgId: number, role: string): boolean {
 
 // ── Merge Logic (strictest wins) ──────────────────────────────────────
 
-function mergeRulesStrictest(base: PolicyRules, override: Partial<PolicyRules>): PolicyRules {
+function mergeRulesStrictest(
+  base: PolicyRules,
+  override: Partial<PolicyRules>,
+): PolicyRules {
   const merged = { ...base };
   for (const key of Object.keys(override) as Array<keyof PolicyRules>) {
     const overrideValue = override[key];
@@ -264,7 +279,7 @@ const SEVERITY_ORDER: Record<string, number> = {
 
 function stricterThreshold(
   a: PolicyConfig["severity_threshold"],
-  b?: PolicyConfig["severity_threshold"]
+  b?: PolicyConfig["severity_threshold"],
 ): PolicyConfig["severity_threshold"] {
   if (!b) return a;
   // Lower threshold = stricter (medium catches more than critical)
@@ -283,25 +298,33 @@ function mergeAllowlists(base: string[], override: string[]): string[] {
   return base.filter((pattern) => overrideSet.has(pattern));
 }
 
-function mergeTwoLevels(base: PolicyConfig, override: PartialPolicy): PolicyConfig {
+function mergeTwoLevels(
+  base: PolicyConfig,
+  override: PartialPolicy,
+): PolicyConfig {
   return {
     ...base,
-    rules: override.rules ? mergeRulesStrictest(base.rules, override.rules) : base.rules,
-    severity_threshold: stricterThreshold(base.severity_threshold, override.severity_threshold),
+    rules: override.rules
+      ? mergeRulesStrictest(base.rules, override.rules)
+      : base.rules,
+    severity_threshold: stricterThreshold(
+      base.severity_threshold,
+      override.severity_threshold,
+    ),
     file_scope: {
       ...base.file_scope,
       blocklist: mergeBlocklists(
         base.file_scope.blocklist,
-        override.file_scope?.blocklist ?? []
+        override.file_scope?.blocklist ?? [],
       ),
       allowlist: mergeAllowlists(
         base.file_scope.allowlist,
-        override.file_scope?.allowlist ?? []
+        override.file_scope?.allowlist ?? [],
       ),
     },
     blocked_paths: mergeBlocklists(
       base.blocked_paths,
-      override.blocked_paths ?? []
+      override.blocked_paths ?? [],
     ),
     // Smart routing: child can only tighten, not relax
     smart_routing: override.smart_routing
@@ -314,7 +337,7 @@ function mergeTwoLevels(base: PolicyConfig, override: PartialPolicy): PolicyConf
           ...override.prompt_injection,
           threshold: Math.min(
             base.prompt_injection?.threshold ?? 60,
-            override.prompt_injection?.threshold ?? 60
+            override.prompt_injection?.threshold ?? 60,
           ),
         }
       : base.prompt_injection,
@@ -343,9 +366,9 @@ function mergeTwoLevels(base: PolicyConfig, override: PartialPolicy): PolicyConf
  */
 export function resolveEffectivePolicy(
   orgId?: number | null,
+  role?: string | null,
   teamId?: number | null,
   projectRoot?: string,
-  role?: string | null,
 ): PolicyConfig {
   // 1. Start with global policy.json
   let policy = loadPolicyConfig();

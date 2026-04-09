@@ -346,6 +346,129 @@ CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_started ON tasks(started_at);
 `);
 
+// ─── Phase A + A.5: per-org / per-user providers and assistants ─────
+//
+// Before Phase A, `providers` was a global table — one row per provider
+// (openai, anthropic, ...) with a single encrypted API key that every
+// authenticated user shared. This broke down as soon as we wanted:
+//
+//   - per-org BYOK (different orgs provisioning their own keys)
+//   - per-user overrides (one dev brings their personal key without
+//     tripping the org's billing caps)
+//   - per-role control over whether personal keys are allowed
+//
+// Phase A introduces two new owned tables:
+//
+//   org_providers   — an org's key for a given provider slug
+//   user_providers  — a user's personal override for a provider slug
+//
+// Resolution order at request time is strictly: user → org → reject.
+// The legacy `providers` table is kept as a **global catalogue** of
+// known provider definitions (base URL, display name) with the
+// `api_key_encrypted` column now nullable — org_providers owns the
+// keys.
+//
+// Phase A.5 introduces the `assistants` table, which replaces the
+// legacy `~/.ai-firewall/config.yaml` file as the source of truth for
+// a user's Continue-style assistant definition (models, context
+// providers, MCP servers, rules, prompts). See docs/developer/assistants.mdx.
+db.exec(`
+CREATE TABLE IF NOT EXISTS org_providers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  provider_slug TEXT NOT NULL,
+  api_key_encrypted TEXT NOT NULL,
+  base_url TEXT,
+  display_name TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  cost_cap_usd REAL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(org_id, provider_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_org_providers_org ON org_providers(org_id);
+
+CREATE TABLE IF NOT EXISTS user_providers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider_slug TEXT NOT NULL,
+  api_key_encrypted TEXT NOT NULL,
+  base_url TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(user_id, provider_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_user_providers_user ON user_providers(user_id);
+
+CREATE TABLE IF NOT EXISTS assistants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT NOT NULL,
+  owner_type TEXT NOT NULL CHECK(owner_type IN ('org','user')),
+  owner_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  yaml_content TEXT NOT NULL,
+  etag TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(owner_type, owner_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_assistants_owner ON assistants(owner_type, owner_id);
+CREATE INDEX IF NOT EXISTS idx_assistants_default
+  ON assistants(owner_type, owner_id, is_default);
+`);
+
+// One-time data migration: copy any legacy rows from the global
+// `providers` table into `org_providers` for every existing org. Runs
+// once per proxy boot and is idempotent (the UNIQUE constraint on
+// (org_id, provider_slug) makes re-runs no-ops).
+try {
+  const legacyProviders = db
+    .prepare(
+      `SELECT id, slug, base_url, api_key_encrypted
+       FROM providers
+       WHERE api_key_encrypted IS NOT NULL AND api_key_encrypted <> ''`,
+    )
+    .all() as Array<{
+    id: number;
+    slug: string;
+    base_url: string;
+    api_key_encrypted: string;
+  }>;
+  if (legacyProviders.length > 0) {
+    const orgs = db.prepare(`SELECT id FROM organizations`).all() as Array<{
+      id: number;
+    }>;
+    const insertStmt = db.prepare(
+      `INSERT OR IGNORE INTO org_providers
+        (org_id, provider_slug, api_key_encrypted, base_url,
+         enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 1, ?, ?)`,
+    );
+    const now = Date.now();
+    const runMigration = db.transaction(() => {
+      for (const org of orgs) {
+        for (const p of legacyProviders) {
+          insertStmt.run(
+            org.id,
+            p.slug,
+            p.api_key_encrypted,
+            p.base_url,
+            now,
+            now,
+          );
+        }
+      }
+    });
+    runMigration();
+  }
+} catch {
+  // Migration failures are non-fatal — logs table may not exist yet
+  // on fresh boots, and the global providers table may not even
+  // have rows. We retry on every boot anyway.
+}
+
 // Migration: add onboarding_complete to users.
 //   Default 0 for new accounts so the wizard runs.
 //   Backfill 1 for any existing user that already belongs to an org —
@@ -357,9 +480,7 @@ try {
   db.exec(
     "ALTER TABLE users ADD COLUMN onboarding_complete INTEGER NOT NULL DEFAULT 0",
   );
-  db.exec(
-    "UPDATE users SET onboarding_complete = 1 WHERE org_id IS NOT NULL",
-  );
+  db.exec("UPDATE users SET onboarding_complete = 1 WHERE org_id IS NOT NULL");
 }
 
 // Migration: add timezone to users (per-user display preference,
@@ -631,9 +752,9 @@ try {
         db.prepare(
           `DELETE FROM role_capabilities WHERE role_id IN (${placeholders})`,
         ).run(...duplicateIds);
-        db.prepare(
-          `DELETE FROM roles WHERE id IN (${placeholders})`,
-        ).run(...duplicateIds);
+        db.prepare(`DELETE FROM roles WHERE id IN (${placeholders})`).run(
+          ...duplicateIds,
+        );
       }
     });
     txn();
@@ -910,65 +1031,310 @@ const caps: Array<[string, string, string, string, string, string]> = [
   //   Developer    : chat, agents, tools, MCP
 
   // Users
-  ["users:view", "users", "view", "View user list and profiles", "Identity", "low"],
+  [
+    "users:view",
+    "users",
+    "view",
+    "View user list and profiles",
+    "Identity",
+    "low",
+  ],
   ["users:create", "users", "create", "Invite new users", "Identity", "high"],
-  ["users:edit", "users", "edit", "Edit user profiles and role assignments", "Identity", "high"],
-  ["users:delete", "users", "delete", "Remove users from the org", "Identity", "high"],
-  ["users:export", "users", "export", "Export the user directory", "Identity", "medium"],
+  [
+    "users:edit",
+    "users",
+    "edit",
+    "Edit user profiles and role assignments",
+    "Identity",
+    "high",
+  ],
+  [
+    "users:delete",
+    "users",
+    "delete",
+    "Remove users from the org",
+    "Identity",
+    "high",
+  ],
+  [
+    "users:export",
+    "users",
+    "export",
+    "Export the user directory",
+    "Identity",
+    "medium",
+  ],
 
   // Roles
-  ["roles:view", "roles", "view", "View roles and permissions", "Identity", "low"],
-  ["roles:create", "roles", "create", "Create custom roles", "Identity", "critical"],
-  ["roles:edit", "roles", "edit", "Edit custom roles + assign to users", "Identity", "critical"],
-  ["roles:delete", "roles", "delete", "Delete custom roles", "Identity", "critical"],
+  [
+    "roles:view",
+    "roles",
+    "view",
+    "View roles and permissions",
+    "Identity",
+    "low",
+  ],
+  [
+    "roles:create",
+    "roles",
+    "create",
+    "Create custom roles",
+    "Identity",
+    "critical",
+  ],
+  [
+    "roles:edit",
+    "roles",
+    "edit",
+    "Edit custom roles + assign to users",
+    "Identity",
+    "critical",
+  ],
+  [
+    "roles:delete",
+    "roles",
+    "delete",
+    "Delete custom roles",
+    "Identity",
+    "critical",
+  ],
 
   // Teams (uniform re-expression)
-  ["teams:view", "teams", "view", "View team list and membership", "Organisation", "low"],
-  ["teams:create", "teams", "create", "Create new teams", "Organisation", "high"],
-  ["teams:edit", "teams", "edit", "Edit team name and members", "Organisation", "medium"],
+  [
+    "teams:view",
+    "teams",
+    "view",
+    "View team list and membership",
+    "Organisation",
+    "low",
+  ],
+  [
+    "teams:create",
+    "teams",
+    "create",
+    "Create new teams",
+    "Organisation",
+    "high",
+  ],
+  [
+    "teams:edit",
+    "teams",
+    "edit",
+    "Edit team name and members",
+    "Organisation",
+    "medium",
+  ],
   ["teams:delete", "teams", "delete", "Delete teams", "Organisation", "high"],
-  ["teams:export", "teams", "export", "Export team roster", "Organisation", "low"],
+  [
+    "teams:export",
+    "teams",
+    "export",
+    "Export team roster",
+    "Organisation",
+    "low",
+  ],
 
   // Organisation settings
-  ["org_settings:view", "org_settings", "view", "View org name, slug, settings", "Organisation", "low"],
-  ["org_settings:edit", "org_settings", "edit", "Edit org name, slug, industry, etc.", "Organisation", "critical"],
+  [
+    "org_settings:view",
+    "org_settings",
+    "view",
+    "View org name, slug, settings",
+    "Organisation",
+    "low",
+  ],
+  [
+    "org_settings:edit",
+    "org_settings",
+    "edit",
+    "Edit org name, slug, industry, etc.",
+    "Organisation",
+    "critical",
+  ],
 
   // Billing
-  ["billing:view", "billing", "view", "View billing + credit usage", "Organisation", "low"],
-  ["billing:edit", "billing", "edit", "Change billing details, top up credits", "Organisation", "critical"],
-  ["billing:export", "billing", "export", "Export billing history", "Organisation", "medium"],
+  [
+    "billing:view",
+    "billing",
+    "view",
+    "View billing + credit usage",
+    "Organisation",
+    "low",
+  ],
+  [
+    "billing:edit",
+    "billing",
+    "edit",
+    "Change billing details, top up credits",
+    "Organisation",
+    "critical",
+  ],
+  [
+    "billing:export",
+    "billing",
+    "export",
+    "Export billing history",
+    "Organisation",
+    "medium",
+  ],
 
   // Policies
-  ["policies:view", "policies", "view", "View the active policy", "Security", "low"],
-  ["policies:edit", "policies", "edit", "Edit scanner rules and thresholds", "Security", "critical"],
-  ["policies:export", "policies", "export", "Export policy snapshots", "Security", "medium"],
+  [
+    "policies:view",
+    "policies",
+    "view",
+    "View the active policy",
+    "Security",
+    "low",
+  ],
+  [
+    "policies:edit",
+    "policies",
+    "edit",
+    "Edit scanner rules and thresholds",
+    "Security",
+    "critical",
+  ],
+  [
+    "policies:export",
+    "policies",
+    "export",
+    "Export policy snapshots",
+    "Security",
+    "medium",
+  ],
 
   // Providers (BYOK)
-  ["providers:view", "providers", "view", "View configured providers (masked)", "Vault", "low"],
-  ["providers:create", "providers", "create", "Add new BYOK providers", "Vault", "critical"],
-  ["providers:edit", "providers", "edit", "Edit provider keys and base URLs", "Vault", "critical"],
-  ["providers:delete", "providers", "delete", "Remove providers", "Vault", "critical"],
+  [
+    "providers:view",
+    "providers",
+    "view",
+    "View configured providers (masked)",
+    "Vault",
+    "low",
+  ],
+  [
+    "providers:create",
+    "providers",
+    "create",
+    "Add new BYOK providers",
+    "Vault",
+    "critical",
+  ],
+  [
+    "providers:edit",
+    "providers",
+    "edit",
+    "Edit provider keys and base URLs",
+    "Vault",
+    "critical",
+  ],
+  [
+    "providers:delete",
+    "providers",
+    "delete",
+    "Remove providers",
+    "Vault",
+    "critical",
+  ],
 
   // Audit logs
-  ["audit_logs:view", "audit_logs", "view", "View the request + admin audit log", "Audit", "medium"],
-  ["audit_logs:export", "audit_logs", "export", "Export audit logs (CSV/JSON)", "Audit", "high"],
+  [
+    "audit_logs:view",
+    "audit_logs",
+    "view",
+    "View the request + admin audit log",
+    "Audit",
+    "medium",
+  ],
+  [
+    "audit_logs:export",
+    "audit_logs",
+    "export",
+    "Export audit logs (CSV/JSON)",
+    "Audit",
+    "high",
+  ],
 
   // Approvals
-  ["approvals:view", "approvals", "view", "View pending + resolved approvals", "Security", "low"],
-  ["approvals:edit", "approvals", "edit", "Resolve approval requests", "Security", "high"],
+  [
+    "approvals:view",
+    "approvals",
+    "view",
+    "View pending + resolved approvals",
+    "Security",
+    "low",
+  ],
+  [
+    "approvals:edit",
+    "approvals",
+    "edit",
+    "Resolve approval requests",
+    "Security",
+    "high",
+  ],
 
   // File restrictions
-  ["file_restrictions:view", "file_restrictions", "view", "View file scope rules", "Security", "low"],
-  ["file_restrictions:edit", "file_restrictions", "edit", "Edit org/team/user file scope", "Security", "high"],
+  [
+    "file_restrictions:view",
+    "file_restrictions",
+    "view",
+    "View file scope rules",
+    "Security",
+    "low",
+  ],
+  [
+    "file_restrictions:edit",
+    "file_restrictions",
+    "edit",
+    "Edit org/team/user file scope",
+    "Security",
+    "high",
+  ],
 
   // Agents + chat + MCP (developer capabilities)
   ["chat:view", "chat", "view", "Read chat history", "Developer", "low"],
-  ["chat:create", "chat", "create", "Send prompts to the agent", "Developer", "low"],
+  [
+    "chat:create",
+    "chat",
+    "create",
+    "Send prompts to the agent",
+    "Developer",
+    "low",
+  ],
   ["agents:view", "agents", "view", "View agent runs", "Developer", "low"],
-  ["agents:create", "agents", "create", "Spawn agents / sub-agents", "Developer", "high"],
-  ["mcp_tools:view", "mcp_tools", "view", "List configured MCP tools", "Developer", "low"],
-  ["mcp_tools:create", "mcp_tools", "create", "Register new MCP tools", "Developer", "high"],
-  ["mcp_tools:delete", "mcp_tools", "delete", "Remove MCP tools", "Developer", "high"],
+  [
+    "agents:create",
+    "agents",
+    "create",
+    "Spawn agents / sub-agents",
+    "Developer",
+    "high",
+  ],
+  [
+    "mcp_tools:view",
+    "mcp_tools",
+    "view",
+    "List configured MCP tools",
+    "Developer",
+    "low",
+  ],
+  [
+    "mcp_tools:create",
+    "mcp_tools",
+    "create",
+    "Register new MCP tools",
+    "Developer",
+    "high",
+  ],
+  [
+    "mcp_tools:delete",
+    "mcp_tools",
+    "delete",
+    "Remove MCP tools",
+    "Developer",
+    "high",
+  ],
 ];
 for (const [name, resource, action, desc, category, risk] of caps) {
   seedCap.run(name, resource, action, desc, category, risk, now);

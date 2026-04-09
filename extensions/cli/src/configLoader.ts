@@ -14,6 +14,10 @@ import {
 import { DefaultApiInterface } from "@ai-firewall/sdk/dist/api/dist/index.js";
 import chalk from "chalk";
 
+import {
+  isApiAssistantEnabled,
+  loadAssistantFromApi,
+} from "./apiAssistantLoader.js";
 import { uriToPath, uriToSlug } from "./auth/uriUtils.js";
 import {
   AuthConfig,
@@ -34,6 +38,7 @@ export interface ConfigLoadResult {
 
 export type ConfigSource =
   | { type: "cli-flag"; path: string }
+  | { type: "api-me-assistant" }
   | { type: "saved-uri"; uri: string }
   | { type: "user-assistant"; slug: string }
   | { type: "local-config-yaml" }
@@ -97,6 +102,26 @@ function determineConfigSource(
     return { type: "cli-flag", path: cliConfigPath };
   }
 
+  // Priority 1.5 (Phase G, opt-in): API-sourced assistant.
+  // When `AI_FIREWALL_USE_API_ASSISTANT=1` AND the user is
+  // signed in, load the assistant from `/api/me/assistant`
+  // instead of any local YAML. This is the single-source-of-truth
+  // path — the proxy DB owns the YAML, the CLI keeps a read-only
+  // ETag cache at `~/.ai-firewall/cache/assistant.yaml`. See
+  // `apiAssistantLoader.ts` for the full flow and offline
+  // fallback semantics.
+  //
+  // Off by default so nobody's `~/.ai-firewall/config.yaml`
+  // stops working without warning. The default flips in a
+  // follow-up release once this path is battle-tested.
+  if (
+    isApiAssistantEnabled() &&
+    !isEnvironmentAuthConfig(authConfig) &&
+    authConfig !== null
+  ) {
+    return { type: "api-me-assistant" };
+  }
+
   // Priority 2: Saved config URI (only for file-based auth)
   if (!isEnvironmentAuthConfig(authConfig) && authConfig !== null) {
     const savedUri = getConfigUri(authConfig);
@@ -114,6 +139,14 @@ function determineConfigSource(
           return { type: "saved-uri", uri: savedUri };
         } else {
           logger.warn("Saved config URI does not exist: " + savedUri);
+        }
+      } else if (savedUri === "afw://me/assistant") {
+        // Phase G: previous session used the API-sourced loader.
+        // Honour the session unless the feature flag has been
+        // flipped OFF since then — in which case fall through to
+        // the legacy resolution chain.
+        if (isApiAssistantEnabled()) {
+          return { type: "saved-uri", uri: savedUri };
         }
       } else {
         // slug
@@ -155,6 +188,14 @@ async function loadFromSource(
       case "cli-flag":
         return await loadFromCliFlag(
           source.path,
+          accessToken,
+          organizationId,
+          apiClient,
+          injectBlocks,
+        );
+
+      case "api-me-assistant":
+        return await loadAssistantFromApi(
           accessToken,
           organizationId,
           apiClient,
@@ -267,6 +308,18 @@ async function loadFromSavedUri(
   apiClient: DefaultApiInterface,
   injectBlocks: PackageIdentifier[],
 ): Promise<AssistantUnrolled> {
+  // Phase G: the `afw://me/assistant` sentinel is stored when a
+  // previous session used the API-sourced loader. Re-route to
+  // that loader so session restore stays on the new path.
+  if (uri === "afw://me/assistant") {
+    return await loadAssistantFromApi(
+      accessToken,
+      organizationId,
+      apiClient,
+      injectBlocks,
+    );
+  }
+
   const filePath = uriToPath(uri);
   if (filePath) {
     return await loadConfigYaml(
@@ -344,7 +397,18 @@ async function loadUserAssistantWithFallback(
 
 /**
  * Loads default config.yaml from ~/.ai-firewall/config.yaml
+ *
+ * NOTE (Phase G): This path is deprecated. Set
+ * `AI_FIREWALL_USE_API_ASSISTANT=1` to switch to the
+ * `/api/me/assistant` API-sourced loader. Once the API path is
+ * battle-tested we'll flip the default and delete this function.
+ *
+ * To keep migration frictionless, we emit a single warning line
+ * the first time this path runs per process (not per call) so
+ * CI logs and verbose startups don't get spammed.
  */
+let loggedLocalYamlDeprecation = false;
+
 async function loadLocalConfigYaml(
   accessToken: string | null,
   organizationId: string | null,
@@ -352,6 +416,15 @@ async function loadLocalConfigYaml(
   injectBlocks: PackageIdentifier[],
 ): Promise<AssistantUnrolled> {
   const defaultConfigPath = path.join(env.continueHome, "config.yaml");
+  if (!loggedLocalYamlDeprecation) {
+    loggedLocalYamlDeprecation = true;
+    console.warn(
+      chalk.yellow(
+        `ℹ Loading ~/.ai-firewall/config.yaml (legacy path). ` +
+          `Set AI_FIREWALL_USE_API_ASSISTANT=1 to load from the proxy instead.`,
+      ),
+    );
+  }
   return await loadConfigYaml(
     defaultConfigPath,
     accessToken,
@@ -586,6 +659,12 @@ function getUriFromSource(source: ConfigSource): string | null {
       return source.uri;
     case "local-config-yaml":
       return `file://${path.join(env.continueHome, "config.yaml")}`;
+    case "api-me-assistant":
+      // The API-sourced assistant is identified by the ETag-cached
+      // file on disk. We store the cache path so session restore
+      // can short-circuit a re-fetch while still pointing at a
+      // real file for debugging.
+      return `afw://me/assistant`;
     default:
       return null;
   }

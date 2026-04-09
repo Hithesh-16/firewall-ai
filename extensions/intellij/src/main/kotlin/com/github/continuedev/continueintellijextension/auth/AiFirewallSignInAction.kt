@@ -1,5 +1,6 @@
 package com.github.continuedev.continueintellijextension.auth
 
+import com.github.continuedev.continueintellijextension.security.AiFirewallFileScopeService
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
@@ -35,6 +36,13 @@ class AiFirewallSignInAction : AnAction() {
                     val service = service<AiFirewallAuthService>()
                     try {
                         val state = service.signInBlocking(proxyUrl)
+
+                        // Phase E: refresh the file-scope cache now
+                        // that we have a bearer token. Runs on the
+                        // shared pool thread so the sign-in action
+                        // returns immediately.
+                        AiFirewallFileScopeService.scheduleRefresh()
+
                         val who = state.email ?: "AI Firewall"
                         ApplicationManager.getApplication().invokeLater {
                             Messages.showInfoMessage(

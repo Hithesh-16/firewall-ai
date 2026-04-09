@@ -24,6 +24,8 @@ import { registerAuditRoutes } from "./routes/audit.route";
 import { registerPluginScanRoutes } from "./routes/pluginScan.route";
 import { registerSSORoutes } from "./routes/sso.route";
 import { registerAuthHandoffRoutes } from "./routes/authHandoff.route";
+import { registerMeRoutes } from "./routes/me.route";
+import { registerOrgAssistantRoutes } from "./routes/orgAssistants.route";
 import { registerWebLoginBridgeRoutes } from "./routes/webLoginBridge.route";
 import { registerPublicConfigRoute } from "./routes/publicConfig.route";
 import { registerWebhookRoutes } from "./routes/webhook.route";
@@ -165,6 +167,13 @@ async function bootstrap(): Promise<void> {
   await registerPublicConfigRoute(app);
   await registerWebLoginBridgeRoutes(app);
   await registerAuthHandoffRoutes(app);
+
+  // Phase A/A.5/B/D — per-user bootstrap endpoints (policy,
+  // assistant, models, personal providers).
+  await registerMeRoutes(app);
+
+  // Phase F (slice 1) — admin provisioning of org-level assistants.
+  await registerOrgAssistantRoutes(app);
 
   // Authenticated / role-gated routes
   await registerLogsRoute(app);

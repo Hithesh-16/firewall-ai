@@ -1,5 +1,6 @@
 package com.github.continuedev.continueintellijextension.auth
 
+import com.github.continuedev.continueintellijextension.security.AiFirewallFileScopeService
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
@@ -36,6 +37,11 @@ class AiFirewallSignOutAction : AnAction() {
                     val service = service<AiFirewallAuthService>()
                     try {
                         service.signOut()
+                        // Phase E: clear the file-scope cache so the
+                        // previously-signed-in user's role policy
+                        // doesn't keep enforcing on an anonymous
+                        // session.
+                        service<AiFirewallFileScopeService>().clear()
                         ApplicationManager.getApplication().invokeLater {
                             Messages.showInfoMessage(
                                 project,

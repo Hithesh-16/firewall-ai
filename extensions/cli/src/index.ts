@@ -14,6 +14,7 @@ import { remoteTest } from "./commands/remote-test.js";
 import { remote } from "./commands/remote.js";
 import { review } from "./commands/review.js";
 import { serve } from "./commands/serve.js";
+import { syncConfigCommand } from "./commands/syncConfig.js";
 import {
   handleValidationErrors,
   validateFlags,
@@ -278,6 +279,20 @@ program
     // Telemetry: record command invocation
     await posthogService.capture("cliCommand", { command: "logout" });
     await logout();
+  });
+
+// Phase G: `cn sync-config` — one-shot migration of
+// ~/.ai-firewall/config.yaml into the proxy's assistants table.
+// Run once after upgrading, then set AI_FIREWALL_USE_API_ASSISTANT=1
+// to have future `cn` invocations load from the proxy.
+program
+  .command("sync-config")
+  .description(
+    "Migrate ~/.ai-firewall/config.yaml into your AI Firewall account",
+  )
+  .action(async () => {
+    await posthogService.capture("cliCommand", { command: "sync-config" });
+    await syncConfigCommand();
   });
 
 // List sessions subcommand

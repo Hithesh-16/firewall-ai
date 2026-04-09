@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { validateMultiEdit } from "core/edit/searchAndReplace/multiEditValidation.js";
 import { executeMultiFindAndReplace } from "core/edit/searchAndReplace/performReplace.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
+import { scanFileViaProxy } from "core/util/fileScanProxy.js";
 
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
@@ -106,6 +107,20 @@ WARNINGS:
     const { resolvedPath } = validateAndResolveFilePath(args);
 
     const { edits } = validateMultiEdit(args);
+
+    // Phase E: scan the file against the caller's effective policy
+    // before reading any bytes. `edit.ts` requires a prior readFile
+    // tool call (which scans), but `multiEdit.ts` does not gate on
+    // readFilesSet — it's a stand-alone entry point. Without this
+    // scan, an agent could call MultiEdit directly on an .env file
+    // and bypass file_scope.blocklist entirely.
+    const scanDecision = await scanFileViaProxy(resolvedPath);
+    if (scanDecision.action === "BLOCK") {
+      throw new ContinueError(
+        ContinueErrorReason.FileIsSecurityConcern,
+        `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+      );
+    }
 
     const currentContent = fs.readFileSync(resolvedPath, "utf-8");
     const newContent = executeMultiFindAndReplace(currentContent, edits);

@@ -13,19 +13,25 @@ import {
 } from "../policy/policyChain";
 
 let seqCounter = 0;
-function uniq() { return `${Date.now()}-${++seqCounter}-${Math.random().toString(36).slice(2, 8)}`; }
+function uniq() {
+  return `${Date.now()}-${++seqCounter}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function makeOrg(): number {
-  const result = db.prepare(
-    "INSERT INTO organizations (name, slug, created_at) VALUES (?, ?, ?)"
-  ).run("Chain Org", `chain-${uniq()}`, Date.now());
+  const result = db
+    .prepare(
+      "INSERT INTO organizations (name, slug, created_at) VALUES (?, ?, ?)",
+    )
+    .run("Chain Org", `chain-${uniq()}`, Date.now());
   return Number(result.lastInsertRowid);
 }
 
 function makeTeam(orgId: number): number {
-  const result = db.prepare(
-    "INSERT INTO teams (org_id, name, slug, created_at) VALUES (?, ?, ?, ?)"
-  ).run(orgId, "Chain Team", `chain-team-${uniq()}`, Date.now());
+  const result = db
+    .prepare(
+      "INSERT INTO teams (org_id, name, slug, created_at) VALUES (?, ?, ?, ?)",
+    )
+    .run(orgId, "Chain Team", `chain-team-${uniq()}`, Date.now());
   return Number(result.lastInsertRowid);
 }
 
@@ -50,7 +56,7 @@ export function testOrgOverrideAddsBlocklistPatterns() {
   const policy = resolveEffectivePolicy(orgId);
   assert.ok(
     policy.file_scope.blocklist.includes("org-secret/**"),
-    "Org blocklist pattern should be merged into effective policy"
+    "Org blocklist pattern should be merged into effective policy",
   );
 }
 
@@ -65,14 +71,14 @@ export function testTeamOverrideExtendsOrg() {
     file_scope: { blocklist: ["team-only/**"], allowlist: [] },
   } as any);
 
-  const policy = resolveEffectivePolicy(orgId, teamId);
+  const policy = resolveEffectivePolicy(orgId, null, teamId);
   assert.ok(
     policy.file_scope.blocklist.includes("org-only/**"),
-    "Should include org blocklist"
+    "Should include org blocklist",
   );
   assert.ok(
     policy.file_scope.blocklist.includes("team-only/**"),
-    "Should include team blocklist (union)"
+    "Should include team blocklist (union)",
   );
 }
 
@@ -88,7 +94,7 @@ export function testStrictestRulesWin() {
   assert.strictEqual(
     policy.rules.block_db_urls,
     true,
-    "Org override should enable block_db_urls (OR semantics)"
+    "Org override should enable block_db_urls (OR semantics)",
   );
 }
 
@@ -104,7 +110,7 @@ export function testStrictestThresholdWins() {
   assert.strictEqual(
     policy.severity_threshold,
     "medium",
-    "Stricter threshold should win"
+    "Stricter threshold should win",
   );
 }
 
@@ -118,7 +124,7 @@ export function testDeleteScopedPolicyReverts() {
   let policy = resolveEffectivePolicy(orgId);
   assert.ok(
     policy.file_scope.blocklist.includes("temp-pattern/**"),
-    "Should have org pattern before delete"
+    "Should have org pattern before delete",
   );
 
   deleteScopedPolicy("org", orgId);
@@ -126,7 +132,7 @@ export function testDeleteScopedPolicyReverts() {
   policy = resolveEffectivePolicy(orgId);
   assert.ok(
     !policy.file_scope.blocklist.includes("temp-pattern/**"),
-    "Org pattern should be gone after delete"
+    "Org pattern should be gone after delete",
   );
 }
 
@@ -144,10 +150,10 @@ export function testChildCannotRelaxParentBlock() {
     rules: { block_db_urls: false },
   } as any);
 
-  const policy = resolveEffectivePolicy(orgId, teamId);
+  const policy = resolveEffectivePolicy(orgId, null, teamId);
   assert.strictEqual(
     policy.rules.block_db_urls,
     true,
-    "Team cannot relax org-level block (OR semantics: true || false = true)"
+    "Team cannot relax org-level block (OR semantics: true || false = true)",
   );
 }

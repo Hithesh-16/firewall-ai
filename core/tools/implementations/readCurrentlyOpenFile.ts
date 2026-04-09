@@ -2,6 +2,8 @@ import { getUriDescription } from "../../util/uri";
 
 import { ToolImpl } from ".";
 import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
+import { ContinueError, ContinueErrorReason } from "../../util/errors";
+import { scanFileViaProxy } from "../../util/fileScanProxy";
 import { throwIfFileExceedsHalfOfContext } from "./readFileLimit";
 
 export const readCurrentlyOpenFileImpl: ToolImpl = async (_, extras) => {
@@ -9,6 +11,23 @@ export const readCurrentlyOpenFileImpl: ToolImpl = async (_, extras) => {
 
   if (result) {
     throwIfFileIsSecurityConcern(result.path);
+
+    // Phase E: enforce role-aware file scope. The "currently open
+    // file" tool is a common escape hatch for agents that can't
+    // locate a file by path — we scan it just like a direct read
+    // so a restricted file can't leak into context via a
+    // different tool.
+    const scanDecision = await scanFileViaProxy(
+      result.path,
+      extras.fetch as typeof fetch,
+    );
+    if (scanDecision.action === "BLOCK") {
+      throw new ContinueError(
+        ContinueErrorReason.FileIsSecurityConcern,
+        `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+      );
+    }
+
     await throwIfFileExceedsHalfOfContext(
       result.path,
       result.contents,

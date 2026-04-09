@@ -1,6 +1,10 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { requireAuth, requireRole, requireCapability } from "../auth/authMiddleware";
+import {
+  requireAuth,
+  requireRole,
+  requireCapability,
+} from "../auth/authMiddleware";
 import { loadPolicyConfig, savePolicyConfig } from "../config";
 import type { PolicyConfig } from "../types";
 
@@ -16,7 +20,7 @@ const updatePolicySchema = z.object({
     redact_jwt: z.boolean(),
     redact_generic_api_keys: z.boolean(),
     allow_source_code: z.boolean(),
-    log_all_requests: z.boolean()
+    log_all_requests: z.boolean(),
   }),
   file_scope: z.object({
     mode: z.enum(["blocklist", "allowlist"]),
@@ -24,10 +28,10 @@ const updatePolicySchema = z.object({
     allowlist: z.array(z.string()),
     max_file_size_kb: z.number(),
     scan_on_open: z.boolean(),
-    scan_on_send: z.boolean()
+    scan_on_send: z.boolean(),
   }),
   blocked_paths: z.array(z.string()),
-  severity_threshold: z.enum(["critical", "high", "medium"])
+  severity_threshold: z.enum(["critical", "high", "medium"]),
 });
 
 const updateScopeSchema = z.object({
@@ -36,45 +40,121 @@ const updateScopeSchema = z.object({
   allowlist: z.array(z.string()),
   max_file_size_kb: z.number(),
   scan_on_open: z.boolean(),
-  scan_on_send: z.boolean()
+  scan_on_send: z.boolean(),
 });
 
 /** Default sensitive file/folder patterns for auto-detection */
-const DEFAULT_SENSITIVE_PATTERNS: Array<{ pattern: string; category: string; description: string }> = [
-  { pattern: ".env", category: "secrets", description: "Environment variables (may contain API keys)" },
-  { pattern: ".env.*", category: "secrets", description: "Environment overrides" },
-  { pattern: "**/*.pem", category: "certificates", description: "PEM certificate files" },
-  { pattern: "**/*.key", category: "certificates", description: "Private key files" },
-  { pattern: "**/*.p12", category: "certificates", description: "PKCS#12 certificate bundles" },
-  { pattern: "**/*.pfx", category: "certificates", description: "PFX certificate files" },
-  { pattern: "**/secrets/**", category: "secrets", description: "Secrets directory" },
-  { pattern: "**/credentials/**", category: "secrets", description: "Credentials directory" },
-  { pattern: "**/.ssh/**", category: "secrets", description: "SSH keys and config" },
-  { pattern: "**/config/production.*", category: "config", description: "Production configuration" },
+const DEFAULT_SENSITIVE_PATTERNS: Array<{
+  pattern: string;
+  category: string;
+  description: string;
+}> = [
+  {
+    pattern: ".env",
+    category: "secrets",
+    description: "Environment variables (may contain API keys)",
+  },
+  {
+    pattern: ".env.*",
+    category: "secrets",
+    description: "Environment overrides",
+  },
+  {
+    pattern: "**/*.pem",
+    category: "certificates",
+    description: "PEM certificate files",
+  },
+  {
+    pattern: "**/*.key",
+    category: "certificates",
+    description: "Private key files",
+  },
+  {
+    pattern: "**/*.p12",
+    category: "certificates",
+    description: "PKCS#12 certificate bundles",
+  },
+  {
+    pattern: "**/*.pfx",
+    category: "certificates",
+    description: "PFX certificate files",
+  },
+  {
+    pattern: "**/secrets/**",
+    category: "secrets",
+    description: "Secrets directory",
+  },
+  {
+    pattern: "**/credentials/**",
+    category: "secrets",
+    description: "Credentials directory",
+  },
+  {
+    pattern: "**/.ssh/**",
+    category: "secrets",
+    description: "SSH keys and config",
+  },
+  {
+    pattern: "**/config/production.*",
+    category: "config",
+    description: "Production configuration",
+  },
   { pattern: "**/.git/**", category: "internal", description: "Git internals" },
-  { pattern: "**/node_modules/**", category: "dependencies", description: "Node.js dependencies" },
+  {
+    pattern: "**/node_modules/**",
+    category: "dependencies",
+    description: "Node.js dependencies",
+  },
   { pattern: "**/dist/**", category: "build", description: "Build output" },
-  { pattern: "**/.aifirewall-vault/**", category: "secrets", description: "AI Firewall vault data" },
-  { pattern: "**/docker-compose*.yml", category: "config", description: "Docker Compose (may contain secrets)" },
-  { pattern: "**/*.env.local", category: "secrets", description: "Local environment overrides" },
-  { pattern: "**/id_rsa*", category: "certificates", description: "RSA private keys" },
-  { pattern: "**/serviceAccount*.json", category: "secrets", description: "Service account credentials" },
+  {
+    pattern: "**/.aifirewall-vault/**",
+    category: "secrets",
+    description: "AI Firewall vault data",
+  },
+  {
+    pattern: "**/docker-compose*.yml",
+    category: "config",
+    description: "Docker Compose (may contain secrets)",
+  },
+  {
+    pattern: "**/*.env.local",
+    category: "secrets",
+    description: "Local environment overrides",
+  },
+  {
+    pattern: "**/id_rsa*",
+    category: "certificates",
+    description: "RSA private keys",
+  },
+  {
+    pattern: "**/serviceAccount*.json",
+    category: "secrets",
+    description: "Service account credentials",
+  },
 ];
 
-export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/policy", { preHandler: requireAuth }, async () => loadPolicyConfig());
+export async function registerPolicyRoutes(
+  app: FastifyInstance,
+): Promise<void> {
+  app.get("/api/policy", { preHandler: requireAuth }, async () =>
+    loadPolicyConfig(),
+  );
 
-  app.put("/api/policy", { preHandler: requireRole("admin", "security_lead") }, async (request, reply) => {
-    const parsed = updatePolicySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: "Invalid policy payload",
-        details: parsed.error.flatten()
-      });
-    }
-    savePolicyConfig(parsed.data);
-    return { ok: true, policy: parsed.data };
-  });
+  app.put(
+    "/api/policy",
+    { preHandler: requireRole("admin", "security_lead") },
+    async (request, reply) => {
+      const parsed = updatePolicySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid policy payload",
+          details: parsed.error.flatten(),
+        });
+      }
+      savePolicyConfig(parsed.data);
+      return { ok: true, policy: parsed.data };
+    },
+  );
 
   // Hot-reload policy (for any client to trigger after writing .aifirewall.json)
   app.post("/api/policy/reload", { preHandler: requireAuth }, async () => {
@@ -87,19 +167,23 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
     return { file_scope: policy.file_scope };
   });
 
-  app.put("/api/file-scope", { preHandler: requireRole("admin", "security_lead") }, async (request, reply) => {
-    const parsed = updateScopeSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: "Invalid file scope payload",
-        details: parsed.error.flatten()
-      });
-    }
-    const policy = loadPolicyConfig();
-    const updated = { ...policy, file_scope: parsed.data };
-    savePolicyConfig(updated);
-    return { ok: true, file_scope: updated.file_scope };
-  });
+  app.put(
+    "/api/file-scope",
+    { preHandler: requireRole("admin", "security_lead") },
+    async (request, reply) => {
+      const parsed = updateScopeSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid file scope payload",
+          details: parsed.error.flatten(),
+        });
+      }
+      const policy = loadPolicyConfig();
+      const updated = { ...policy, file_scope: parsed.data };
+      savePolicyConfig(updated);
+      return { ok: true, file_scope: updated.file_scope };
+    },
+  );
 
   // ── Security Perimeter APIs (client-agnostic) ──
 
@@ -108,20 +192,24 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
    * Returns auto-detected sensitive file patterns for a workspace.
    * Any client (VS Code, CLI, JetBrains, browser) can call this.
    */
-  app.get("/api/perimeter/detect", { preHandler: requireAuth }, async (request) => {
-    const query = request.query as { projectRoot?: string };
-    const policy = loadPolicyConfig();
-    const currentBlocklist = policy.file_scope?.blocklist ?? [];
+  app.get(
+    "/api/perimeter/detect",
+    { preHandler: requireAuth },
+    async (request) => {
+      const query = request.query as { projectRoot?: string };
+      const policy = loadPolicyConfig();
+      const currentBlocklist = policy.file_scope?.blocklist ?? [];
 
-    return {
-      patterns: DEFAULT_SENSITIVE_PATTERNS.map((p) => ({
-        ...p,
-        recommended: true,
-        active: currentBlocklist.includes(p.pattern),
-      })),
-      currentBlocklist,
-    };
-  });
+      return {
+        patterns: DEFAULT_SENSITIVE_PATTERNS.map((p) => ({
+          ...p,
+          recommended: true,
+          active: currentBlocklist.includes(p.pattern),
+        })),
+        currentBlocklist,
+      };
+    },
+  );
 
   /**
    * POST /api/perimeter/confirm
@@ -133,27 +221,31 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
     projectRoot: z.string().optional(),
   });
 
-  app.post("/api/perimeter/confirm", { preHandler: requireRole("admin", "security_lead") }, async (request, reply) => {
-    const parsed = confirmPerimeterSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: "Invalid perimeter payload",
-        details: parsed.error.flatten(),
-      });
-    }
+  app.post(
+    "/api/perimeter/confirm",
+    { preHandler: requireRole("admin", "security_lead") },
+    async (request, reply) => {
+      const parsed = confirmPerimeterSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid perimeter payload",
+          details: parsed.error.flatten(),
+        });
+      }
 
-    const { restricted } = parsed.data;
-    const policy = loadPolicyConfig();
-    const updatedFileScope = { ...policy.file_scope, blocklist: restricted };
-    const updated = { ...policy, file_scope: updatedFileScope };
-    savePolicyConfig(updated);
+      const { restricted } = parsed.data;
+      const policy = loadPolicyConfig();
+      const updatedFileScope = { ...policy.file_scope, blocklist: restricted };
+      const updated = { ...policy, file_scope: updatedFileScope };
+      savePolicyConfig(updated);
 
-    return {
-      ok: true,
-      file_scope: updated.file_scope,
-      restricted_count: restricted.length,
-    };
-  });
+      return {
+        ok: true,
+        file_scope: updated.file_scope,
+        restricted_count: restricted.length,
+      };
+    },
+  );
 
   /**
    * GET /api/perimeter/status
@@ -181,113 +273,186 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
    * GET /api/file-restrictions
    * Returns effective merged file policy for the authenticated user.
    */
-  app.get("/api/file-restrictions", { preHandler: requireAuth }, async (request, reply) => {
-    const { getEffectiveFilePolicy } = await import("../policy/fileRestrictionService");
-    const user = request.authContext?.user;
-    if (!user?.orgId) {
-      return reply.status(400).send({ error: "User has no organization" });
-    }
-    return getEffectiveFilePolicy(user.orgId, null, user.id);
-  });
+  app.get(
+    "/api/file-restrictions",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { getEffectiveFilePolicy } =
+        await import("../policy/fileRestrictionService");
+      const user = request.authContext?.user;
+      if (!user?.orgId) {
+        return reply.status(400).send({ error: "User has no organization" });
+      }
+      return getEffectiveFilePolicy(user.orgId, null, user.id);
+    },
+  );
 
   /**
    * GET /api/file-restrictions/all
    * Lists all file restrictions for the org (admin view).
    */
-  app.get("/api/file-restrictions/all", { preHandler: [requireAuth, requireCapability("file_restrictions:manage")] }, async (request, reply) => {
-    const { listFileRestrictions } = await import("../policy/fileRestrictionService");
-    const orgId = request.authContext?.user.orgId;
-    if (!orgId) return reply.status(400).send({ error: "User has no organization" });
-    return { restrictions: listFileRestrictions(orgId) };
-  });
+  app.get(
+    "/api/file-restrictions/all",
+    {
+      preHandler: [requireAuth, requireCapability("file_restrictions:manage")],
+    },
+    async (request, reply) => {
+      const { listFileRestrictions } =
+        await import("../policy/fileRestrictionService");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
+      return { restrictions: listFileRestrictions(orgId) };
+    },
+  );
 
   /**
    * PUT /api/file-restrictions/org
    * Set org-level file restriction (admin only).
    */
-  app.put("/api/file-restrictions/org", { preHandler: [requireAuth, requireCapability("file_restrictions:manage")] }, async (request, reply) => {
-    const { setFileRestriction } = await import("../policy/fileRestrictionService");
-    const orgId = request.authContext?.user.orgId;
-    if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+  app.put(
+    "/api/file-restrictions/org",
+    {
+      preHandler: [requireAuth, requireCapability("file_restrictions:manage")],
+    },
+    async (request, reply) => {
+      const { setFileRestriction } =
+        await import("../policy/fileRestrictionService");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
-    const parsed = fileRestrictionSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+      const parsed = fileRestrictionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    const result = setFileRestriction(orgId, null, null, parsed.data.mode, parsed.data.patterns);
-    return { ok: true, restriction: result };
-  });
+      const result = setFileRestriction(
+        orgId,
+        null,
+        null,
+        parsed.data.mode,
+        parsed.data.patterns,
+      );
+      return { ok: true, restriction: result };
+    },
+  );
 
   /**
    * PUT /api/file-restrictions/team/:teamId
    * Set team-level file restriction (admin, security_lead).
    */
-  app.put("/api/file-restrictions/team/:teamId", { preHandler: [requireAuth, requireCapability("file_restrictions:manage")] }, async (request, reply) => {
-    const { setFileRestriction } = await import("../policy/fileRestrictionService");
-    const orgId = request.authContext?.user.orgId;
-    if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+  app.put(
+    "/api/file-restrictions/team/:teamId",
+    {
+      preHandler: [requireAuth, requireCapability("file_restrictions:manage")],
+    },
+    async (request, reply) => {
+      const { setFileRestriction } =
+        await import("../policy/fileRestrictionService");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
-    const { teamId } = request.params as { teamId: string };
-    const parsed = fileRestrictionSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+      const { teamId } = request.params as { teamId: string };
+      const parsed = fileRestrictionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    const result = setFileRestriction(orgId, Number(teamId), null, parsed.data.mode, parsed.data.patterns);
-    return { ok: true, restriction: result };
-  });
+      const result = setFileRestriction(
+        orgId,
+        Number(teamId),
+        null,
+        parsed.data.mode,
+        parsed.data.patterns,
+      );
+      return { ok: true, restriction: result };
+    },
+  );
 
   /**
    * PUT /api/file-restrictions/user/:userId
    * Set user-level file restriction (admin only).
    */
-  app.put("/api/file-restrictions/user/:userId", { preHandler: [requireAuth, requireCapability("file_restrictions:manage")] }, async (request, reply) => {
-    const { setFileRestriction } = await import("../policy/fileRestrictionService");
-    const orgId = request.authContext?.user.orgId;
-    if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+  app.put(
+    "/api/file-restrictions/user/:userId",
+    {
+      preHandler: [requireAuth, requireCapability("file_restrictions:manage")],
+    },
+    async (request, reply) => {
+      const { setFileRestriction } =
+        await import("../policy/fileRestrictionService");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
-    const { userId } = request.params as { userId: string };
-    const parsed = fileRestrictionSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+      const { userId } = request.params as { userId: string };
+      const parsed = fileRestrictionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    const result = setFileRestriction(orgId, null, Number(userId), parsed.data.mode, parsed.data.patterns);
-    return { ok: true, restriction: result };
-  });
+      const result = setFileRestriction(
+        orgId,
+        null,
+        Number(userId),
+        parsed.data.mode,
+        parsed.data.patterns,
+      );
+      return { ok: true, restriction: result };
+    },
+  );
 
   /**
    * DELETE /api/file-restrictions/:id
    * Remove a file restriction (admin only).
    */
-  app.delete("/api/file-restrictions/:id", { preHandler: [requireAuth, requireCapability("file_restrictions:manage")] }, async (request, reply) => {
-    const { deleteFileRestriction } = await import("../policy/fileRestrictionService");
-    const { id } = request.params as { id: string };
-    const deleted = deleteFileRestriction(Number(id));
-    if (!deleted) return reply.status(404).send({ error: "Restriction not found" });
-    return { ok: true };
-  });
+  app.delete(
+    "/api/file-restrictions/:id",
+    {
+      preHandler: [requireAuth, requireCapability("file_restrictions:manage")],
+    },
+    async (request, reply) => {
+      const { deleteFileRestriction } =
+        await import("../policy/fileRestrictionService");
+      const { id } = request.params as { id: string };
+      const deleted = deleteFileRestriction(Number(id));
+      if (!deleted)
+        return reply.status(404).send({ error: "Restriction not found" });
+      return { ok: true };
+    },
+  );
 
   // ── Policy Inheritance Chain APIs ──
 
   const scopedPolicySchema = z.object({
-    rules: z.object({
-      block_private_keys: z.boolean().optional(),
-      block_aws_keys: z.boolean().optional(),
-      block_db_urls: z.boolean().optional(),
-      block_github_tokens: z.boolean().optional(),
-      redact_emails: z.boolean().optional(),
-      redact_phone: z.boolean().optional(),
-      redact_jwt: z.boolean().optional(),
-      redact_generic_api_keys: z.boolean().optional(),
-      allow_source_code: z.boolean().optional(),
-      log_all_requests: z.boolean().optional(),
-    }).optional(),
-    file_scope: z.object({
-      blocklist: z.array(z.string()).optional(),
-      allowlist: z.array(z.string()).optional(),
-    }).optional(),
+    rules: z
+      .object({
+        block_private_keys: z.boolean().optional(),
+        block_aws_keys: z.boolean().optional(),
+        block_db_urls: z.boolean().optional(),
+        block_github_tokens: z.boolean().optional(),
+        redact_emails: z.boolean().optional(),
+        redact_phone: z.boolean().optional(),
+        redact_jwt: z.boolean().optional(),
+        redact_generic_api_keys: z.boolean().optional(),
+        allow_source_code: z.boolean().optional(),
+        log_all_requests: z.boolean().optional(),
+      })
+      .optional(),
+    file_scope: z
+      .object({
+        blocklist: z.array(z.string()).optional(),
+        allowlist: z.array(z.string()).optional(),
+      })
+      .optional(),
     blocked_paths: z.array(z.string()).optional(),
     severity_threshold: z.enum(["medium", "high", "critical"]).optional(),
   });
@@ -297,97 +462,122 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
    * Returns the fully resolved policy for the authenticated user
    * (global → org → role → team → project, strictest wins).
    */
-  app.get("/api/policies/effective", { preHandler: requireAuth }, async (request, reply) => {
-    const { resolveEffectivePolicy } = await import("../policy/policyChain");
-    const user = request.authContext?.user;
-    if (!user?.orgId) {
-      return reply.status(400).send({ error: "User has no organization" });
-    }
-    const projectRoot = (request.query as Record<string, string>).projectRoot;
-    return resolveEffectivePolicy(
-      user.orgId,
-      null,
-      projectRoot,
-      user.role as
-        | "admin"
-        | "security_lead"
-        | "developer"
-        | "auditor"
-        | null
-        | undefined,
-    );
-  });
+  app.get(
+    "/api/policies/effective",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { resolveEffectivePolicy } = await import("../policy/policyChain");
+      const user = request.authContext?.user;
+      if (!user?.orgId) {
+        return reply.status(400).send({ error: "User has no organization" });
+      }
+      const projectRoot = (request.query as Record<string, string>).projectRoot;
+      return resolveEffectivePolicy(
+        user.orgId,
+        user.role ?? null,
+        null, // teamId — TODO: resolve from team membership
+        projectRoot,
+      );
+    },
+  );
 
   /**
    * GET /api/policies/scoped
    * List all scoped policy overrides for the org (admin view).
    */
-  app.get("/api/policies/scoped", { preHandler: [requireAuth, requireCapability("policy:read")] }, async (request, reply) => {
-    const { listScopedPolicies } = await import("../policy/policyChain");
-    const orgId = request.authContext?.user.orgId;
-    if (!orgId) return reply.status(400).send({ error: "User has no organization" });
-    return { policies: listScopedPolicies(orgId) };
-  });
+  app.get(
+    "/api/policies/scoped",
+    { preHandler: [requireAuth, requireCapability("policy:read")] },
+    async (request, reply) => {
+      const { listScopedPolicies } = await import("../policy/policyChain");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
+      return { policies: listScopedPolicies(orgId) };
+    },
+  );
 
   /**
    * PUT /api/policies/org
    * Set org-level policy override (extends global, strictest wins).
    */
-  app.put("/api/policies/org", { preHandler: [requireAuth, requireCapability("policy:write")] }, async (request, reply) => {
-    const { saveScopedPolicy } = await import("../policy/policyChain");
-    const orgId = request.authContext?.user.orgId;
-    if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+  app.put(
+    "/api/policies/org",
+    { preHandler: [requireAuth, requireCapability("policy:write")] },
+    async (request, reply) => {
+      const { saveScopedPolicy } = await import("../policy/policyChain");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
-    const parsed = scopedPolicySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+      const parsed = scopedPolicySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    saveScopedPolicy("org", orgId, parsed.data as any);
-    return { ok: true };
-  });
+      saveScopedPolicy("org", orgId, parsed.data as any);
+      return { ok: true };
+    },
+  );
 
   /**
    * PUT /api/policies/team/:teamId
    * Set team-level policy override.
    */
-  app.put("/api/policies/team/:teamId", { preHandler: [requireAuth, requireCapability("policy:write")] }, async (request, reply) => {
-    const { saveScopedPolicy } = await import("../policy/policyChain");
-    const { teamId } = request.params as { teamId: string };
+  app.put(
+    "/api/policies/team/:teamId",
+    { preHandler: [requireAuth, requireCapability("policy:write")] },
+    async (request, reply) => {
+      const { saveScopedPolicy } = await import("../policy/policyChain");
+      const { teamId } = request.params as { teamId: string };
 
-    const parsed = scopedPolicySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+      const parsed = scopedPolicySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    saveScopedPolicy("team", Number(teamId), parsed.data as any);
-    return { ok: true };
-  });
+      saveScopedPolicy("team", Number(teamId), parsed.data as any);
+      return { ok: true };
+    },
+  );
 
   /**
    * DELETE /api/policies/org
    * Remove org-level policy override (revert to global).
    */
-  app.delete("/api/policies/org", { preHandler: [requireAuth, requireCapability("policy:write")] }, async (request, reply) => {
-    const { deleteScopedPolicy } = await import("../policy/policyChain");
-    const orgId = request.authContext?.user.orgId;
-    if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+  app.delete(
+    "/api/policies/org",
+    { preHandler: [requireAuth, requireCapability("policy:write")] },
+    async (request, reply) => {
+      const { deleteScopedPolicy } = await import("../policy/policyChain");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
-    deleteScopedPolicy("org", orgId);
-    return { ok: true };
-  });
+      deleteScopedPolicy("org", orgId);
+      return { ok: true };
+    },
+  );
 
   /**
    * DELETE /api/policies/team/:teamId
    * Remove team-level policy override.
    */
-  app.delete("/api/policies/team/:teamId", { preHandler: [requireAuth, requireCapability("policy:write")] }, async (request, reply) => {
-    const { deleteScopedPolicy } = await import("../policy/policyChain");
-    const { teamId } = request.params as { teamId: string };
+  app.delete(
+    "/api/policies/team/:teamId",
+    { preHandler: [requireAuth, requireCapability("policy:write")] },
+    async (request, reply) => {
+      const { deleteScopedPolicy } = await import("../policy/policyChain");
+      const { teamId } = request.params as { teamId: string };
 
-    deleteScopedPolicy("team", Number(teamId));
-    return { ok: true };
-  });
+      deleteScopedPolicy("team", Number(teamId));
+      return { ok: true };
+    },
+  );
 
   // ── Role-scoped policies (Phase 4.5) ──────────────────────────────────
   //
@@ -489,9 +679,8 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
     "/api/policies/roles",
     { preHandler: [requireAuth, requireCapability("policy:read")] },
     async (request, reply) => {
-      const { listRolePolicies, SYSTEM_ROLES } = await import(
-        "../policy/policyChain"
-      );
+      const { listRolePolicies, SYSTEM_ROLES } =
+        await import("../policy/policyChain");
       const orgId = request.authContext?.user.orgId;
       if (!orgId) {
         return reply.status(400).send({ error: "User has no organization" });
@@ -573,12 +762,10 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
       }
       const parsedBody = rolePolicySchema.safeParse(request.body);
       if (!parsedBody.success) {
-        return reply
-          .status(400)
-          .send({
-            error: "Invalid policy payload",
-            details: parsedBody.error.flatten(),
-          });
+        return reply.status(400).send({
+          error: "Invalid policy payload",
+          details: parsedBody.error.flatten(),
+        });
       }
       const stored = saveRolePolicy(
         orgId,
@@ -677,50 +864,46 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
    * page can pre-fill the sliders / toggles on a hard refresh instead
    * of always showing defaults.
    */
-  app.get(
-    "/api/policy/wizard",
-    { preHandler: requireAuth },
-    async () => {
-      const current = loadPolicyConfig() as unknown as Record<string, any>;
-      const r = (current.rules || {}) as Record<string, boolean>;
-      // Secrets "enabled" = any of the secret-flavored rules is on.
-      const secretsEnabled =
-        !!r.block_private_keys ||
-        !!r.block_aws_keys ||
-        !!r.block_db_urls ||
-        !!r.block_github_tokens ||
-        !!r.redact_jwt ||
-        !!r.redact_generic_api_keys;
-      const piiEnabled = !!r.redact_emails || !!r.redact_phone;
-      const injThreshold = current.prompt_injection?.threshold ?? 60;
+  app.get("/api/policy/wizard", { preHandler: requireAuth }, async () => {
+    const current = loadPolicyConfig() as unknown as Record<string, any>;
+    const r = (current.rules || {}) as Record<string, boolean>;
+    // Secrets "enabled" = any of the secret-flavored rules is on.
+    const secretsEnabled =
+      !!r.block_private_keys ||
+      !!r.block_aws_keys ||
+      !!r.block_db_urls ||
+      !!r.block_github_tokens ||
+      !!r.redact_jwt ||
+      !!r.redact_generic_api_keys;
+    const piiEnabled = !!r.redact_emails || !!r.redact_phone;
+    const injThreshold = current.prompt_injection?.threshold ?? 60;
 
-      return {
-        scanners: {
-          secrets: { enabled: secretsEnabled, block: 70, redact: 40 },
-          pii: { enabled: piiEnabled, block: 60, redact: 30 },
-          promptInjection: {
-            enabled: current.prompt_injection?.enabled ?? true,
-            block: 100 - injThreshold,
-            redact: Math.max(0, 80 - injThreshold),
-          },
-          entropy: { enabled: true, block: 75, redact: 45 },
-          unicode: {
-            enabled: current.unicode_normalization?.enabled ?? true,
-            block: current.unicode_normalization?.block_on_anomaly ? 90 : 70,
-            redact: 40,
-          },
+    return {
+      scanners: {
+        secrets: { enabled: secretsEnabled, block: 70, redact: 40 },
+        pii: { enabled: piiEnabled, block: 60, redact: 30 },
+        promptInjection: {
+          enabled: current.prompt_injection?.enabled ?? true,
+          block: 100 - injThreshold,
+          redact: Math.max(0, 80 - injThreshold),
         },
-        responseScanning: !!current.response_scanning?.enabled,
-        mcpGateway: true,
-        mcpAudit: true,
-        costRouting: {
-          enabled: !!current.smart_routing?.cost_routing?.enabled,
-          perRequestUsdCap:
-            current.smart_routing?.cost_routing?.maxCostPerRequest ?? undefined,
+        entropy: { enabled: true, block: 75, redact: 45 },
+        unicode: {
+          enabled: current.unicode_normalization?.enabled ?? true,
+          block: current.unicode_normalization?.block_on_anomaly ? 90 : 70,
+          redact: 40,
         },
-      };
-    },
-  );
+      },
+      responseScanning: !!current.response_scanning?.enabled,
+      mcpGateway: true,
+      mcpAudit: true,
+      costRouting: {
+        enabled: !!current.smart_routing?.cost_routing?.enabled,
+        perRequestUsdCap:
+          current.smart_routing?.cost_routing?.maxCostPerRequest ?? undefined,
+      },
+    };
+  });
 
   /**
    * POST /api/policy/wizard
@@ -740,7 +923,10 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ error: "Invalid wizard payload", details: parsed.error.flatten() });
+          .send({
+            error: "Invalid wizard payload",
+            details: parsed.error.flatten(),
+          });
       }
       const w = parsed.data;
       // Cast to a broader shape so we can read optional top-level
@@ -770,7 +956,10 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
         prompt_injection: {
           enabled: w.scanners.promptInjection.enabled,
           // Slider is "block at or above this score" so threshold = 100 - block.
-          threshold: Math.max(0, Math.min(100, 100 - w.scanners.promptInjection.block)),
+          threshold: Math.max(
+            0,
+            Math.min(100, 100 - w.scanners.promptInjection.block),
+          ),
         },
         response_scanning: {
           ...(current.response_scanning || {}),

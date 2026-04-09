@@ -3,9 +3,10 @@ import { getUriPathBasename } from "../../util/uri";
 
 import { ToolImpl } from ".";
 import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
+import { ContinueError, ContinueErrorReason } from "../../util/errors";
+import { scanFileViaProxy } from "../../util/fileScanProxy";
 import { getNumberArg, getStringArg } from "../parseArgs";
 import { throwIfFileExceedsHalfOfContext } from "./readFileLimit";
-import { ContinueError, ContinueErrorReason } from "../../util/errors";
 
 // Use Int.MAX_VALUE from Java/Kotlin (2^31 - 1) instead of JavaScript's Number.MAX_SAFE_INTEGER
 // to ensure compatibility with IntelliJ's Kotlin Position type which uses Int for character field
@@ -47,6 +48,22 @@ export const readFileRangeImpl: ToolImpl = async (args, extras) => {
 
   // Security check on the resolved display path
   throwIfFileIsSecurityConcern(resolvedPath.displayPath);
+
+  // Phase E: route through the proxy's role-aware file scan before
+  // reading any bytes. Blocks any file matching `file_scope.blocklist`
+  // in the caller's effective policy — including per-role overrides
+  // the admin configured in RBAC. Fail-open if the proxy is
+  // unreachable; fail-closed is opt-in via policy.
+  const scanDecision = await scanFileViaProxy(
+    resolvedPath.displayPath,
+    extras.fetch as typeof fetch,
+  );
+  if (scanDecision.action === "BLOCK") {
+    throw new ContinueError(
+      ContinueErrorReason.FileIsSecurityConcern,
+      `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+    );
+  }
 
   // Use the IDE's readRangeInFile method with 0-based range (IDE expects 0-based internally)
   const content = await extras.ide.readRangeInFile(resolvedPath.uri, {

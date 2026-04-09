@@ -17,6 +17,7 @@ import {
   EyeSlashIcon,
   BellIcon,
   ClockIcon,
+  CodeBracketSquareIcon,
 } from "@heroicons/react/24/outline";
 import { cn } from "../../utils/cn";
 import { ROUTES } from "../../utils/routes";
@@ -65,6 +66,11 @@ const sections: NavSection[] = [
   {
     title: "System",
     items: [
+      {
+        label: "Assistant",
+        to: "/settings/assistant",
+        icon: CodeBracketSquareIcon,
+      },
       { label: "Policy", to: ROUTES.POLICY, icon: DocumentTextIcon },
       { label: "Privacy", to: ROUTES.PRIVACY, icon: EyeSlashIcon },
       { label: "Notifications", to: ROUTES.NOTIFICATIONS, icon: BellIcon },

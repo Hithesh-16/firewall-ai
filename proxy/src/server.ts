@@ -25,6 +25,7 @@ import { registerPluginScanRoutes } from "./routes/pluginScan.route";
 import { registerSSORoutes } from "./routes/sso.route";
 import { registerAuthHandoffRoutes } from "./routes/authHandoff.route";
 import { registerMeRoutes } from "./routes/me.route";
+import { registerModelGrantRoutes } from "./routes/modelGrants.route";
 import { registerOrgAssistantRoutes } from "./routes/orgAssistants.route";
 import { registerWebLoginBridgeRoutes } from "./routes/webLoginBridge.route";
 import { registerPublicConfigRoute } from "./routes/publicConfig.route";
@@ -174,6 +175,9 @@ async function bootstrap(): Promise<void> {
 
   // Phase F (slice 1) — admin provisioning of org-level assistants.
   await registerOrgAssistantRoutes(app);
+
+  // Phase F (slice 2) — admin CRUD for model access grants.
+  await registerModelGrantRoutes(app);
 
   // Authenticated / role-gated routes
   await registerLogsRoute(app);

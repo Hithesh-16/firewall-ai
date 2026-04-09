@@ -11,6 +11,11 @@ import {
   upsertAssistant,
 } from "../gateway/assistantService";
 import {
+  inferGrantMode,
+  isModelGrantedToUser,
+  resolveGrantsForUser,
+} from "../gateway/modelGrantService";
+import {
   deleteUserProvider,
   listAvailableProvidersForUser,
   listOrgProviders,
@@ -282,24 +287,47 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Cross-reference: a declared model is "reachable" only when
-    // the user has an available provider for its slug.
+    //   1. the user has an available provider for its slug, AND
+    //   2. the user either has an explicit grant for the model,
+    //      or the org is in "allow-all" mode (no grants configured
+    //      anywhere — bootstrap phase).
+    //
+    // Personal providers (`source === 'user'`) bypass the grant
+    // check entirely — an individual's own key is not subject to
+    // the admin's allow-list.
     const availableSlugs = new Set(available.map((p) => p.providerSlug));
-    const reachable = declaredModels.filter((m) =>
-      availableSlugs.has(m.provider),
+    const providerSource = new Map(
+      available.map((p) => [p.providerSlug, p.source] as const),
     );
+
+    const grantMode =
+      user.orgId !== null ? inferGrantMode(user.orgId, user.id) : "allow-all";
+    const grants =
+      user.orgId !== null
+        ? resolveGrantsForUser(user.orgId, user.id)
+        : { exact: new Set<string>(), wildcard: new Set<string>() };
+
+    const reachable = declaredModels.filter((m) => {
+      if (!availableSlugs.has(m.provider)) return false;
+      // Personal provider overrides bypass the grant check.
+      if (providerSource.get(m.provider) === "user") return true;
+      // Bootstrap mode: no grants anywhere, don't gate.
+      if (grantMode === "allow-all") return true;
+      return isModelGrantedToUser(m.provider, m.model, grants);
+    });
 
     return {
       models: reachable.map((m) => ({
         provider: m.provider,
         model: m.model,
         displayName: m.displayName,
-        source:
-          available.find((a) => a.providerSlug === m.provider)?.source ?? "org",
+        source: providerSource.get(m.provider) ?? "org",
       })),
       availableProviders: available,
       hasAny: reachable.length > 0,
       canAddPersonal,
       hasAssistant: !!assistant,
+      grantMode,
     };
   });
 

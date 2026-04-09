@@ -417,6 +417,29 @@ CREATE TABLE IF NOT EXISTS assistants (
 CREATE INDEX IF NOT EXISTS idx_assistants_owner ON assistants(owner_type, owner_id);
 CREATE INDEX IF NOT EXISTS idx_assistants_default
   ON assistants(owner_type, owner_id, is_default);
+
+-- Phase F (slice 2): model access grants. An admin adds a
+-- provider + model combo and grants it to specific users or teams.
+-- A user can only see and call models they have a grant for —
+-- even when the underlying provider key is provisioned org-wide.
+--
+--   grantee_type = 'user'  → grantee_id is user_id
+--   grantee_type = 'team'  → grantee_id is team_id (all members inherit)
+--   model_slug   = '*'     → wildcard: grants every model the provider catalogues
+CREATE TABLE IF NOT EXISTS model_grants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  grantee_type TEXT NOT NULL CHECK(grantee_type IN ('user','team')),
+  grantee_id INTEGER NOT NULL,
+  provider_slug TEXT NOT NULL,
+  model_slug TEXT NOT NULL,
+  granted_at INTEGER NOT NULL,
+  granted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE(org_id, grantee_type, grantee_id, provider_slug, model_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_model_grants_org ON model_grants(org_id);
+CREATE INDEX IF NOT EXISTS idx_model_grants_grantee
+  ON model_grants(grantee_type, grantee_id);
 `);
 
 // One-time data migration: copy any legacy rows from the global

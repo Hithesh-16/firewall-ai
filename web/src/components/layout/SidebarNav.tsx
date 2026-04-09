@@ -71,6 +71,11 @@ const sections: NavSection[] = [
         to: "/settings/assistant",
         icon: CodeBracketSquareIcon,
       },
+      {
+        label: "Model Access",
+        to: "/settings/model-access",
+        icon: KeyIcon,
+      },
       { label: "Policy", to: ROUTES.POLICY, icon: DocumentTextIcon },
       { label: "Privacy", to: ROUTES.PRIVACY, icon: EyeSlashIcon },
       { label: "Notifications", to: ROUTES.NOTIFICATIONS, icon: BellIcon },

@@ -9,6 +9,7 @@ import { AppInitializer } from "./components/shared/AppInitializer";
 import ModelGate from "./components/shared/ModelGate";
 import SetupModelPage from "./pages/setup/SetupModelPage";
 import AssistantPage from "./pages/settings/AssistantPage";
+import ModelAccessPage from "./pages/settings/ModelAccessPage";
 import { ChatPage } from "./pages/chat/ChatPage";
 import { SecurityDashboard } from "./pages/security/SecurityDashboard";
 import { SecurityAuditPage } from "./pages/security/SecurityAuditPage";
@@ -98,6 +99,7 @@ const router = createBrowserRouter([
       { path: "usage", element: <UsagePage /> },
       { path: "providers/add", element: <AddProviderPage /> },
       { path: "settings/assistant", element: <AssistantPage /> },
+      { path: "settings/model-access", element: <ModelAccessPage /> },
     ],
   },
   // Public 403 — rendered by <ProtectedRoute> when the user lacks a

@@ -15,18 +15,31 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8080",
         changeOrigin: true,
+        // Suppress noisy proxy errors when the backend proxy is offline
+        configure: (proxy) => {
+          proxy.on("error", () => {});
+        },
       },
       "/v1": {
         target: "http://localhost:8080",
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", () => {});
+        },
       },
       "/ws": {
         target: "ws://localhost:8080",
         ws: true,
+        configure: (proxy) => {
+          proxy.on("error", () => {});
+        },
       },
       "/health": {
         target: "http://localhost:8080",
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", () => {});
+        },
       },
     },
   },

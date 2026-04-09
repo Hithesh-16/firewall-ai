@@ -54,7 +54,15 @@ interface ModelsResponse {
   hasAssistant: boolean;
 }
 
-const BYPASS_PATHS = ["/setup-model", "/onboarding", "/login", "/register", "/403"];
+const BYPASS_PATHS = [
+  "/setup-model",
+  "/settings/models",
+  "/settings/assistant",
+  "/onboarding",
+  "/login",
+  "/register",
+  "/403",
+];
 
 function shouldBypass(pathname: string): boolean {
   return BYPASS_PATHS.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"));
@@ -89,7 +97,7 @@ export function ModelGate({ children }: { children: ReactNode }) {
 
     setState({ kind: "loading" });
     apiClient
-      .get<ModelsResponse>("/api/me/models")
+      .get<ModelsResponse>("/api/me/models/list")
       .then((res) => {
         if (res.hasAny) {
           setState({ kind: "ok" });
@@ -118,7 +126,7 @@ export function ModelGate({ children }: { children: ReactNode }) {
   }
 
   if (state.kind === "no-model") {
-    return <Navigate to="/setup-model" replace />;
+    return <Navigate to="/settings/models" replace />;
   }
 
   return <>{children}</>;

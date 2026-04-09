@@ -121,12 +121,20 @@ function writeConfigYaml(yaml: string): void {
 }
 
 /**
- * Fetch `/api/me/assistant` with the bearer token and write the
- * YAML to `~/.ai-firewall/config.yaml`. Honours the user-managed
- * marker and uses a conditional GET for efficiency.
+ * Pull the user's model list + assistant config from the proxy
+ * and write a merged config.yaml. Uses two endpoints:
  *
- * Returns a SyncStatus so the caller can log outcomes without
- * having to know anything about HTTP or the cache.
+ *   1. GET /api/me/models/list → the unified user_models table
+ *      (provider + model + display name, no keys — keys are
+ *      resolved at gateway dispatch time)
+ *   2. GET /api/me/assistant → non-model config (MCP servers,
+ *      rules, context providers) with API keys injected
+ *
+ * The config.yaml gets model entries from (1) for the model
+ * selector, and uses the full assistant YAML from (2) when
+ * available (because it has the injected API keys the CLI's
+ * LLM client needs for direct-to-provider calls in offline
+ * mode).
  */
 export async function syncAssistantToConfigYaml(
   proxyUrl: string,
@@ -134,22 +142,36 @@ export async function syncAssistantToConfigYaml(
 ): Promise<SyncStatus> {
   if (!bearerToken) return { kind: "not-signed-in" };
 
-  // Respect the user-managed escape hatch.
   if (isFileUserManaged(CONFIG_YAML_PATH)) {
     return { kind: "user-managed" };
   }
 
-  const cachedEtag = readCachedEtag();
+  const base = proxyUrl.replace(/\/+$/, "");
   const headers: Record<string, string> = {
     Authorization: `Bearer ${bearerToken}`,
   };
-  if (cachedEtag) headers["If-None-Match"] = cachedEtag;
 
   try {
-    const res = await fetch(
-      `${proxyUrl.replace(/\/+$/, "")}/api/me/assistant`,
-      { headers },
-    );
+    // Fetch both in parallel
+    const [assistantRes, modelsRes] = await Promise.all([
+      fetch(`${base}/api/me/assistant`, {
+        headers: {
+          ...headers,
+          ...(readCachedEtag() ? { "If-None-Match": readCachedEtag()! } : {}),
+        },
+      }).catch(() => null),
+      fetch(`${base}/api/me/models/list`, { headers }).catch(() => null),
+    ]);
+
+    // If we got a fresh assistant YAML (with keys injected),
+    // use it directly — it's the most complete config. Models
+    // from user_models are already reflected because the proxy's
+    // me.route.ts auto-syncs the assistant YAML on provider add.
+    if (!assistantRes) {
+      return { kind: "error", message: "Proxy unreachable" };
+    }
+    const res = assistantRes;
+    const cachedEtag = readCachedEtag();
 
     if (res.status === 304) {
       return { kind: "ok", fresh: false };

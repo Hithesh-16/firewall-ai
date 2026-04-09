@@ -27,11 +27,9 @@ import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
 import { useOnboardingCard } from "../../components/OnboardingCard";
 import StepContainer from "../../components/StepContainer";
 import { TabBar } from "../../components/TabBar/TabBar";
-import { SessionCostBadge } from "../../components/security/CostBadge";
 import { ScanResultBanner } from "../../components/security/ScanResultBanner";
 import { PreflightPanel } from "../../components/security/PreflightPanel";
 import { FirewallActivityIndicator } from "../../components/security/FirewallActivityIndicator";
-import { ShieldStatus } from "../../components/security/ShieldStatus";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useWebviewListener } from "../../hooks/useWebviewListener";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
@@ -517,11 +515,7 @@ export function Chat() {
 
   return (
     <>
-      {/* AI Firewall status bar */}
-      <div className="border-border flex items-center justify-between border-b bg-gradient-to-r from-emerald-950/20 to-transparent px-3 py-1.5">
-        <ShieldStatus />
-        <SessionCostBadge />
-      </div>
+      {/* Session cost shown inline, shield status removed per user request */}
       {!!showSessionTabs && !isInEdit && <TabBar ref={tabsRef} />}
       {widget}
 

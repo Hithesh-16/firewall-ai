@@ -401,6 +401,38 @@ CREATE TABLE IF NOT EXISTS user_providers (
 );
 CREATE INDEX IF NOT EXISTS idx_user_providers_user ON user_providers(user_id);
 
+-- ── UNIFIED MODEL TABLE (replaces providers + models + user_providers
+-- + org_providers + model_grants for model resolution) ──────────────
+--
+-- Each row = "user X has access to model Y from provider Z with key K".
+-- The gateway reads this table on every /v1/chat/completions request.
+-- Admin creates rows for other users. Users create rows for themselves
+-- (when role policy permits). Keys are AES-256-GCM encrypted.
+--
+-- provider_slug: openai, anthropic, gemini, groq, ollama, etc.
+-- model_slug:    gpt-4o, claude-sonnet-4-5, AUTODETECT, etc.
+--                AUTODETECT means "pass through whatever model slug
+--                the client sends in the request body — the provider
+--                key is valid for any model on that account."
+-- api_base:      Optional override URL (Azure, Ollama, self-hosted)
+CREATE TABLE IF NOT EXISTS user_models (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider_slug TEXT NOT NULL,
+  model_slug TEXT NOT NULL,
+  display_name TEXT,
+  api_key_encrypted TEXT NOT NULL,
+  api_base TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  roles TEXT DEFAULT 'chat,edit,apply',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE(user_id, provider_slug, model_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_user_models_user ON user_models(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_models_provider ON user_models(user_id, provider_slug);
+
 CREATE TABLE IF NOT EXISTS assistants (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT NOT NULL,

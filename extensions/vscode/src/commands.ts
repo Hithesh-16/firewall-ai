@@ -980,14 +980,14 @@ const getCommandsMap: (
     },
 
     "aiFirewall.viewDashboard": () => {
-      // Opens the standalone AI Firewall web dashboard (web/ app, not gui/).
-      // Base URL is configurable via `aiFirewall.webDashboardUrl` setting and
-      // defaults to http://localhost:5174 (the Vite dev server for web/).
-      const base = vscode.workspace
-        .getConfiguration("aiFirewall")
-        .get<string>("webDashboardUrl", "http://localhost:5174")
-        .replace(/\/+$/, "");
-      vscode.env.openExternal(vscode.Uri.parse(base));
+      // Navigate to the in-IDE security dashboard page within the
+      // sidebar webview. This gives users a native-feeling experience
+      // without leaving VS Code.
+      sidebar.webviewProtocol?.request("navigateTo", {
+        path: "/security",
+        toggle: true,
+      });
+      focusGUI();
     },
 
     "aiFirewall.viewExternalLogs": () => {

@@ -14,6 +14,7 @@
  *   → extractScanHeaders() → onScanResult listeners → GUI banner + toast
  */
 
+import crypto from "node:crypto";
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { loadPolicyConfig } from "../config";
@@ -24,6 +25,9 @@ import { scanSecrets } from "../scanner/secretScanner";
 import { scanEntropy } from "../scanner/entropyScanner";
 import { adjustSeverity } from "../scanner/contextScanner";
 import { scanPromptInjection } from "../scanner/promptInjectionScanner";
+import { scanResponseText } from "../middleware/responseScanner";
+import { logRequest } from "../logger/logger";
+import { broadcastAll } from "../ws/wsManager";
 
 const scanSchema = z.object({
   messages: z
@@ -151,6 +155,45 @@ export async function registerPreflightScanRoute(
       reply.header("X-AF-Findings", findingsHeader);
     }
 
+    // ── Log scan result to DB + broadcast to dashboard ──
+    const scanAction =
+      decision.action === "BLOCK"
+        ? "BLOCK"
+        : decision.action === "REDACT"
+          ? "REDACT"
+          : "ALLOW";
+    const modelName = model ?? "unknown";
+
+    logRequest({
+      timestamp: Date.now(),
+      model: modelName,
+      provider: "preflight-scan",
+      originalHash: crypto.createHash("sha256").update(rawText).digest("hex"),
+      sanitizedText: "",
+      secretsFound: secretResult.secrets.length,
+      piiFound: piiResult.pii.length,
+      entropyFound: entropyMatches.length,
+      filesBlocked: 0,
+      riskScore: decision.riskScore,
+      action: scanAction,
+      reasons: decision.reasons,
+      responseTimeMs: 0,
+    });
+
+    broadcastAll({
+      type: "scan_result",
+      payload: {
+        action: scanAction,
+        riskScore: decision.riskScore,
+        secretsFound: secretResult.secrets.length,
+        piiFound: piiResult.pii.length,
+        entropyFound: entropyMatches.length,
+        model: modelName,
+        timestamp: Date.now(),
+      },
+      timestamp: Date.now(),
+    });
+
     // BLOCK → 403
     if (decision.action === "BLOCK") {
       return reply.status(403).send({
@@ -188,7 +231,126 @@ export async function registerPreflightScanRoute(
         decision.action === "REDACT" ? sanitizedMessages : undefined,
     };
   });
+
+  /**
+   * POST /api/scan/response
+   *
+   * Post-flight scan for LLM responses (LLM05 — Insecure Output).
+   * Called by core/llm/index.ts AFTER the LLM response is received,
+   * so the extension can detect and mask any leaked secrets/PII in
+   * the assistant's output.
+   *
+   * Always forces enabled:true + redact_on_detection:true because the
+   * caller is opting in by calling this endpoint.
+   *
+   * Logs result to DB + broadcasts WebSocket event so dashboards update.
+   */
+  app.post("/api/scan/response", async (request, reply) => {
+    const parsed = responseScanSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: "Invalid payload", details: parsed.error.flatten() });
+    }
+
+    const { text, model } = parsed.data;
+    const modelName = model ?? "unknown";
+    const startTime = Date.now();
+
+    const result = scanResponseText(text, {
+      enabled: true,
+      scan_secrets: true,
+      scan_pii: true,
+      redact_on_detection: true,
+    });
+
+    // Build findings list for display
+    const findings = [
+      ...result.secrets.map((s) => ({
+        type: s.type,
+        severity: s.severity,
+        category: "secret" as const,
+        maskedValue: maskValue(s.value, s.type),
+      })),
+      ...result.pii.map((p) => ({
+        type: p.type,
+        severity: p.severity,
+        category: "pii" as const,
+        maskedValue: maskValue(p.value, p.type),
+      })),
+    ];
+
+    // Log to DB so dashboards show response leaks
+    const action = result.action === "ALLOW" ? "ALLOW" : "REDACT";
+    const riskScore =
+      findings.length > 0 ? Math.min(100, findings.length * 25) : 0;
+
+    logRequest({
+      timestamp: Date.now(),
+      model: modelName,
+      provider: "response-scan",
+      originalHash: crypto.createHash("sha256").update(text).digest("hex"),
+      sanitizedText: "",
+      secretsFound: result.secretsFound,
+      piiFound: result.piiFound,
+      entropyFound: 0,
+      filesBlocked: 0,
+      riskScore,
+      action,
+      reasons:
+        findings.length > 0
+          ? [`LLM response leaked ${findings.length} finding(s)`]
+          : [],
+      responseTimeMs: Date.now() - startTime,
+    });
+
+    // Broadcast so any connected dashboard updates in real time
+    broadcastAll({
+      type: "scan_result",
+      payload: {
+        action,
+        riskScore,
+        secretsFound: result.secretsFound,
+        piiFound: result.piiFound,
+        entropyFound: 0,
+        model: modelName,
+        timestamp: Date.now(),
+      },
+      timestamp: Date.now(),
+    });
+
+    // Set X-AF headers for extractScanHeaders() in the extension
+    reply.header("X-AF-Action", action);
+    reply.header("X-AF-Risk-Score", String(riskScore));
+    reply.header("X-AF-Secrets-Count", String(result.secretsFound));
+    reply.header("X-AF-PII-Count", String(result.piiFound));
+    if (findings.length > 0) {
+      const findingsHeader = JSON.stringify(
+        findings.slice(0, 20).map((f) => ({
+          t: f.type,
+          s: f.severity,
+          c: f.category,
+          v: f.maskedValue,
+        })),
+      );
+      reply.header("X-AF-Findings", findingsHeader);
+    }
+
+    return {
+      action,
+      riskScore,
+      secretsFound: result.secretsFound,
+      piiFound: result.piiFound,
+      findings,
+      sanitizedText: result.redactedText ?? text,
+    };
+  });
 }
+
+const responseScanSchema = z.object({
+  text: z.string().min(1).max(500_000),
+  model: z.string().optional(),
+});
 
 /**
  * Mask a detected value for safe display — show enough to identify

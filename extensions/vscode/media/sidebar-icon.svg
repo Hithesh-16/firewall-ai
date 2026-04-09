@@ -1,25 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
   <!--
     Activity bar icon for VS Code.
-    VS Code applies a CSS mask so this must be a solid-filled shape.
-    We draw the shield outline as a thick stroked path (filled white)
-    with "AI" text inside — VS Code will colorize it.
+    VS Code applies a CSS mask so this must be solid-filled shapes.
+    Shield with a centered lock/checkmark motif — clean and modern.
   -->
 
-  <!-- Shield outline (thick stroke rendered as solid) -->
-  <path d="M12 2 L21 5.5 L21 12.5 Q21 18.5 12 22 Q3 18.5 3 12.5 L3 5.5 Z"
+  <!-- Shield body -->
+  <path d="M12 1.5 L21 5.5 L21 11 C21 16.5 17.2 20.8 12 22.5 C6.8 20.8 3 16.5 3 11 L3 5.5 Z"
+        fill="white"
+        fill-opacity="0.15"/>
+
+  <!-- Shield outline -->
+  <path d="M12 1.5 L21 5.5 L21 11 C21 16.5 17.2 20.8 12 22.5 C6.8 20.8 3 16.5 3 11 L3 5.5 Z"
         fill="none"
         stroke="white"
-        stroke-width="1.8"
+        stroke-width="1.5"
         stroke-linejoin="round"/>
 
-  <!-- "AI" text inside shield -->
-  <text x="12" y="14"
-        font-family="'Segoe UI','SF Pro','Arial',sans-serif"
-        font-size="7.5"
-        font-weight="700"
-        fill="white"
-        text-anchor="middle"
-        dominant-baseline="middle"
-        letter-spacing="-0.3">AI</text>
+  <!-- Checkmark inside shield -->
+  <path d="M8 12.5 L10.8 15.3 L16 9.5"
+        fill="none"
+        stroke="white"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
 </svg>

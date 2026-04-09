@@ -778,7 +778,17 @@ export class VsCodeMessenger {
       return await ide.readFile(msg.data.filepath);
     });
     this.onWebviewOrCore("openUrl", (msg) => {
-      vscode.env.openExternal(vscode.Uri.parse(msg.data));
+      const url: string = msg.data;
+      // Support `command:` prefix to execute VS Code commands from
+      // the webview — used by the gui login page to trigger
+      // `aiFirewall.login` / `aiFirewall.logout` without the user
+      // having to open the command palette.
+      if (url.startsWith("command:")) {
+        const cmdId = url.slice("command:".length);
+        void vscode.commands.executeCommand(cmdId);
+        return;
+      }
+      vscode.env.openExternal(vscode.Uri.parse(url));
     });
 
     this.onWebviewOrCore("fileExists", async (msg) => {

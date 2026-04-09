@@ -9,9 +9,6 @@
  * proxy REST API and is the correct entrypoint for browser users.
  */
 export default function IdeOnlyGate() {
-  // The web/ dashboard runs on a different port during dev, but in production
-  // it's typically served from the same host root by the proxy. Try same-origin
-  // first; fall back to the dev-server port hint.
   const sameOriginDashboard =
     typeof window !== "undefined" ? `${window.location.origin}/` : "/";
   const devDashboard =
@@ -20,88 +17,65 @@ export default function IdeOnlyGate() {
       : "http://localhost:5174/";
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100vh",
-        padding: "2rem",
-        fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-        backgroundColor: "#0f172a",
-        color: "#e2e8f0",
-        textAlign: "center",
-      }}
-    >
-      <div style={{ maxWidth: 520 }}>
-        <h1 style={{ fontSize: "1.75rem", marginBottom: "0.75rem" }}>
-          AI Firewall — IDE UI
+    <div className="bg-editor flex min-h-screen flex-col items-center justify-center p-8 text-center font-sans">
+      <div className="max-w-[480px]">
+        {/* Shield icon */}
+        <div className="bg-primary/10 mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl">
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            className="text-primary"
+          >
+            <path
+              d="M12 2L21 5.5V11C21 16.5 17.2 20.8 12 22.5C6.8 20.8 3 16.5 3 11V5.5L12 2Z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M8 12.5L10.8 15.3L16 9.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+
+        <h1 className="text-foreground mb-2 text-xl font-semibold">
+          AI Firewall {"\u2014"} IDE UI
         </h1>
-        <p
-          style={{
-            fontSize: "1rem",
-            lineHeight: 1.55,
-            color: "#94a3b8",
-            marginBottom: "1.5rem",
-          }}
-        >
-          This interface is the chat experience that runs inside the
-          <strong> VS Code </strong> and <strong>JetBrains</strong> extensions.
-          It is not meant to be opened in a regular browser.
+        <p className="text-description mb-4 text-sm leading-relaxed">
+          This interface is the chat experience that runs inside{" "}
+          <strong className="text-foreground">VS Code</strong> and{" "}
+          <strong className="text-foreground">JetBrains</strong> extensions. It
+          is not meant to be opened in a regular browser.
         </p>
-        <p
-          style={{
-            fontSize: "0.95rem",
-            lineHeight: 1.5,
-            color: "#cbd5e1",
-            marginBottom: "1.75rem",
-          }}
-        >
-          For the browser dashboard — security policies, usage, audit logs,
-          RBAC, providers, and team admin — open the{" "}
-          <strong>AI Firewall Web Dashboard</strong> instead.
+        <p className="text-description mb-6 text-sm leading-relaxed">
+          For the browser dashboard {"\u2014"} security policies, usage, audit
+          logs, RBAC, providers, and team admin {"\u2014"} open the{" "}
+          <strong className="text-foreground">AI Firewall Web Dashboard</strong>{" "}
+          instead.
         </p>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.75rem",
-            alignItems: "center",
-          }}
-        >
+
+        <div className="flex flex-col items-center gap-3">
           <a
             href={sameOriginDashboard}
-            style={{
-              padding: "0.65rem 1.25rem",
-              backgroundColor: "#3b82f6",
-              color: "#ffffff",
-              borderRadius: "0.5rem",
-              textDecoration: "none",
-              fontWeight: 600,
-              fontSize: "0.95rem",
-            }}
+            className="bg-primary text-primary-foreground inline-block rounded-lg px-5 py-2.5 text-sm font-semibold no-underline transition-all hover:brightness-110"
           >
             Open Web Dashboard
           </a>
           <a
             href={devDashboard}
-            style={{
-              fontSize: "0.85rem",
-              color: "#60a5fa",
-              textDecoration: "underline",
-            }}
+            className="text-description hover:text-foreground text-xs underline transition-colors"
           >
             Or use dev server: {devDashboard}
           </a>
         </div>
-        <p
-          style={{
-            fontSize: "0.8rem",
-            color: "#64748b",
-            marginTop: "2rem",
-          }}
-        >
+
+        <p className="text-description-muted mt-8 text-[11px]">
           To use the chat experience, install the AI Firewall extension in VS
           Code or JetBrains.
         </p>

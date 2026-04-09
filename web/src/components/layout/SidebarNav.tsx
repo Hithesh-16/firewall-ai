@@ -18,6 +18,7 @@ import {
   BellIcon,
   ClockIcon,
   CodeBracketSquareIcon,
+  CubeIcon,
 } from "@heroicons/react/24/outline";
 import { cn } from "../../utils/cn";
 import { ROUTES } from "../../utils/routes";
@@ -67,14 +68,14 @@ const sections: NavSection[] = [
     title: "System",
     items: [
       {
+        label: "Models",
+        to: "/settings/models",
+        icon: CubeIcon,
+      },
+      {
         label: "Assistant",
         to: "/settings/assistant",
         icon: CodeBracketSquareIcon,
-      },
-      {
-        label: "Model Access",
-        to: "/settings/model-access",
-        icon: KeyIcon,
       },
       { label: "Policy", to: ROUTES.POLICY, icon: DocumentTextIcon },
       { label: "Privacy", to: ROUTES.PRIVACY, icon: EyeSlashIcon },

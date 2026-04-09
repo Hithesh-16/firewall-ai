@@ -4,9 +4,11 @@ import {
   NoSymbolIcon,
   PencilSquareIcon,
   CheckCircleIcon,
+  ExclamationTriangleIcon,
+  FingerPrintIcon,
 } from "@heroicons/react/24/outline";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { addScanResult, setProxyHealthy } from "../../store/slices/securitySlice";
+import { addScanResult, setRecentScans, setProxyHealthy } from "../../store/slices/securitySlice";
 import { apiClient } from "../../api/client";
 import type { ScanResult, Provider } from "../../api/types";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
@@ -17,6 +19,9 @@ import { ErrorBanner } from "../../components/ui/ErrorBanner";
 import { ShieldStatus } from "../../components/security/ShieldStatus";
 import { RiskGauge } from "../../components/security/RiskGauge";
 import { LiveScanFeed } from "../../components/security/LiveScanFeed";
+import { DonutChart } from "../../components/security/DonutChart";
+import { ActivityChart } from "../../components/security/ActivityChart";
+import { SecretTypesChart } from "../../components/security/SecretTypesChart";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { PolicyEditor } from "./PolicyEditor";
 import { CreditsTab } from "./tabs/CreditsTab";
@@ -29,11 +34,18 @@ interface StatsData {
   redacted: number;
   allowed: number;
   avgRiskScore: number;
+  totalEntropyFindings: number;
+  totalSecretsFound?: number;
+  totalPiiFound?: number;
+  secretsByType: Record<string, number>;
+  requestsByDay: Array<{ date: string; count: number; blocked?: number; redacted?: number }>;
+  topModels?: Array<{ model: string; count: number }>;
 }
 
 const tabs = [
   { id: "overview", label: "Overview" },
   { id: "feed", label: "Live Feed" },
+  { id: "analytics", label: "Analytics" },
   { id: "policy", label: "Policy" },
   { id: "credits", label: "Credits" },
   { id: "providers", label: "Providers" },
@@ -49,7 +61,7 @@ function gradeFromScore(score: number): string {
 
 export function SecurityDashboard() {
   const dispatch = useAppDispatch();
-  const { proxyHealthy, sessionStats, recentScans } = useAppSelector((s) => s.security);
+  const { proxyHealthy, recentScans } = useAppSelector((s) => s.security);
   const [activeTab, setActiveTab] = useState("overview");
   const [stats, setStats] = useState<StatsData | null>(null);
   const [credits, setCredits] = useState<CreditData[]>([]);
@@ -62,20 +74,26 @@ export function SecurityDashboard() {
     (data: unknown) => {
       const scan = data as ScanResult;
       dispatch(addScanResult(scan));
+      // Refresh stats on new scan event
+      apiClient
+        .get<StatsData>("/api/stats")
+        .then(setStats)
+        .catch(() => {});
     },
     [dispatch],
   );
 
   useWebSocket({ scan_result: handleScanEvent });
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
+  const loadOverviewData = useCallback(
+    async (showSpinner = true) => {
+      if (showSpinner) setLoading(true);
       setError(null);
       try {
-        const [healthRes, statsRes] = await Promise.allSettled([
+        const [healthRes, statsRes, logsRes] = await Promise.allSettled([
           apiClient.get<{ status: string }>("/health"),
           apiClient.get<StatsData>("/api/stats"),
+          apiClient.get<{ logs: ScanResult[] }>("/api/logs?limit=50"),
         ]);
 
         dispatch(
@@ -85,29 +103,35 @@ export function SecurityDashboard() {
         if (statsRes.status === "fulfilled") {
           setStats(statsRes.value);
         }
+
+        if (logsRes.status === "fulfilled") {
+          dispatch(setRecentScans(logsRes.value.logs ?? []));
+        }
       } catch (err: unknown) {
         if (err instanceof Error) setError(err.message);
         else setError("Failed to load security data");
       } finally {
         setLoading(false);
       }
-    }
-    load();
-  }, [dispatch]);
+    },
+    [dispatch],
+  );
 
   useEffect(() => {
+    loadOverviewData(true);
+  }, [loadOverviewData]);
+
+  useEffect(() => {
+    if (activeTab === "overview" || activeTab === "analytics") {
+      loadOverviewData(false);
+    }
     if (activeTab === "feed") {
       apiClient
         .get<{ logs: ScanResult[] }>("/api/logs?limit=50")
         .then((res) => {
-          const logs = res.logs ?? [];
-          for (const log of logs) {
-            dispatch(addScanResult(log));
-          }
+          dispatch(setRecentScans(res.logs ?? []));
         })
-        .catch(() => {
-          /* historical logs unavailable, live feed still works */
-        });
+        .catch(() => {});
     }
     if (activeTab === "credits") {
       Promise.allSettled([
@@ -124,7 +148,7 @@ export function SecurityDashboard() {
         .then(setProviders)
         .catch(() => setProviders([]));
     }
-  }, [activeTab, dispatch]);
+  }, [activeTab, dispatch, loadOverviewData]);
 
   if (loading) {
     return (
@@ -135,10 +159,17 @@ export function SecurityDashboard() {
   }
 
   const avgRisk = stats?.avgRiskScore ?? 0;
+  const totalReqs = stats?.totalRequests ?? 0;
+  const blocked = stats?.blocked ?? 0;
+  const redacted = stats?.redacted ?? 0;
+  const allowed = stats?.allowed ?? 0;
 
   return (
     <div className="space-y-6 p-6">
-      <h1 className="text-foreground text-2xl font-bold">Security Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-foreground text-2xl font-bold">Security Dashboard</h1>
+        <ShieldStatus healthy={proxyHealthy} />
+      </div>
 
       {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
@@ -146,72 +177,194 @@ export function SecurityDashboard() {
 
       {activeTab === "overview" && (
         <div className="space-y-6">
-          {/* Top row: shield + gauge */}
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-            <Card className="flex-1">
-              <ShieldStatus healthy={proxyHealthy} />
-            </Card>
-            <Card className="flex items-center justify-center">
-              <RiskGauge score={avgRisk} grade={gradeFromScore(avgRisk)} />
-            </Card>
-          </div>
-
-          {/* Session stats grid */}
+          {/* Stat cards — from DB, not session */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
               label="Total Scanned"
-              value={sessionStats.totalScanned}
+              value={totalReqs.toLocaleString()}
               icon={<ShieldCheckIcon className="h-5 w-5" />}
             />
             <StatCard
               label="Blocked"
-              value={sessionStats.blocked}
+              value={blocked.toLocaleString()}
               icon={<NoSymbolIcon className="h-5 w-5" />}
+              variant={blocked > 0 ? "error" : undefined}
             />
             <StatCard
               label="Redacted"
-              value={sessionStats.redacted}
+              value={redacted.toLocaleString()}
               icon={<PencilSquareIcon className="h-5 w-5" />}
+              variant={redacted > 0 ? "warning" : undefined}
             />
             <StatCard
               label="Allowed"
-              value={sessionStats.allowed}
+              value={allowed.toLocaleString()}
               icon={<CheckCircleIcon className="h-5 w-5" />}
+              variant="success"
             />
           </div>
 
-          {/* All-time stats */}
+          {/* Middle row: risk gauge + donut */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <Card className="flex flex-col items-center justify-center gap-3 py-6">
+              <RiskGauge score={avgRisk} grade={gradeFromScore(avgRisk)} size={140} />
+              <p className="text-description text-xs">Average Risk Score</p>
+            </Card>
+
+            <Card className="flex flex-col items-center justify-center py-6 lg:col-span-2">
+              <h3 className="text-foreground mb-4 text-sm font-semibold">Action Distribution</h3>
+              <DonutChart
+                segments={[
+                  {
+                    label: "Allowed",
+                    value: allowed,
+                    colorClass: "text-success",
+                    stroke: "#22c55e",
+                  },
+                  {
+                    label: "Redacted",
+                    value: redacted,
+                    colorClass: "text-warning",
+                    stroke: "#f59e0b",
+                  },
+                  {
+                    label: "Blocked",
+                    value: blocked,
+                    colorClass: "text-error",
+                    stroke: "#ef4444",
+                  },
+                ]}
+                size={200}
+              />
+            </Card>
+          </div>
+
+          {/* Detection summary cards */}
           {stats && (
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <Card className="flex flex-col gap-1 p-4">
+                <div className="flex items-center gap-2">
+                  <ExclamationTriangleIcon className="text-error h-4 w-4" />
+                  <span className="text-description text-xs">Secrets Detected</span>
+                </div>
+                <span className="text-foreground text-xl font-bold">
+                  {(stats.totalSecretsFound ?? 0).toLocaleString()}
+                </span>
+              </Card>
+              <Card className="flex flex-col gap-1 p-4">
+                <div className="flex items-center gap-2">
+                  <FingerPrintIcon className="text-warning h-4 w-4" />
+                  <span className="text-description text-xs">PII Detected</span>
+                </div>
+                <span className="text-foreground text-xl font-bold">
+                  {(stats.totalPiiFound ?? 0).toLocaleString()}
+                </span>
+              </Card>
+              <Card className="flex flex-col gap-1 p-4">
+                <span className="text-description text-xs">Entropy Findings</span>
+                <span className="text-foreground text-xl font-bold">
+                  {stats.totalEntropyFindings.toLocaleString()}
+                </span>
+              </Card>
+              <Card className="flex flex-col gap-1 p-4">
+                <span className="text-description text-xs">Security Score</span>
+                <span className="text-foreground text-xl font-bold">
+                  {totalReqs > 0 ? `${Math.max(0, 100 - Math.round(avgRisk))}/100` : "N/A"}
+                </span>
+              </Card>
+            </div>
+          )}
+
+          {/* Activity over time */}
+          {stats && stats.requestsByDay.length > 0 && (
             <Card>
-              <h3 className="text-foreground mb-3 text-sm font-semibold">All-Time Statistics</h3>
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <div>
-                  <p className="text-description text-xs">Total Scanned</p>
-                  <p className="text-foreground text-lg font-semibold">
-                    {stats.totalRequests.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-description text-xs">Blocked</p>
-                  <p className="text-error text-lg font-semibold">
-                    {stats.blocked.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-description text-xs">Redacted</p>
-                  <p className="text-warning text-lg font-semibold">
-                    {stats.redacted.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-description text-xs">Allowed</p>
-                  <p className="text-success text-lg font-semibold">
-                    {stats.allowed.toLocaleString()}
-                  </p>
-                </div>
-              </div>
+              <h3 className="text-foreground mb-4 text-sm font-semibold">
+                Scan Activity (Last 14 Days)
+              </h3>
+              <ActivityChart data={stats.requestsByDay} height={180} />
             </Card>
           )}
+        </div>
+      )}
+
+      {activeTab === "analytics" && stats && (
+        <div className="space-y-6">
+          {/* Detections by type */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card>
+              <h3 className="text-foreground mb-4 text-sm font-semibold">Detections by Type</h3>
+              <SecretTypesChart data={stats.secretsByType} />
+            </Card>
+            <Card>
+              <h3 className="text-foreground mb-4 text-sm font-semibold">Top Models</h3>
+              {stats.topModels && stats.topModels.length > 0 ? (
+                <div className="space-y-2">
+                  {stats.topModels.map((m) => {
+                    const pct = totalReqs > 0 ? (m.count / totalReqs) * 100 : 0;
+                    return (
+                      <div key={m.model} className="flex items-center gap-3">
+                        <span className="text-description w-36 shrink-0 truncate text-xs font-medium">
+                          {m.model}
+                        </span>
+                        <div className="bg-secondary relative h-4 flex-1 overflow-hidden rounded-full">
+                          <div
+                            className="bg-primary/80 absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-foreground w-10 shrink-0 text-right text-xs font-semibold">
+                          {m.count}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-description-muted py-8 text-center text-sm">
+                  No model data available
+                </p>
+              )}
+            </Card>
+          </div>
+
+          {/* All-time summary grid */}
+          <Card>
+            <h3 className="text-foreground mb-4 text-sm font-semibold">All-Time Summary</h3>
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+              <div>
+                <p className="text-description text-xs">Total Scanned</p>
+                <p className="text-foreground text-xl font-semibold">
+                  {stats.totalRequests.toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-description text-xs">Blocked</p>
+                <p className="text-error text-xl font-semibold">{stats.blocked.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-description text-xs">Redacted</p>
+                <p className="text-warning text-xl font-semibold">
+                  {stats.redacted.toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-description text-xs">Allowed</p>
+                <p className="text-success text-xl font-semibold">
+                  {stats.allowed.toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-description text-xs">Avg Risk Score</p>
+                <p className="text-foreground text-xl font-semibold">{stats.avgRiskScore}</p>
+              </div>
+              <div>
+                <p className="text-description text-xs">Entropy Findings</p>
+                <p className="text-foreground text-xl font-semibold">
+                  {stats.totalEntropyFindings.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 

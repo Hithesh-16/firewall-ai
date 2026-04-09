@@ -16,6 +16,7 @@ import {
   AuthenticationProvider,
   AuthenticationProviderAuthenticationSessionsChangeEvent,
   AuthenticationSession,
+  commands,
   Disposable,
   env,
   EventEmitter,
@@ -372,37 +373,54 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
    * @returns
    */
   public async createSession(
-    scopes: string[],
+    _scopes: string[],
   ): Promise<ContinueAuthenticationSession> {
+    // ── AI Firewall override ──────────────────────────────────
+    // The legacy WorkOS device-auth flow has been replaced by the
+    // web-first loopback handshake via the proxy's /web-login-start
+    // bridge. Instead of redirecting to api.workos.com, we trigger
+    // the `aiFirewall.login` command which opens the user's browser
+    // to the AI Firewall web dashboard.
+    //
+    // After the user signs in on the web, the loopback callback
+    // delivers the token to AiFirewallAuthService which stores it
+    // in SecretStorage + the shared auth file. We then read the
+    // shared auth file here to build a synthetic session that
+    // Continue core can consume for profile/config sync.
     try {
-      const codeVerifier = generateRandomString(64);
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      // Trigger the web-first sign-in flow
+      await commands.executeCommand("aiFirewall.login");
 
-      if (!isHubEnv(controlPlaneEnv)) {
-        throw new Error("Login is disabled");
+      // Read the token from the shared auth file (written by
+      // AiFirewallAuthService.signIn during the browser flow)
+      const fs = await import("fs");
+      const os = await import("os");
+      const path = await import("path");
+      const authPath = path.join(os.homedir(), ".ai-firewall", "auth.json");
+      let email = "user@aifirewall.local";
+      let accessToken = "";
+      if (fs.existsSync(authPath)) {
+        const parsed = JSON.parse(fs.readFileSync(authPath, "utf8")) as {
+          accessToken?: string;
+          user?: { email?: string; name?: string };
+        };
+        accessToken = parsed.accessToken || "";
+        email = parsed.user?.email || email;
       }
 
-      const token = await this.login(codeChallenge, controlPlaneEnv, scopes);
-      if (!token) {
-        throw new Error(`Continue login failure`);
+      if (!accessToken) {
+        throw new Error("Sign-in did not complete");
       }
-
-      const userInfo = (await this.getUserInfo(
-        token,
-        codeVerifier,
-        controlPlaneEnv,
-      )) as any;
-      const { user, access_token, refresh_token } = userInfo;
 
       const session: ContinueAuthenticationSession = {
         id: uuidv4(),
-        accessToken: access_token,
-        refreshToken: refresh_token,
-        expiresInMs: this.getExpirationTimeMs(access_token),
+        accessToken,
+        refreshToken: accessToken, // sentinel — shared-auth tokens don't refresh
+        expiresInMs: WorkOsAuthProvider.EXPIRATION_TIME_MS,
         loginNeeded: false,
         account: {
-          label: this._formatProfileLabel(user.first_name, user.last_name),
-          id: user.email,
+          label: email,
+          id: email,
         },
         scopes: [],
       };
@@ -420,7 +438,7 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
       // Capture authentication failures to Sentry
       Logger.error(e, {
         context: "workOS_auth_session_creation",
-        scopes: scopes.join(","),
+        scopes: _scopes.join(","),
         authType: controlPlaneEnv.AUTH_TYPE,
       });
 

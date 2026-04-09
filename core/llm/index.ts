@@ -2,6 +2,7 @@ import { ModelRole } from "@ai-firewall/config-yaml";
 import { fetchwithRequestOptions } from "@ai-firewall/fetch";
 import { findLlmInfo } from "@ai-firewall/llm-info";
 import { firewallPreflightScan } from "./firewallScan.js";
+import { firewallResponseScan } from "./firewallResponseScan.js";
 import {
   BaseLlmApi,
   ChatCompletionCreateParams,
@@ -1323,10 +1324,23 @@ export abstract class BaseLLM implements ILLM {
         });
       }
 
+      // AI Firewall post-flight scan — detect secrets/PII leaked in the
+      // LLM response (LLM05 defense). Runs fire-and-forget so it doesn't
+      // block the caller; dashboards update via WebSocket and X-AF headers.
+      const finalCompletion = completion.join("");
+      if (finalCompletion.length > 0) {
+        void firewallResponseScan(
+          finalCompletion,
+          completionOptions.model,
+        ).catch(() => {
+          // Fail-open: response scan is opportunistic, never block the user
+        });
+      }
+
       status = this._logEnd(
         completionOptions.model,
         prompt,
-        completion.join(""),
+        finalCompletion,
         thinking.join(""),
         interaction,
         usage,

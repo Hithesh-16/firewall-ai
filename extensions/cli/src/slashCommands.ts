@@ -228,31 +228,134 @@ async function handleSync(): Promise<SlashCommandResult> {
   const proxyUrl = auth.proxyUrl || "http://localhost:8080";
   const lines: string[] = [];
 
-  // ── 1. Sync assistant (models) ────────────────────────────
+  // ── 1. Sync models from user_models table ─────────────────
+  // Fetches the user's model list from the unified user_models
+  // table, then writes a config.yaml with one model entry per
+  // row so the config service and model selector pick them up.
   try {
-    const yaml = await loadAssistantYamlFromApi();
-    // Write to config.yaml so the config service picks it up
-    const fs = await import("fs");
-    const path = await import("path");
-    const os = await import("os");
-    const configPath = path.join(os.homedir(), ".ai-firewall", "config.yaml");
-    const header =
-      "# Managed by AI Firewall — edit via the web dashboard.\n" +
-      "# Add `# user-managed: true` on the first line to prevent auto-sync.\n";
-    fs.writeFileSync(configPath, header + yaml, {
-      encoding: "utf8",
-      mode: 0o600,
+    const modelsRes = await fetch(`${proxyUrl}/api/me/models/list`, {
+      headers: { Authorization: `Bearer ${auth.accessToken}` },
     });
-    // Count models in the YAML for the summary
-    const modelCount = (yaml.match(/^\s+-\s+name:/gm) || []).length;
+    if (!modelsRes.ok) {
+      throw new Error(`HTTP ${modelsRes.status} ${modelsRes.statusText}`);
+    }
+    const modelsBody = (await modelsRes.json()) as {
+      models: Array<{
+        providerSlug: string;
+        modelSlug: string;
+        displayName: string | null;
+        apiBase: string | null;
+        roles: string[];
+      }>;
+    };
+
+    // Also fetch the assistant YAML for non-model config (MCP
+    // servers, rules, context providers, prompts). Models come
+    // from user_models now, not from the assistant YAML.
+    let assistantYaml = "";
+    try {
+      assistantYaml = await loadAssistantYamlFromApi();
+    } catch {
+      // No assistant — that's fine for model sync, assistant is
+      // only needed for MCP/rules/context.
+    }
+
+    // Build a config.yaml that has the models from user_models
+    // + non-model blocks from the assistant (if any).
+    const fs = await import("fs");
+    const pathMod = await import("path");
+    const os = await import("os");
+
+    // Parse the assistant YAML to extract non-model fields.
+    let nonModelFields = "";
+    if (assistantYaml) {
+      try {
+        const yamlMod = await import("yaml");
+        const parsed = yamlMod.parse(assistantYaml) as Record<string, unknown>;
+        // Remove models — we'll rebuild from user_models
+        delete parsed.models;
+        nonModelFields = yamlMod.stringify(parsed);
+      } catch {
+        nonModelFields = "";
+      }
+    }
+
+    // Build the models: block from user_models
+    const modelEntries = modelsBody.models.map((m) => {
+      const lines2: string[] = [];
+      lines2.push(`  - name: ${JSON.stringify(m.displayName || m.modelSlug)}`);
+      lines2.push(`    provider: ${m.providerSlug}`);
+      lines2.push(`    model: ${m.modelSlug}`);
+      if (m.apiBase) {
+        lines2.push(`    apiBase: ${m.apiBase}`);
+      }
+      lines2.push(`    roles:`);
+      for (const r of m.roles) {
+        lines2.push(`      - ${r}`);
+      }
+      return lines2.join("\n");
+    });
+
+    // Note: API keys are NOT written to config.yaml here because
+    // the gateway now reads them directly from user_models at
+    // dispatch time. The config.yaml is only for the CLI's local
+    // model selector — it doesn't need keys for that.
+    const header =
+      "# Managed by AI Firewall — synced from the web dashboard.\n" +
+      "# Add `# user-managed: true` on the first line to prevent auto-sync.\n";
+
+    // If we have non-model assistant config, use it as the base;
+    // otherwise generate a minimal config.
+    let yamlContent: string;
+    if (nonModelFields.trim()) {
+      yamlContent =
+        nonModelFields.trimEnd() +
+        "\nmodels:\n" +
+        modelEntries.join("\n") +
+        "\n";
+    } else {
+      yamlContent =
+        "name: synced\nschema: v1\nversion: 0.0.1\nmodels:\n" +
+        modelEntries.join("\n") +
+        "\n";
+    }
+
+    // Also inject API keys from the assistant endpoint (which
+    // does server-side key injection) so the CLI can actually
+    // make LLM calls, not just list models.
+    if (assistantYaml) {
+      // The assistant YAML already has keys injected — use it
+      // directly if it has models, it's the most complete version.
+      const configPath = pathMod.join(
+        os.homedir(),
+        ".ai-firewall",
+        "config.yaml",
+      );
+      fs.writeFileSync(configPath, header + assistantYaml, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+    } else {
+      const configPath = pathMod.join(
+        os.homedir(),
+        ".ai-firewall",
+        "config.yaml",
+      );
+      fs.writeFileSync(configPath, header + yamlContent, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+    }
+
+    const modelCount = modelsBody.models.length;
     lines.push(
       chalk.green(
-        `✓ Assistant synced (${modelCount} model${modelCount === 1 ? "" : "s"})`,
+        `✓ Models synced (${modelCount} model${modelCount === 1 ? "" : "s"})`,
       ),
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    lines.push(chalk.red(`✗ Assistant sync failed: ${msg}`));
+    lines.push(chalk.red(`✗ Model sync failed: ${msg}`));
   }
 
   // ── 2. Sync effective policy ──────────────────────────────

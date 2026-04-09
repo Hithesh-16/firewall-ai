@@ -8,7 +8,9 @@ import {
 } from "../redux/slices/agentSlice";
 
 const PROXY_URL = "http://localhost:8080";
-const RECONNECT_DELAY_MS = 3000;
+const MAX_FAILURES = 3;
+const BASE_DELAY_MS = 10_000;
+const MAX_DELAY_MS = 60_000;
 
 interface WsEvent {
   type: string;
@@ -29,54 +31,69 @@ export function useWebSocketApprovals() {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let failures = 0;
+
     function connect() {
       const token = localStorage.getItem("afw_token");
-      if (!token) return;
+      if (!token || failures >= MAX_FAILURES) return;
 
-      const wsUrl = PROXY_URL.replace(/^http/, "ws") + `/ws?token=${encodeURIComponent(token)}`;
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      const wsUrl =
+        PROXY_URL.replace(/^http/, "ws") +
+        `/ws?token=${encodeURIComponent(token)}`;
 
-      ws.onopen = () => {
-        // Re-fetch pending approvals on every connect/reconnect
-        fetchPendingApprovals();
-      };
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
 
-      ws.onmessage = (event) => {
-        try {
-          const data: WsEvent = JSON.parse(event.data);
+        ws.onopen = () => {
+          failures = 0;
+          fetchPendingApprovals();
+        };
 
-          if (data.type === "approval_needed") {
-            const p = data.payload;
-            dispatch(
-              addPendingApproval({
-                requestId: p.requestId as number,
-                actionType: p.actionType as string,
-                resource: p.resource as string,
-                context: (p.context as Record<string, unknown>) ?? {},
-                timeoutMs: (p.timeoutMs as number) ?? 60000,
-                createdAt: data.timestamp,
-              }),
+        ws.onmessage = (event) => {
+          try {
+            const data: WsEvent = JSON.parse(event.data);
+
+            if (data.type === "approval_needed") {
+              const p = data.payload;
+              dispatch(
+                addPendingApproval({
+                  requestId: p.requestId as number,
+                  actionType: p.actionType as string,
+                  resource: p.resource as string,
+                  context: (p.context as Record<string, unknown>) ?? {},
+                  timeoutMs: (p.timeoutMs as number) ?? 60000,
+                  createdAt: data.timestamp,
+                }),
+              );
+            }
+
+            if (data.type === "approval_resolved") {
+              dispatch(removePendingApproval(data.payload.requestId as number));
+            }
+          } catch {
+            // Ignore malformed messages
+          }
+        };
+
+        ws.onclose = () => {
+          wsRef.current = null;
+          failures += 1;
+          if (failures < MAX_FAILURES) {
+            const delay = Math.min(
+              BASE_DELAY_MS * Math.pow(2, failures - 1),
+              MAX_DELAY_MS,
             );
+            reconnectTimerRef.current = setTimeout(connect, delay);
           }
+        };
 
-          if (data.type === "approval_resolved") {
-            dispatch(removePendingApproval(data.payload.requestId as number));
-          }
-        } catch {
-          // Ignore malformed messages
-        }
-      };
-
-      ws.onclose = () => {
-        wsRef.current = null;
-        // Auto-reconnect
-        reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY_MS);
-      };
-
-      ws.onerror = () => {
-        ws.close();
-      };
+        ws.onerror = () => {
+          ws.close();
+        };
+      } catch {
+        failures += 1;
+      }
     }
 
     async function fetchPendingApprovals() {
@@ -94,9 +111,7 @@ export function useWebSocketApprovals() {
               requestId: a.id as number,
               actionType: a.actionType as string,
               resource: a.resource as string,
-              context: a.contextJson
-                ? JSON.parse(a.contextJson as string)
-                : {},
+              context: a.contextJson ? JSON.parse(a.contextJson as string) : {},
               timeoutMs: 60000,
               createdAt: a.createdAt as number,
             }),

@@ -40,12 +40,12 @@ const coreRoutes = [
   { path: ROUTES.CONFIG, element: <ConfigPage /> },
   { path: ROUTES.THEME, element: <ThemePage /> },
   { path: "/onboarding", element: <OnboardingPage /> },
+  { path: ROUTES.SECURITY, element: <SecurityPage /> },
+  { path: ROUTES.FIRST_LOOK, element: <FirstLookPage /> },
 ];
 
 /** Routes only available in the standalone web dashboard (NOT in IDE webview) */
 const webOnlyRoutes = [
-  { path: ROUTES.SECURITY, element: <SecurityPage /> },
-  { path: ROUTES.FIRST_LOOK, element: <FirstLookPage /> },
   { path: "/rbac", element: <RbacPage /> },
   { path: ROUTES.ORG, element: <OrgSettingsPage /> },
   { path: ROUTES.TEAM, element: <TeamDashboard /> },

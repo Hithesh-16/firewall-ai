@@ -13,11 +13,23 @@ export type WsEventType =
 
 export type WsHandler = (payload: unknown) => void;
 
+/**
+ * Lightweight WebSocket client for real-time proxy events.
+ *
+ * Connects once on demand. If the connection drops it backs off
+ * exponentially (5s → 10s → 20s → 40s → 60s cap) and gives up
+ * after 5 consecutive failures. Users can refresh the page to
+ * re-establish the connection — no aggressive polling.
+ */
 export class FirewallWebSocket {
   private ws: WebSocket | null = null;
   private handlers = new Map<string, Set<WsHandler>>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private enabled = false;
+  private failures = 0;
+  private static readonly MAX_FAILURES = 5;
+  private static readonly BASE_DELAY_MS = 5_000;
+  private static readonly MAX_DELAY_MS = 60_000;
 
   connect(): void {
     if (this.ws) return;
@@ -32,6 +44,7 @@ export class FirewallWebSocket {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        this.failures = 0;
         this.emit("connected", null);
       };
 
@@ -51,6 +64,7 @@ export class FirewallWebSocket {
         this.handleMessage(event.data as string);
       };
     } catch {
+      this.failures += 1;
       this.scheduleReconnect();
     }
   }
@@ -73,7 +87,6 @@ export class FirewallWebSocket {
     }
     this.handlers.get(event)!.add(handler);
 
-    // Return unsubscribe function
     return () => {
       const set = this.handlers.get(event);
       if (set) {
@@ -112,12 +125,26 @@ export class FirewallWebSocket {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
+
+    this.failures += 1;
+
+    // Stop trying after MAX_FAILURES — user can refresh the page
+    if (this.failures > FirewallWebSocket.MAX_FAILURES) {
+      return;
+    }
+
+    // Exponential backoff: 5s, 10s, 20s, 40s, 60s
+    const delay = Math.min(
+      FirewallWebSocket.BASE_DELAY_MS * Math.pow(2, this.failures - 1),
+      FirewallWebSocket.MAX_DELAY_MS,
+    );
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       if (this.enabled) {
         this.connect();
       }
-    }, 3000);
+    }, delay);
   }
 }
 

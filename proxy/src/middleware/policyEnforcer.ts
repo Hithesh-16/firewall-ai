@@ -10,6 +10,7 @@
  * - DIP: Depends on evaluatePolicy() interface, not on route logic.
  */
 
+import crypto from "node:crypto";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { loadPolicyConfig } from "../config";
 import { evaluatePolicy } from "../policy/policyEngine";
@@ -30,6 +31,8 @@ import type {
   PiiScanResult,
   ChatCompletionRequest,
 } from "../types";
+import { logRequest } from "../logger/logger";
+import { broadcastAll } from "../ws/wsManager";
 
 // ── File path extraction from message content ─────────────────────────
 
@@ -302,6 +305,41 @@ export function createPolicyEnforcerHook(options?: PolicyEnforcerOptions) {
                 reasons: decision.reasons,
                 risk_score: decision.riskScore,
               };
+
+        // Log BLOCK to DB + broadcast WebSocket event so dashboard updates
+        const modelName = body.model ?? "unknown";
+        const blockUserId = request.authContext?.user?.id;
+        logRequest({
+          timestamp: Date.now(),
+          model: modelName,
+          provider: "blocked",
+          originalHash: rawText
+            ? crypto.createHash("sha256").update(rawText).digest("hex")
+            : "",
+          sanitizedText: "",
+          secretsFound: secretResult.secrets.length,
+          piiFound: piiResult.pii.length,
+          entropyFound: entropyCount,
+          filesBlocked: decision.filesBlocked.length,
+          riskScore: decision.riskScore,
+          action: "BLOCK",
+          reasons: decision.reasons,
+          responseTimeMs: 0,
+          userId: blockUserId,
+        });
+        broadcastAll({
+          type: "scan_result",
+          payload: {
+            action: "BLOCK",
+            riskScore: decision.riskScore,
+            secretsFound: secretResult.secrets.length,
+            piiFound: piiResult.pii.length,
+            entropyFound: entropyCount,
+            model: modelName,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        });
 
         return reply.status(403).send(errorPayload);
       }

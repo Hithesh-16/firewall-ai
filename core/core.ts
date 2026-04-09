@@ -87,6 +87,7 @@ import type { IMessenger, Message } from "./protocol/messenger";
 import { ContinueError, ContinueErrorReason } from "./util/errors";
 import { shareSession } from "./util/historyUtils";
 import { Logger } from "./util/Logger.js";
+import { syncModelToProxy } from "./util/proxyModelSync.js";
 
 export class Core {
   configHandler: ConfigHandler;
@@ -405,6 +406,18 @@ export class Core {
       void this.configHandler.reloadConfig(
         "Model added (config/addModel message)",
       );
+
+      // Sync to AI Firewall proxy's user_models table so the
+      // model is visible in the web dashboard, CLI, and other
+      // IDEs. Uses the shared auth file — if the user isn't
+      // signed in to AI Firewall, this is a no-op.
+      void syncModelToProxy("add", {
+        providerSlug: model.provider,
+        modelSlug: model.model,
+        displayName: model.title,
+        apiKey: model.apiKey || (model as any).apiKeyRef || "",
+        apiBase: model.apiBase,
+      });
     });
 
     on("config/deleteModel", (msg) => {
@@ -412,6 +425,12 @@ export class Core {
       void this.configHandler.reloadConfig(
         "Model removed (config/deleteModel message)",
       );
+
+      // Sync delete to proxy. Uses model title as a fuzzy match
+      // since deleteModel only gets a title string.
+      void syncModelToProxy("delete", {
+        displayName: msg.data.title,
+      });
     });
 
     on("config/newPromptFile", async (msg) => {

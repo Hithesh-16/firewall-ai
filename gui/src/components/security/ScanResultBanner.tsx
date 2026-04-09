@@ -1,55 +1,54 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { dismissBanner } from "../../redux/slices/securitySlice";
 
 /**
- * Scan Result Banner — floating notification card matching AI Firewall's session limit style.
- * Appears above the input box after each scan with BLOCK/REDACT/REQUIRE_APPROVAL results.
+ * Scan Result Banner — compact inline tooltip that sits above the chat input.
+ * Designed to feel like a native VS Code notification, not a separate panel.
  */
 
-// Color configs per action — uses semantic colors with alpha for the glow effect
-const BANNER_STYLES: Record<
+const ACTION_CONFIG: Record<
   string,
   {
-    borderColor: string;
-    glowColor: string;
+    bg: string;
+    border: string;
     icon: string;
-    title: string;
-    titleColor: string;
-    linkColor: string;
+    label: string;
+    labelColor: string;
+    badgeBg: string;
   }
 > = {
   BLOCK: {
-    borderColor: "border-error/40",
-    glowColor: "shadow-[0_0_15px_rgba(239,68,68,0.15)]",
+    bg: "bg-error/5",
+    border: "border-error/30",
     icon: "\u26D4",
-    title: "Blocked",
-    titleColor: "text-error",
-    linkColor: "text-error",
+    label: "Blocked",
+    labelColor: "text-error",
+    badgeBg: "bg-error/10",
   },
   REDACT: {
-    borderColor: "border-warning/40",
-    glowColor: "shadow-[0_0_15px_rgba(245,158,11,0.15)]",
+    bg: "bg-warning/5",
+    border: "border-warning/30",
     icon: "\u26A0\uFE0F",
-    title: "Redacted",
-    titleColor: "text-warning",
-    linkColor: "text-warning",
+    label: "Redacted",
+    labelColor: "text-warning",
+    badgeBg: "bg-warning/10",
   },
   ALLOW: {
-    borderColor: "border-success/30",
-    glowColor: "shadow-[0_0_10px_rgba(52,211,153,0.1)]",
+    bg: "bg-success/5",
+    border: "border-success/20",
     icon: "\u2705",
-    title: "Scanned",
-    titleColor: "text-success",
-    linkColor: "text-success",
+    label: "Scanned",
+    labelColor: "text-success",
+    badgeBg: "bg-success/10",
   },
   REQUIRE_APPROVAL: {
-    borderColor: "border-info/40",
-    glowColor: "shadow-[0_0_15px_rgba(96,165,250,0.15)]",
+    bg: "bg-info/5",
+    border: "border-info/30",
     icon: "\u23F3",
-    title: "Approval Required",
-    titleColor: "text-info",
-    linkColor: "text-info",
+    label: "Pending",
+    labelColor: "text-info",
+    badgeBg: "bg-info/10",
   },
 };
 
@@ -57,85 +56,114 @@ export function ScanResultBanner() {
   const dispatch = useAppDispatch();
   const lastScan = useAppSelector((s) => s.security.lastScanResult);
   const showBanner = useAppSelector((s) => s.security.showBanner);
+  const [expanded, setExpanded] = useState(false);
 
   const onDismiss = useCallback(() => {
     dispatch(dismissBanner());
+    setExpanded(false);
   }, [dispatch]);
 
   if (!lastScan || !showBanner) return null;
   if (lastScan.action === "ALLOW" && lastScan.riskScore === 0) return null;
 
-  const style = BANNER_STYLES[lastScan.action] ?? BANNER_STYLES.ALLOW;
+  const cfg = ACTION_CONFIG[lastScan.action] ?? ACTION_CONFIG.ALLOW;
+  const hasFindings = lastScan.findings && lastScan.findings.length > 0;
 
-  // Build detail string
-  const parts: string[] = [];
+  // Summary chips
+  const chips: Array<{ text: string; color: string }> = [];
   if (lastScan.secretsCount > 0) {
-    parts.push(
-      `${lastScan.secretsCount} secret${lastScan.secretsCount > 1 ? "s" : ""}`,
-    );
+    chips.push({
+      text: `${lastScan.secretsCount} secret${lastScan.secretsCount > 1 ? "s" : ""}`,
+      color: "text-error",
+    });
   }
   if (lastScan.piiCount > 0) {
-    parts.push(
-      `${lastScan.piiCount} PII item${lastScan.piiCount > 1 ? "s" : ""}`,
-    );
+    chips.push({
+      text: `${lastScan.piiCount} PII`,
+      color: "text-warning",
+    });
   }
-  if (lastScan.redactedTypes.length > 0) {
-    parts.push(lastScan.redactedTypes.join(", "));
-  }
-  const detailText = parts.length > 0 ? parts.join(" \u00B7 ") : "";
 
   return (
     <div
-      className={`bg-editor mx-2 mb-2 flex items-center gap-3 rounded-xl border px-4 py-2.5 ${style.borderColor} ${style.glowColor} animate-in fade-in slide-in-from-top-2 duration-300`}
+      className={`mx-2 mb-1.5 rounded-lg border ${cfg.border} ${cfg.bg} animate-in fade-in slide-in-from-bottom-1 duration-200`}
     >
-      {/* Icon + Text */}
-      <span className="flex-shrink-0 text-base">{style.icon}</span>
+      {/* Single-line header — always visible */}
+      <div className="flex items-center gap-2 px-3 py-1.5">
+        <span className="flex-shrink-0 text-sm leading-none">{cfg.icon}</span>
 
-      <div className="min-w-0 flex-1">
-        <span className={`text-sm font-semibold ${style.titleColor}`}>
-          {style.title}
+        <span className={`text-xs font-semibold ${cfg.labelColor}`}>
+          {cfg.label}
         </span>
-        {detailText && (
-          <>
-            <span className="text-description mx-1.5">{"\u00B7"}</span>
-            <span className="text-description text-xs">{detailText}</span>
-          </>
-        )}
-        <span className="text-description mx-1.5">{"\u00B7"}</span>
-        <span className="text-description font-mono text-xs">
+
+        <span className="text-description-muted text-[10px]">{"\u2022"}</span>
+        <span className="text-description font-mono text-[10px]">
           Risk {lastScan.riskScore}
         </span>
+
+        {chips.map((chip) => (
+          <span
+            key={chip.text}
+            className={`${cfg.badgeBg} rounded px-1.5 py-0.5 text-[10px] font-medium ${chip.color}`}
+          >
+            {chip.text}
+          </span>
+        ))}
+
+        {lastScan.redactedTypes.length > 0 && chips.length === 0 && (
+          <span className="text-description truncate text-[10px]">
+            {lastScan.redactedTypes.join(", ")}
+          </span>
+        )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Expand toggle — only if there are findings */}
+        {hasFindings && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-description hover:text-foreground text-[10px] transition-colors"
+          >
+            {expanded ? "less" : `${lastScan.findings.length} found`}
+          </button>
+        )}
+
+        {/* Close */}
+        <button
+          onClick={onDismiss}
+          className="text-description hover:text-foreground flex-shrink-0 text-sm leading-none transition-colors"
+          aria-label="Dismiss scan result"
+        >
+          {"\u00D7"}
+        </button>
       </div>
 
-      {/* Close button — matches the "x" from the screenshot */}
-      <button
-        onClick={onDismiss}
-        className={`flex-shrink-0 ${style.linkColor} hover:text-foreground focus-visible:ring-border-focus text-base leading-none transition-colors focus-visible:outline-none focus-visible:ring-2`}
-        title="Dismiss"
-      >
-        {"\u00D7"}
-      </button>
-
-      {/* Findings detail — show each detected item in red */}
-      {lastScan.findings && lastScan.findings.length > 0 && (
-        <div className="border-border/30 mt-1.5 w-full border-t pt-1.5">
-          {lastScan.findings.map((f, i) => (
-            <div key={i} className="flex items-center gap-2 py-0.5">
+      {/* Expandable findings — compact list */}
+      {expanded && hasFindings && (
+        <div className="border-border/20 mx-3 mb-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t pt-1.5">
+          {lastScan.findings.slice(0, 6).map((f, i) => (
+            <span key={i} className="flex items-center gap-1 text-[10px]">
               <span
-                className={`rounded px-1 font-mono text-xs ${
+                className={`rounded px-1 font-mono font-medium ${
                   f.severity === "critical" || f.severity === "high"
                     ? "bg-error/10 text-error"
                     : "bg-warning/10 text-warning"
                 }`}
               >
-                {f.severity.toUpperCase()}
+                {f.severity.slice(0, 4).toUpperCase()}
               </span>
-              <span className="text-description text-xs">{f.type}</span>
-              <code className="text-error font-mono text-xs font-bold">
+              <span className="text-description">{f.type}</span>
+              <code className="text-error font-mono font-semibold">
                 {f.maskedValue}
               </code>
-            </div>
+            </span>
           ))}
+          {lastScan.findings.length > 6 && (
+            <span className="text-description-muted text-[10px]">
+              +{lastScan.findings.length - 6} more
+            </span>
+          )}
         </div>
       )}
     </div>

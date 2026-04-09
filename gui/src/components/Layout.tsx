@@ -15,6 +15,7 @@ import { enterEdit, exitEdit } from "../redux/thunks/edit";
 import { saveCurrentSession } from "../redux/thunks/session";
 import { fontSize, isMetaEquivalentKeyPressed } from "../util";
 import { ROUTES } from "../util/navigation";
+import { AuthStatusBar } from "./AuthStatusBar";
 import { FatalErrorIndicator } from "./config/FatalErrorNotice";
 import TextDialog from "./dialogs";
 import { GenerateRuleDialog } from "./GenerateRuleDialog";
@@ -48,13 +49,17 @@ const Layout = () => {
   const onboardingCard = useOnboardingCard();
   const ideMessenger = useContext(IdeMessengerContext);
 
-  // Redirect to login if no proxy auth token exists
-  useEffect(() => {
-    const token = localStorage.getItem("afw_token");
-    if (!token) {
-      navigate(ROUTES.LOGIN);
-    }
-  }, [navigate]);
+  // Auth is now handled by the host IDE's AiFirewallAuthService
+  // (VS Code / JetBrains). The shared auth file at
+  // ~/.ai-firewall/auth.json is the source of truth — not the
+  // webview's localStorage. The old localStorage("afw_token")
+  // check was redirecting to login even when the user was already
+  // signed in via `cn login` or the web dashboard. Removed.
+  //
+  // If the user needs to sign in, they use:
+  //   - The login page buttons (Sign In / Sign Out)
+  //   - Command Palette → "AI Firewall: Sign In"
+  //   - CLI: `cn login`
 
   const { mainEditor } = useMainEditor();
   const dialogMessage = useAppSelector((state) => state.ui.dialogMessage);
@@ -281,6 +286,7 @@ const Layout = () => {
         </GridDiv>
       </div>
       <div style={{ fontSize: fontSize(-4) }} id="tooltip-portal-div" />
+      <AuthStatusBar />
     </LayoutTopDiv>
   );
 

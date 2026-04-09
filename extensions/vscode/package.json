@@ -482,7 +482,8 @@
       {
         "command": "aiFirewall.viewDashboard",
         "category": "AI Firewall",
-        "title": "AI Firewall: Open Security Dashboard"
+        "title": "AI Firewall: Open Security Dashboard",
+        "icon": "$(dashboard)"
       },
       {
         "command": "aiFirewall.viewExternalLogs",
@@ -717,6 +718,11 @@
         {
           "command": "aiFirewall.viewHistory",
           "group": "navigation@2",
+          "when": "view == aiFirewall.aiFirewallGUIView"
+        },
+        {
+          "command": "aiFirewall.viewDashboard",
+          "group": "navigation@3",
           "when": "view == aiFirewall.aiFirewallGUIView"
         },
         {

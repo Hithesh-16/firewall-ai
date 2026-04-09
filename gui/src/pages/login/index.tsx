@@ -2,56 +2,95 @@ import { useContext } from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 
 /**
- * Phase 8 — the `gui/` package is now the IDE webview only. Standalone
- * browser access is blocked by `IdeOnlyGate` in `App.tsx`, and all
- * sign-in has moved to the host IDE's native command:
- *
- *   - VS Code:   Command Palette → "AI Firewall: Sign In"
- *   - JetBrains: Go to Action → "AI Firewall: Sign In"
- *   - CLI:       `cn login` (or `/login` inside the TUI)
- *
- * The 500+ lines of dashboard-style login UI that used to live here
- * has been replaced with a pointer. Centralising the sign-in surface
- * means a single audit surface for auth, and a single place to make
- * changes — the proxy's `/web-login-start` bridge plus the web/
- * dashboard LoginPage.
+ * IDE webview login/logout page. Delegates to the host IDE's
+ * native commands via the `command:` URL prefix, which the
+ * VsCodeMessenger `openUrl` handler intercepts and routes to
+ * `vscode.commands.executeCommand()`.
  */
 export default function LoginPage() {
   const ideMessenger = useContext(IdeMessengerContext);
 
-  function openHostCommand() {
-    // Ask the host IDE to run its sign-in command. Both the VS Code
-    // extension (`aiFirewall.login`) and the JetBrains plugin
-    // (`aiFirewall.signIn` action) handle this the same way: pop
-    // open the system browser, wait for the loopback / URI callback,
-    // and write the shared auth file.
+  function signIn() {
     try {
       ideMessenger?.post("openUrl", "command:aiFirewall.login");
     } catch {
-      // Fallback: do nothing — the instructions below tell the user
-      // how to reach it manually.
+      // Fallback: user can open command palette manually
+    }
+  }
+
+  function signOut() {
+    try {
+      ideMessenger?.post("openUrl", "command:aiFirewall.logout");
+    } catch {
+      // Fallback: user can open command palette manually
     }
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-6 p-6 text-center">
-      <div className="text-2xl font-semibold">Sign in to AI Firewall</div>
-      <div className="text-sm opacity-75">
-        Sign-in is handled by your IDE. Run the{" "}
-        <span className="rounded bg-black/10 px-1 py-0.5 font-mono">
-          AI Firewall: Sign In
-        </span>{" "}
-        command and complete the flow in the browser tab that opens.
+    <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-5 p-6 text-center">
+      {/* Shield icon */}
+      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-xl">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          className="text-primary"
+        >
+          <path
+            d="M12 2L21 5.5V11C21 16.5 17.2 20.8 12 22.5C6.8 20.8 3 16.5 3 11V5.5L12 2Z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M8 12.5L10.8 15.3L16 9.5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </div>
-      <button
-        className="rounded bg-emerald-500 px-4 py-2 font-medium text-white hover:bg-emerald-600"
-        onClick={openHostCommand}
-      >
-        Open Sign-In
-      </button>
-      <div className="mt-4 text-xs opacity-60">
-        CLI users: run <span className="font-mono">cn login</span> from your
-        terminal.
+
+      <div>
+        <h2 className="text-foreground text-lg font-semibold">
+          AI Firewall Account
+        </h2>
+        <p className="text-description mt-1.5 text-xs leading-relaxed">
+          Sign in to sync your models, policies, and settings across the CLI, VS
+          Code, JetBrains, and the web dashboard.
+        </p>
+      </div>
+
+      <div className="flex w-full flex-col gap-2">
+        <button
+          className="bg-primary text-primary-foreground w-full rounded-md px-4 py-2 text-sm font-medium transition-all hover:brightness-110"
+          onClick={signIn}
+        >
+          Sign In
+        </button>
+        <button
+          className="border-border text-description hover:bg-list-hover hover:text-foreground w-full rounded-md border bg-transparent px-4 py-2 text-sm font-medium transition-all"
+          onClick={signOut}
+        >
+          Sign Out
+        </button>
+      </div>
+
+      <div className="text-description-muted mt-2 space-y-1 text-[10px]">
+        <div>
+          Command Palette:{" "}
+          <span className="bg-input text-description rounded px-1 py-0.5 font-mono">
+            AI Firewall: Sign In
+          </span>
+        </div>
+        <div>
+          CLI:{" "}
+          <span className="bg-input text-description rounded px-1 py-0.5 font-mono">
+            cn login
+          </span>
+        </div>
       </div>
     </div>
   );

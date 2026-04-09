@@ -172,6 +172,8 @@ export type LogEntry = {
   action: "ALLOW" | "BLOCK" | "REDACT";
   reasons: string[];
   responseTimeMs: number;
+  userId?: number;
+  teamId?: number;
 };
 
 export type ChatCompletionMessage = {

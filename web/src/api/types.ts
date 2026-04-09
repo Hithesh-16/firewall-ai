@@ -6,13 +6,20 @@ export interface ApiResponse<T> {
 }
 
 export interface ScanResult {
+  id?: number;
   action: "ALLOW" | "BLOCK" | "REDACT";
   riskScore: number;
   secretsFound: number;
   piiFound: number;
   entropyFound: number;
+  filesBlocked?: number;
   model?: string;
+  provider?: string;
   timestamp: number;
+  responseTimeMs?: number;
+  reasons?: string | null;
+  userId?: number | null;
+  teamId?: number | null;
 }
 
 export interface User {

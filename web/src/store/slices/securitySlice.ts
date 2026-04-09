@@ -47,6 +47,13 @@ export const securitySlice = createSlice({
         recentScans: [result, ...state.recentScans].slice(0, 100),
       };
     },
+    /** Replace recentScans wholesale (used when loading from API to avoid duplicates). */
+    setRecentScans(state, action: PayloadAction<ScanResult[]>) {
+      return {
+        ...state,
+        recentScans: action.payload.slice(0, 100),
+      };
+    },
     setProxyHealthy(state, action: PayloadAction<boolean>) {
       return { ...state, proxyHealthy: action.payload };
     },
@@ -56,6 +63,6 @@ export const securitySlice = createSlice({
   },
 });
 
-export const { addScanResult, setProxyHealthy, resetSessionStats } =
+export const { addScanResult, setRecentScans, setProxyHealthy, resetSessionStats } =
   securitySlice.actions;
 export default securitySlice.reducer;

@@ -62,7 +62,8 @@ interface PendingSignIn {
 }
 
 export class AiFirewallAuthService {
-  private readonly _onDidChangeAuth = new vscode.EventEmitter<AiFirewallAuthState>();
+  private readonly _onDidChangeAuth =
+    new vscode.EventEmitter<AiFirewallAuthState>();
   public readonly onDidChangeAuth = this._onDidChangeAuth.event;
 
   private state: AiFirewallAuthState = { signedIn: false };
@@ -162,6 +163,56 @@ export class AiFirewallAuthService {
       throw new Error("Sign-in already in progress");
     }
 
+    // Short-circuit: if the user is already signed in (via CLI,
+    // web, or a previous VS Code session), validate the token
+    // and return immediately without opening the browser.
+    if (this.state.signedIn && this.state.token) {
+      const proxyUrl = this.resolveProxyUrl();
+      try {
+        const res = await fetch(`${proxyUrl}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${this.state.token}` },
+        });
+        if (res.ok) {
+          return this.state; // already valid
+        }
+      } catch {
+        // Proxy unreachable or token invalid — fall through to
+        // the browser flow so the user can re-authenticate.
+      }
+    }
+
+    // Also check the shared auth file — the user may have signed
+    // in via `cn login` or the web dashboard without VS Code knowing.
+    const sharedAuthOnDisk = loadAuthFile();
+    if (sharedAuthOnDisk?.accessToken) {
+      const proxyUrl2 = this.resolveProxyUrl();
+      try {
+        const res2 = await fetch(`${proxyUrl2}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${sharedAuthOnDisk.accessToken}` },
+        });
+        if (res2.ok) {
+          const user2 = await this.fetchMe(
+            proxyUrl2,
+            sharedAuthOnDisk.accessToken,
+          );
+          const file2: SharedAuthFile = {
+            version: sharedAuthOnDisk.version ?? 1,
+            proxyUrl: sharedAuthOnDisk.proxyUrl ?? proxyUrl2,
+            accessToken: sharedAuthOnDisk.accessToken,
+            user: user2,
+            savedAt: sharedAuthOnDisk.savedAt ?? Date.now(),
+            savedBy: sharedAuthOnDisk.savedBy ?? "cli",
+          };
+          await this.context.secrets.store(SECRET_KEY, JSON.stringify(file2));
+          this.state = this.fromSharedFile(file2);
+          this._onDidChangeAuth.fire(this.state);
+          return this.state;
+        }
+      } catch {
+        // fall through to browser
+      }
+    }
+
     const proxyUrl = this.resolveProxyUrl();
     const state = generateStateNonce();
     const callbackUri = await this.buildCallbackUri();
@@ -206,7 +257,7 @@ export class AiFirewallAuthService {
     // half-populated state.
     const user = await this.fetchMe(proxyUrl, token);
 
-    const shared: SharedAuthFile = {
+    const newAuthFile: SharedAuthFile = {
       version: 1,
       proxyUrl,
       accessToken: token,
@@ -220,9 +271,9 @@ export class AiFirewallAuthService {
     // the shared file (for CLI + JetBrains). Best-effort on the
     // shared file — remote proxies / read-only homedir setups
     // shouldn't break VS Code sign-in.
-    await this.context.secrets.store(SECRET_KEY, JSON.stringify(shared));
+    await this.context.secrets.store(SECRET_KEY, JSON.stringify(newAuthFile));
     try {
-      saveAuthFile(shared);
+      saveAuthFile(newAuthFile);
     } catch (err) {
       console.warn(
         "[AiFirewallAuthService] saveAuthFile failed (non-fatal):",
@@ -230,7 +281,7 @@ export class AiFirewallAuthService {
       );
     }
 
-    this.state = this.fromSharedFile(shared);
+    this.state = this.fromSharedFile(newAuthFile);
     this._onDidChangeAuth.fire(this.state);
     return this.state;
   }

@@ -12,6 +12,9 @@ import { useTheme } from "../../theme/useTheme";
 import { useAppSelector, useAppDispatch } from "../../store/hooks";
 import { setSidebarOpen } from "../../store/slices/uiSlice";
 import { logout } from "../../store/slices/authSlice";
+import { clearPermissions } from "../../store/slices/permissionsSlice";
+import { apiClient } from "../../api/client";
+import { clearToken } from "../../utils/storage";
 import { ROUTES } from "../../utils/routes";
 import { Breadcrumb } from "../ui/Breadcrumb";
 import { Avatar } from "../ui/Avatar";
@@ -138,8 +141,27 @@ export function TopBar() {
               <Menu.Item>
                 {({ active }) => (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
+                      // Three-step sign-out:
+                      //   1. Revoke the proxy token (so the server stops
+                      //      accepting it).
+                      //   2. Delete the local shared auth file (so the
+                      //      CLI / VS Code / JetBrains lose it too — only
+                      //      effective when proxy is local).
+                      //   3. Local cleanup: clear localStorage + Redux.
+                      try {
+                        await apiClient.post("/api/auth/logout");
+                      } catch {
+                        /* token may already be invalid — ignore */
+                      }
+                      try {
+                        await apiClient.del("/api/auth/handoff");
+                      } catch {
+                        /* remote proxy returns 403 — ignore */
+                      }
+                      clearToken();
                       dispatch(logout());
+                      dispatch(clearPermissions());
                       navigate(ROUTES.LOGIN);
                     }}
                     className={cn(

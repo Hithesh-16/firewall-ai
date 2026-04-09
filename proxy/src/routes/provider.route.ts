@@ -10,11 +10,60 @@ import {
 } from "../gateway/providerService";
 import { addModel, deleteModel, listModels, updateModel } from "../gateway/modelService";
 
-const createProviderSchema = z.object({
-  name: z.string().min(1),
-  apiKey: z.string().min(1),
-  baseUrl: z.string().url()
-});
+/**
+ * Default base URLs per provider kind. The web onboarding wizard sends
+ * `kind` and relies on us to fill in `baseUrl` when the user didn't
+ * provide one (which is the common case for OpenAI/Anthropic/Gemini).
+ *
+ * Keys match `OnboardingProviderDraft.kind` in the web/ slice.
+ */
+const DEFAULT_PROVIDER_BASE_URLS: Record<string, string> = {
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
+  mistral: "https://api.mistral.ai/v1",
+  ollama: "http://localhost:11434",
+};
+
+const createProviderSchema = z
+  .object({
+    name: z.string().min(1),
+    /**
+     * Optional high-level kind hint from the onboarding wizard.
+     * When provided, `baseUrl` may be omitted and will be filled in
+     * from DEFAULT_PROVIDER_BASE_URLS.
+     */
+    kind: z
+      .enum([
+        "openai",
+        "anthropic",
+        "gemini",
+        "mistral",
+        "azure",
+        "ollama",
+        "custom",
+      ])
+      .optional(),
+    apiKey: z.string().optional(),
+    baseUrl: z.string().url().optional(),
+    deploymentName: z.string().optional(),
+  })
+  .refine(
+    (v) => v.baseUrl || (v.kind && DEFAULT_PROVIDER_BASE_URLS[v.kind]),
+    {
+      message:
+        "baseUrl is required (or send a `kind` with a known default, e.g. openai)",
+      path: ["baseUrl"],
+    },
+  )
+  .refine(
+    (v) => {
+      // Ollama doesn't need a key; everyone else does.
+      if (v.kind === "ollama") return true;
+      return typeof v.apiKey === "string" && v.apiKey.length > 0;
+    },
+    { message: "apiKey is required for this provider", path: ["apiKey"] },
+  );
 
 const updateProviderSchema = z.object({
   name: z.string().min(1).optional(),
@@ -52,7 +101,19 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
       }
 
       try {
-        const provider = createProvider(parsed.data.name, parsed.data.apiKey, parsed.data.baseUrl);
+        const data = parsed.data;
+        const resolvedBaseUrl =
+          data.baseUrl ??
+          (data.kind ? DEFAULT_PROVIDER_BASE_URLS[data.kind] : undefined);
+        if (!resolvedBaseUrl) {
+          return reply
+            .status(400)
+            .send({ error: "Could not resolve provider base URL" });
+        }
+        // Ollama doesn't have an API key; pass a sentinel placeholder
+        // so the encrypted-vault layer doesn't blow up on empty string.
+        const apiKey = data.apiKey ?? "__no_key_required__";
+        const provider = createProvider(data.name, apiKey, resolvedBaseUrl);
         return reply.status(201).send({
           id: provider.id,
           name: provider.name,

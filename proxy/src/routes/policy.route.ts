@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth, requireRole, requireCapability } from "../auth/authMiddleware";
 import { loadPolicyConfig, savePolicyConfig } from "../config";
+import type { PolicyConfig } from "../types";
 
 const updatePolicySchema = z.object({
   version: z.string(),
@@ -293,7 +294,8 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
 
   /**
    * GET /api/policies/effective
-   * Returns the fully resolved policy for the authenticated user (global + org + team + project merged).
+   * Returns the fully resolved policy for the authenticated user
+   * (global → org → role → team → project, strictest wins).
    */
   app.get("/api/policies/effective", { preHandler: requireAuth }, async (request, reply) => {
     const { resolveEffectivePolicy } = await import("../policy/policyChain");
@@ -302,7 +304,18 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
       return reply.status(400).send({ error: "User has no organization" });
     }
     const projectRoot = (request.query as Record<string, string>).projectRoot;
-    return resolveEffectivePolicy(user.orgId, null, projectRoot);
+    return resolveEffectivePolicy(
+      user.orgId,
+      null,
+      projectRoot,
+      user.role as
+        | "admin"
+        | "security_lead"
+        | "developer"
+        | "auditor"
+        | null
+        | undefined,
+    );
   });
 
   /**
@@ -375,4 +388,421 @@ export async function registerPolicyRoutes(app: FastifyInstance): Promise<void> 
     deleteScopedPolicy("team", Number(teamId));
     return { ok: true };
   });
+
+  // ── Role-scoped policies (Phase 4.5) ──────────────────────────────────
+  //
+  // Per-role policy overlays stored in the `role_policies` SQLite table
+  // as JSON. Merged between the org-level and team-level steps of
+  // `resolveEffectivePolicy`, strictest-wins, so role overrides can
+  // only tighten the org baseline.
+  //
+  // All four routes require `policy:write` and verify the user is a
+  // member of the org they're editing — an admin in org A cannot touch
+  // role policies in org B.
+
+  /**
+   * GET /api/policies/role-template
+   *
+   * Returns the commented JSONC policy template the RBAC UI pre-fills
+   * into the Policy tab when a user opens a custom role for the first
+   * time. Every policy field is annotated with a // comment so the
+   * user can learn the shape just by reading it.
+   *
+   * Also returns the field-by-field metadata the UI can render in a
+   * side panel if desired.
+   */
+  app.get(
+    "/api/policies/role-template",
+    { preHandler: requireAuth },
+    async () => {
+      const { ROLE_POLICY_TEMPLATE_JSONC, ROLE_DEFAULT_POLICIES } =
+        await import("../policy/roleDefaults");
+      return {
+        template: ROLE_POLICY_TEMPLATE_JSONC,
+        defaults: ROLE_DEFAULT_POLICIES,
+      };
+    },
+  );
+
+  /**
+   * Role name validator — accepts both the four system role names
+   * and any custom role slug created via `POST /api/roles`. Custom
+   * role names are slug-ified on create (lowercase alnum + dashes)
+   * so we match that shape here.
+   */
+  const roleNameSchema = z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9_-]+$/i, "Role name must be a slug");
+
+  // The partial policy shape accepted for role overrides. Intentionally
+  // permissive — we only enforce JSON.stringify-ability and the well-known
+  // top-level fields. Unknown fields are passed through so future
+  // policy features don't require a route change.
+  const rolePolicySchema = z
+    .object({
+      rules: z
+        .object({
+          block_private_keys: z.boolean().optional(),
+          block_aws_keys: z.boolean().optional(),
+          block_db_urls: z.boolean().optional(),
+          block_github_tokens: z.boolean().optional(),
+          redact_emails: z.boolean().optional(),
+          redact_phone: z.boolean().optional(),
+          redact_jwt: z.boolean().optional(),
+          redact_generic_api_keys: z.boolean().optional(),
+          allow_source_code: z.boolean().optional(),
+          log_all_requests: z.boolean().optional(),
+        })
+        .optional(),
+      severity_threshold: z.enum(["medium", "high", "critical"]).optional(),
+      file_scope: z
+        .object({
+          blocklist: z.array(z.string()).optional(),
+          allowlist: z.array(z.string()).optional(),
+        })
+        .optional(),
+      blocked_paths: z.array(z.string()).optional(),
+      prompt_injection: z
+        .object({
+          enabled: z.boolean().optional(),
+          threshold: z.number().min(0).max(100).optional(),
+        })
+        .optional(),
+      response_scanning: z
+        .object({
+          enabled: z.boolean().optional(),
+        })
+        .optional(),
+    })
+    .passthrough();
+
+  /**
+   * GET /api/policies/roles
+   *
+   * List every role override the current org has configured, plus a
+   * row for every role WITHOUT an override so the UI can render all
+   * 4 roles in one pass.
+   */
+  app.get(
+    "/api/policies/roles",
+    { preHandler: [requireAuth, requireCapability("policy:read")] },
+    async (request, reply) => {
+      const { listRolePolicies, SYSTEM_ROLES } = await import(
+        "../policy/policyChain"
+      );
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId) {
+        return reply.status(400).send({ error: "User has no organization" });
+      }
+      const stored = listRolePolicies(orgId);
+      const byRole = new Map(stored.map((s) => [s.role, s]));
+      return {
+        roles: SYSTEM_ROLES.map((role) => {
+          const s = byRole.get(role);
+          return s
+            ? {
+                role,
+                hasOverride: true,
+                policy: s.policy,
+                updatedAt: s.updatedAt,
+              }
+            : { role, hasOverride: false, policy: null, updatedAt: null };
+        }),
+      };
+    },
+  );
+
+  /**
+   * GET /api/policies/role/:roleName
+   *
+   * Fetch a single role's override (or `null` if none set).
+   */
+  app.get(
+    "/api/policies/role/:roleName",
+    { preHandler: [requireAuth, requireCapability("policy:read")] },
+    async (request, reply) => {
+      const { getRolePolicy } = await import("../policy/policyChain");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId) {
+        return reply.status(400).send({ error: "User has no organization" });
+      }
+      const { roleName } = request.params as { roleName: string };
+      const parsedRole = roleNameSchema.safeParse(roleName);
+      if (!parsedRole.success) {
+        return reply.status(400).send({ error: "Invalid role name" });
+      }
+      const found = getRolePolicy(orgId, parsedRole.data);
+      if (!found) {
+        return {
+          role: parsedRole.data,
+          hasOverride: false,
+          policy: null,
+          updatedAt: null,
+        };
+      }
+      return {
+        role: found.role,
+        hasOverride: true,
+        policy: found.policy,
+        updatedAt: found.updatedAt,
+      };
+    },
+  );
+
+  /**
+   * PUT /api/policies/role/:roleName
+   *
+   * Upsert a role override. Body is a PartialPolicy — fields omitted
+   * fall through to the org default during resolution.
+   */
+  app.put(
+    "/api/policies/role/:roleName",
+    { preHandler: [requireAuth, requireCapability("policy:write")] },
+    async (request, reply) => {
+      const { saveRolePolicy } = await import("../policy/policyChain");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId) {
+        return reply.status(400).send({ error: "User has no organization" });
+      }
+      const { roleName } = request.params as { roleName: string };
+      const parsedRole = roleNameSchema.safeParse(roleName);
+      if (!parsedRole.success) {
+        return reply.status(400).send({ error: "Invalid role name" });
+      }
+      const parsedBody = rolePolicySchema.safeParse(request.body);
+      if (!parsedBody.success) {
+        return reply
+          .status(400)
+          .send({
+            error: "Invalid policy payload",
+            details: parsedBody.error.flatten(),
+          });
+      }
+      const stored = saveRolePolicy(
+        orgId,
+        parsedRole.data,
+        parsedBody.data as Record<string, unknown>,
+      );
+      return {
+        role: stored.role,
+        hasOverride: true,
+        policy: stored.policy,
+        updatedAt: stored.updatedAt,
+      };
+    },
+  );
+
+  /**
+   * DELETE /api/policies/role/:roleName
+   *
+   * Remove a role override. The role falls back to the org default
+   * on the next request.
+   */
+  app.delete(
+    "/api/policies/role/:roleName",
+    { preHandler: [requireAuth, requireCapability("policy:write")] },
+    async (request, reply) => {
+      const { deleteRolePolicy } = await import("../policy/policyChain");
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId) {
+        return reply.status(400).send({ error: "User has no organization" });
+      }
+      const { roleName } = request.params as { roleName: string };
+      const parsedRole = roleNameSchema.safeParse(roleName);
+      if (!parsedRole.success) {
+        return reply.status(400).send({ error: "Invalid role name" });
+      }
+      const deleted = deleteRolePolicy(orgId, parsedRole.data);
+      return { ok: true, deleted };
+    },
+  );
+
+  // ── Wizard-shaped policy endpoint ─────────────────────────────────────
+  //
+  // The web onboarding wizard collects policy choices at a higher level
+  // than the raw policy.json fields (category toggles + thresholds
+  // instead of per-rule booleans). This endpoint accepts that shape and
+  // translates it into the canonical PolicyConfig, merged on top of the
+  // existing file so unrelated sections (smart_routing rules, model
+  // policies, etc.) are preserved.
+  //
+  // Using its own path + its own preHandler means the raw PUT /api/policy
+  // endpoint above keeps working for admins editing the policy directly
+  // (via the Policy Editor page), and a busy wizard can't clobber their
+  // work.
+
+  const wizardPolicySchema = z.object({
+    scanners: z.object({
+      secrets: z.object({
+        enabled: z.boolean(),
+        block: z.number().min(0).max(100),
+        redact: z.number().min(0).max(100),
+      }),
+      pii: z.object({
+        enabled: z.boolean(),
+        block: z.number().min(0).max(100),
+        redact: z.number().min(0).max(100),
+      }),
+      promptInjection: z.object({
+        enabled: z.boolean(),
+        block: z.number().min(0).max(100),
+        redact: z.number().min(0).max(100),
+      }),
+      entropy: z.object({
+        enabled: z.boolean(),
+        block: z.number().min(0).max(100),
+        redact: z.number().min(0).max(100),
+      }),
+      unicode: z.object({
+        enabled: z.boolean(),
+        block: z.number().min(0).max(100),
+        redact: z.number().min(0).max(100),
+      }),
+    }),
+    responseScanning: z.boolean(),
+    mcpGateway: z.boolean(),
+    mcpAudit: z.boolean(),
+    costRouting: z.object({
+      enabled: z.boolean(),
+      perRequestUsdCap: z.number().min(0).optional(),
+    }),
+  });
+
+  /**
+   * GET /api/policy/wizard
+   *
+   * Returns the wizard's view of the current policy so the onboarding
+   * page can pre-fill the sliders / toggles on a hard refresh instead
+   * of always showing defaults.
+   */
+  app.get(
+    "/api/policy/wizard",
+    { preHandler: requireAuth },
+    async () => {
+      const current = loadPolicyConfig() as unknown as Record<string, any>;
+      const r = (current.rules || {}) as Record<string, boolean>;
+      // Secrets "enabled" = any of the secret-flavored rules is on.
+      const secretsEnabled =
+        !!r.block_private_keys ||
+        !!r.block_aws_keys ||
+        !!r.block_db_urls ||
+        !!r.block_github_tokens ||
+        !!r.redact_jwt ||
+        !!r.redact_generic_api_keys;
+      const piiEnabled = !!r.redact_emails || !!r.redact_phone;
+      const injThreshold = current.prompt_injection?.threshold ?? 60;
+
+      return {
+        scanners: {
+          secrets: { enabled: secretsEnabled, block: 70, redact: 40 },
+          pii: { enabled: piiEnabled, block: 60, redact: 30 },
+          promptInjection: {
+            enabled: current.prompt_injection?.enabled ?? true,
+            block: 100 - injThreshold,
+            redact: Math.max(0, 80 - injThreshold),
+          },
+          entropy: { enabled: true, block: 75, redact: 45 },
+          unicode: {
+            enabled: current.unicode_normalization?.enabled ?? true,
+            block: current.unicode_normalization?.block_on_anomaly ? 90 : 70,
+            redact: 40,
+          },
+        },
+        responseScanning: !!current.response_scanning?.enabled,
+        mcpGateway: true,
+        mcpAudit: true,
+        costRouting: {
+          enabled: !!current.smart_routing?.cost_routing?.enabled,
+          perRequestUsdCap:
+            current.smart_routing?.cost_routing?.maxCostPerRequest ?? undefined,
+        },
+      };
+    },
+  );
+
+  /**
+   * POST /api/policy/wizard
+   *
+   * Accepts the wizard's payload and translates it into the real
+   * PolicyConfig shape, merging on top of the current file so unrelated
+   * sections survive.
+   *
+   * Role check: admin OR security_lead (same as PUT /api/policy), so
+   * an invited developer can't rewrite the policy through the wizard.
+   */
+  app.post(
+    "/api/policy/wizard",
+    { preHandler: requireRole("admin", "security_lead") },
+    async (request, reply) => {
+      const parsed = wizardPolicySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid wizard payload", details: parsed.error.flatten() });
+      }
+      const w = parsed.data;
+      // Cast to a broader shape so we can read optional top-level
+      // sections that aren't in the strict PolicyConfig type.
+      const current = loadPolicyConfig() as unknown as Record<string, any>;
+
+      // Merge: keep existing fields, then overlay the wizard choices.
+      const next: Record<string, any> = {
+        ...current,
+        rules: {
+          ...current.rules,
+          block_private_keys: w.scanners.secrets.enabled,
+          block_aws_keys: w.scanners.secrets.enabled,
+          block_db_urls: w.scanners.secrets.enabled,
+          block_github_tokens: w.scanners.secrets.enabled,
+          redact_emails: w.scanners.pii.enabled,
+          redact_phone: w.scanners.pii.enabled,
+          redact_jwt: w.scanners.secrets.enabled,
+          redact_generic_api_keys: w.scanners.secrets.enabled,
+          allow_source_code: current.rules?.allow_source_code ?? true,
+          log_all_requests: current.rules?.log_all_requests ?? true,
+        },
+        unicode_normalization: {
+          enabled: w.scanners.unicode.enabled,
+          block_on_anomaly: w.scanners.unicode.block >= 85,
+        },
+        prompt_injection: {
+          enabled: w.scanners.promptInjection.enabled,
+          // Slider is "block at or above this score" so threshold = 100 - block.
+          threshold: Math.max(0, Math.min(100, 100 - w.scanners.promptInjection.block)),
+        },
+        response_scanning: {
+          ...(current.response_scanning || {}),
+          enabled: w.responseScanning,
+          scan_secrets: current.response_scanning?.scan_secrets ?? true,
+          scan_pii: current.response_scanning?.scan_pii ?? true,
+          redact_on_detection:
+            current.response_scanning?.redact_on_detection ?? false,
+          stream_buffer_size:
+            current.response_scanning?.stream_buffer_size ?? 500,
+        },
+        smart_routing: {
+          ...(current.smart_routing || {}),
+          enabled: current.smart_routing?.enabled ?? false,
+          routes: current.smart_routing?.routes ?? [],
+          local_llm: current.smart_routing?.local_llm ?? {
+            provider: "ollama",
+            model: "llama3",
+            endpoint: "http://localhost:11434",
+          },
+          cost_routing: {
+            enabled: w.costRouting.enabled,
+            maxCostPerRequest: w.costRouting.perRequestUsdCap ?? null,
+            preferCheaper:
+              current.smart_routing?.cost_routing?.preferCheaper ?? false,
+            rules: current.smart_routing?.cost_routing?.rules ?? [],
+          },
+        },
+      };
+
+      savePolicyConfig(next as PolicyConfig);
+      return { ok: true };
+    },
+  );
 }

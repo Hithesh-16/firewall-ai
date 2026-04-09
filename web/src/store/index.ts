@@ -4,6 +4,8 @@ import uiReducer from "./slices/uiSlice";
 import chatReducer from "./slices/chatSlice";
 import securityReducer from "./slices/securitySlice";
 import orgReducer from "./slices/orgSlice";
+import { onboardingReducer } from "./slices/onboardingSlice";
+import { permissionsReducer } from "./slices/permissionsSlice";
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -11,6 +13,8 @@ const rootReducer = combineReducers({
   chat: chatReducer,
   security: securityReducer,
   org: orgReducer,
+  onboarding: onboardingReducer,
+  permissions: permissionsReducer,
 });
 
 export const store = configureStore({ reducer: rootReducer });

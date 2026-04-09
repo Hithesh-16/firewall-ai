@@ -8,6 +8,8 @@ import {
 } from "./auth/workos.js";
 import { getAllSlashCommands } from "./commands/commands.js";
 import { handleInit } from "./commands/init.js";
+import { authenticate as webAuthenticate } from "./commands/login.js";
+import { logout as webLogout } from "./commands/logout.js";
 import { handleInfoSlashCommand } from "./infoScreen.js";
 import { reloadService, SERVICE_NAMES, services } from "./services/index.js";
 import { getCurrentSession, updateSessionTitle } from "./session.js";
@@ -54,43 +56,68 @@ async function handleHelp(_args: string[], _assistant: AssistantConfig) {
 }
 
 async function handleLogin() {
+  // `/login` calls the shared web-first flow directly so it works even
+  // when the AuthService failed to initialize (e.g. because there's no
+  // model / no assistant yet). Opens the browser, waits for the
+  // loopback callback, writes ~/.ai-firewall/auth.json.
   try {
-    const newAuthState = await services.auth.login();
-    await reloadService(SERVICE_NAMES.AUTH);
+    const ok = await webAuthenticate({ force: true });
+    if (!ok) {
+      return {
+        exit: false,
+        output: "Sign-in did not complete.",
+      };
+    }
 
+    // Best-effort: refresh the auth service so downstream consumers
+    // (API client, MCP, model service) pick up the new token without
+    // requiring a TUI restart. If the service isn't registered yet,
+    // just swallow and let the next command trigger init.
+    try {
+      await reloadService(SERVICE_NAMES.AUTH);
+    } catch {
+      /* service container not ready — next read will initialize */
+    }
+
+    const config = loadAuthConfig();
     const userInfo =
-      newAuthState.authConfig && isAuthenticatedConfig(newAuthState.authConfig)
-        ? newAuthState.authConfig.userEmail || newAuthState.authConfig.userId
+      config && isAuthenticatedConfig(config)
+        ? config.userEmail || config.userId
         : "user";
 
-    console.info(chalk.green(`\nLogged in as ${userInfo}`));
-
     return {
       exit: false,
-      output: "Login successful! All services updated automatically.",
+      output: `Signed in as ${userInfo}. Use /model to pick a model.`,
     };
   } catch (error: any) {
-    console.error(chalk.red(`\nLogin failed: ${error.message}`));
     return {
       exit: false,
-      output: `Login failed: ${error.message}`,
+      output: `Login failed: ${error?.message ?? String(error)}`,
     };
   }
 }
 
 async function handleLogout() {
+  // `/logout` also bypasses the AuthService wrapper. It runs the
+  // three-step web-first flow (server revoke → shared-auth handoff
+  // delete → local cleanup) and always reports success so the user
+  // can always get out of a broken state.
   try {
-    await services.auth.logout();
-    return {
-      exit: true,
-      output: "Logged out successfully",
-    };
+    await webLogout();
   } catch {
-    return {
-      exit: true,
-      output: "Logged out successfully",
-    };
+    /* webLogout already swallows everything it can */
   }
+
+  try {
+    await reloadService(SERVICE_NAMES.AUTH);
+  } catch {
+    /* ignore — local state is what matters for logout */
+  }
+
+  return {
+    exit: true,
+    output: "Signed out of AI Firewall.",
+  };
 }
 
 async function handleWhoami() {

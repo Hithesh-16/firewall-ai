@@ -6,6 +6,13 @@ import chalk from "chalk";
 import nodeFetch from "node-fetch";
 import open from "open";
 
+import {
+  loadAuthFile as sharedLoadAuthFile,
+  saveAuthFile as sharedSaveAuthFile,
+  deleteAuthFile as sharedDeleteAuthFile,
+  type SharedAuthFile,
+} from "@ai-firewall/shared-auth";
+
 import { logger } from "src/util/logger.js";
 
 import { getApiClient } from "../config.js";
@@ -117,10 +124,77 @@ export function getLocalConfigPath(config: AuthConfig): string | null {
 }
 
 /**
- * Loads the authentication configuration from disk
+ * Translate a shared-auth `SharedAuthFile` (v1) into the legacy
+ * `AuthenticatedConfig` shape the rest of the CLI code expects.
+ *
+ * The CLI stored tokens as `{ userId, userEmail, accessToken,
+ * refreshToken, expiresAt, organizationId, configUri, modelName }`
+ * before Phase 5. The web dashboard now writes the canonical
+ * shared-auth format instead. This adapter keeps every existing
+ * caller (useModelSelector, uploadArtifact, hubLoader, apiClient,
+ * etc.) working without touching them — we just translate on read.
+ */
+function sharedToLegacyConfig(
+  file: SharedAuthFile,
+): AuthenticatedConfig {
+  // Merge in the CLI-only sidecar fields (configUri + modelName)
+  // stored next to the shared auth file. Missing sidecar = empty.
+  let sidecar: { configUri?: string; modelName?: string } = {};
+  try {
+    const sidecarPath = path.join(
+      path.dirname(getAuthConfigPath()),
+      "cli-state.json",
+    );
+    if (fs.existsSync(sidecarPath)) {
+      sidecar = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    }
+  } catch {
+    /* ignore — sidecar is best-effort */
+  }
+
+  return {
+    userId: String(file.user.id ?? ""),
+    userEmail: file.user.email ?? "",
+    accessToken: file.accessToken,
+    // shared-auth doesn't carry a refresh token (the proxy revokes
+    // tokens directly via /api/auth/logout). Use the access token
+    // as a sentinel so the legacy validation passes — any caller
+    // that actually hits a refresh endpoint falls back to the
+    // re-login flow on failure.
+    refreshToken: file.accessToken,
+    expiresAt: file.expiresAt ?? 0,
+    organizationId:
+      file.user.orgId != null ? String(file.user.orgId) : null,
+    configUri: sidecar.configUri,
+    modelName: sidecar.modelName,
+  };
+}
+
+/**
+ * Legacy on-disk shape (pre-Phase 5). Kept readable for backward
+ * compat so users with an old auth.json from the WorkOS device-auth
+ * flow don't have to re-sign-in after upgrading.
+ */
+interface LegacyOnDiskAuth {
+  userId?: string | number;
+  userEmail?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  organizationId?: string | null;
+  configUri?: string;
+  modelName?: string;
+}
+
+/**
+ * Loads the authentication configuration from disk.
+ *
+ * Accepts BOTH the legacy CLI shape and the new shared-auth shape,
+ * so a file written by the web dashboard's handoff endpoint is
+ * picked up transparently.
  */
 export function loadAuthConfig(): AuthConfig {
-  // If AI_FIREWALL_API_KEY environment variable exists, use that instead
+  // 1. Env var shortcut — unchanged.
   if (process.env.AI_FIREWALL_API_KEY) {
     return {
       accessToken: process.env.AI_FIREWALL_API_KEY,
@@ -128,12 +202,23 @@ export function loadAuthConfig(): AuthConfig {
     };
   }
 
+  // 2. Try the canonical shared-auth format first. This is what
+  //    `saveAuthConfig` writes going forward, and what the web
+  //    dashboard writes via POST /api/auth/handoff.
+  const shared = sharedLoadAuthFile();
+  if (shared && shared.accessToken) {
+    return sharedToLegacyConfig(shared);
+  }
+
+  // 3. Fall back to the legacy CLI shape for users who haven't
+  //    re-authenticated since the Phase 5 upgrade.
   try {
     const authConfigPath = getAuthConfigPath();
     if (fs.existsSync(authConfigPath)) {
-      const data = JSON.parse(fs.readFileSync(authConfigPath, "utf8"));
+      const data = JSON.parse(
+        fs.readFileSync(authConfigPath, "utf8"),
+      ) as LegacyOnDiskAuth;
 
-      // Validate that we have all required fields for authenticated config
       if (
         data.userId &&
         data.userEmail &&
@@ -142,18 +227,15 @@ export function loadAuthConfig(): AuthConfig {
         data.expiresAt
       ) {
         return {
-          userId: data.userId,
+          userId: String(data.userId),
           userEmail: data.userEmail,
           accessToken: data.accessToken,
           refreshToken: data.refreshToken,
           expiresAt: data.expiresAt,
-          organizationId: data.organizationId || null,
+          organizationId: data.organizationId ?? null,
           configUri: data.configUri,
           modelName: data.modelName,
         };
-      } else {
-        console.warn("Invalid auth config found, ignoring.");
-        return null;
       }
     }
   } catch (error) {
@@ -164,7 +246,14 @@ export function loadAuthConfig(): AuthConfig {
 }
 
 /**
- * Saves the authentication configuration to disk
+ * Saves the authentication configuration to disk.
+ *
+ * Writes the canonical shared-auth format so the web dashboard,
+ * VS Code extension, and JetBrains plugin can all read the same
+ * file. `configUri` and `modelName` are CLI-specific, not part
+ * of the shared schema, so they're sidecar'd in an adjacent file
+ * (`~/.ai-firewall/cli-state.json`) to avoid breaking those
+ * callers.
  */
 export function saveAuthConfig(config: AuthenticatedConfig): void {
   // If using AI_FIREWALL_API_KEY environment variable, don't save anything
@@ -173,14 +262,43 @@ export function saveAuthConfig(config: AuthenticatedConfig): void {
   }
 
   try {
-    const authConfigPath = getAuthConfigPath();
-    // Make sure the directory exists
-    const dir = path.dirname(authConfigPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    // 1. Write the canonical shared-auth file (chmod 600 via the
+    //    shared-auth package's atomic-write helper).
+    const file: SharedAuthFile = {
+      version: 1,
+      proxyUrl:
+        process.env.AI_FIREWALL_PROXY_URL || "http://localhost:8080",
+      accessToken: config.accessToken,
+      user: {
+        id: Number(config.userId) || 0,
+        email: config.userEmail,
+        role: "developer",
+        orgId:
+          config.organizationId != null
+            ? Number(config.organizationId) || null
+            : null,
+      },
+      expiresAt: config.expiresAt,
+      savedAt: Date.now(),
+      savedBy: "cli",
+    };
+    sharedSaveAuthFile(file);
 
-    fs.writeFileSync(authConfigPath, JSON.stringify(config, null, 2));
+    // 2. Sidecar the CLI-only fields (configUri + modelName) so the
+    //    shared file stays clean for other surfaces.
+    const sidecar = {
+      configUri: config.configUri,
+      modelName: config.modelName,
+    };
+    const sidecarPath = path.join(
+      path.dirname(getAuthConfigPath()),
+      "cli-state.json",
+    );
+    const dir = path.dirname(sidecarPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
+    fs.writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2));
   } catch (error) {
     console.error(`Error saving auth config: ${error}`);
   }
@@ -258,7 +376,18 @@ export async function isAuthenticated(): Promise<boolean> {
     return true;
   }
 
-  if (Date.now() > config.expiresAt) {
+  // Phase 5: shared-auth tokens don't carry a legacy refresh token.
+  // The adapter in `loadAuthConfig()` stores the access token in the
+  // `refreshToken` slot as a sentinel — if the two are equal, this
+  // is a shared-auth token and we must NOT hit the WorkOS refresh
+  // endpoint (it would fail with "Token refresh error: fetch failed"
+  // every 15 minutes and make the CLI look broken). Just trust the
+  // token; the proxy returns 401 when it actually expires and
+  // callers fall back to re-login.
+  const isSharedAuthToken =
+    config.accessToken === config.refreshToken;
+
+  if (!isSharedAuthToken && Date.now() > config.expiresAt) {
     try {
       const refreshed = await refreshToken(config.refreshToken);
       return isAuthenticatedConfig(refreshed);

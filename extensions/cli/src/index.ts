@@ -252,14 +252,22 @@ addCommonOptions(program)
     await chat(prompt, options);
   });
 
-// Login subcommand
+// Login subcommand — web-first sign-in via the shared loopback flow.
+// `--proxy <url>` lets an invited user point at a remote proxy without
+// having to set AI_FIREWALL_PROXY_URL. `--force` re-runs the browser
+// flow even when a valid token is already cached.
 program
   .command("login")
-  .description("Authenticate with AI Firewall")
-  .action(async () => {
+  .description("Authenticate with AI Firewall via the web dashboard")
+  .option(
+    "--proxy <url>",
+    "Proxy URL to sign in against (e.g. https://firewall.acme.com)",
+  )
+  .option("--force", "Re-run the browser sign-in even if already signed in")
+  .action(async (options: { proxy?: string; force?: boolean }) => {
     // Telemetry: record command invocation
     await posthogService.capture("cliCommand", { command: "login" });
-    await login();
+    await login({ proxyUrl: options.proxy, force: options.force });
   });
 
 // Logout subcommand

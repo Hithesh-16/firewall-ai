@@ -161,6 +161,45 @@ export function listRolesForOrg(orgId: number): RoleInfo[] {
   return rows.map(toRoleInfo);
 }
 
+/**
+ * Validate that every resource with a write-style action
+ * (`create|edit|delete|export`) also grants `view` (or the legacy `read`).
+ *
+ * Throws with a message the route handler converts into HTTP 422.
+ * Matches the RBAC spec: "Backend MUST reject any role save where
+ * create/edit/delete/export exists without view for the same resource."
+ */
+export function validatePermissionDependencies(
+  capabilityNames: string[],
+): void {
+  const DEPENDS_ON_VIEW = ["create", "edit", "delete", "export"] as const;
+  const byResource = new Map<string, Set<string>>();
+  for (const cap of capabilityNames) {
+    const [resource, action] = cap.split(":");
+    if (!resource || !action) continue;
+    if (!byResource.has(resource)) byResource.set(resource, new Set());
+    byResource.get(resource)!.add(action);
+  }
+
+  const problems: string[] = [];
+  for (const [resource, actions] of byResource) {
+    const hasView = actions.has("view") || actions.has("read");
+    if (hasView) continue;
+    for (const dep of DEPENDS_ON_VIEW) {
+      if (actions.has(dep)) {
+        problems.push(
+          `${resource}:${dep} requires ${resource}:view (dependency rule)`,
+        );
+      }
+    }
+  }
+  if (problems.length > 0) {
+    const err = new Error(problems.join("; "));
+    (err as Error & { code?: string }).code = "RBAC_DEPENDENCY_VIOLATION";
+    throw err;
+  }
+}
+
 export function createCustomRole(
   orgId: number,
   name: string,
@@ -168,6 +207,12 @@ export function createCustomRole(
   description: string,
   capabilityNames: string[],
 ): RoleInfo {
+  validatePermissionDependencies(capabilityNames);
+  if (capabilityNames.length === 0) {
+    const err = new Error("Role must grant at least one permission");
+    (err as Error & { code?: string }).code = "RBAC_EMPTY_ROLE";
+    throw err;
+  }
   const now = Date.now();
   const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
 
@@ -201,9 +246,25 @@ export function updateRoleCapabilities(
   roleId: number,
   capabilityNames: string[],
 ): void {
-  const role = db.prepare("SELECT is_system FROM roles WHERE id = ?").get(roleId) as { is_system: number } | undefined;
-  if (role?.is_system) {
-    throw new Error("Cannot modify built-in system roles");
+  const role = db
+    .prepare("SELECT is_system FROM roles WHERE id = ?")
+    .get(roleId) as { is_system: number } | undefined;
+  if (!role) {
+    const err = new Error("Role not found");
+    (err as Error & { code?: string }).code = "RBAC_ROLE_NOT_FOUND";
+    throw err;
+  }
+  if (role.is_system) {
+    const err = new Error("Cannot modify built-in system roles");
+    (err as Error & { code?: string }).code = "RBAC_SYSTEM_ROLE_LOCKED";
+    throw err;
+  }
+
+  validatePermissionDependencies(capabilityNames);
+  if (capabilityNames.length === 0) {
+    const err = new Error("Role must grant at least one permission");
+    (err as Error & { code?: string }).code = "RBAC_EMPTY_ROLE";
+    throw err;
   }
 
   const now = Date.now();
@@ -212,7 +273,7 @@ export function updateRoleCapabilities(
 
   // Add new ones
   const insert = db.prepare(
-    "INSERT INTO role_capabilities (role_id, capability_name, scope, granted, created_at) VALUES (?, ?, 'org', 1, ?)"
+    "INSERT INTO role_capabilities (role_id, capability_name, scope, granted, created_at) VALUES (?, ?, 'org', 1, ?)",
   );
   for (const cap of capabilityNames) {
     insert.run(roleId, cap, now);
@@ -221,13 +282,119 @@ export function updateRoleCapabilities(
   db.prepare("UPDATE roles SET updated_at = ? WHERE id = ?").run(now, roleId);
 }
 
-export function deleteCustomRole(roleId: number): boolean {
-  const role = db.prepare("SELECT is_system FROM roles WHERE id = ?").get(roleId) as { is_system: number } | undefined;
-  if (role?.is_system) {
-    throw new Error("Cannot delete built-in system roles");
+/**
+ * Compute the flat list of capability atoms the given user effectively
+ * holds in the given org.
+ *
+ * Resolution order mirrors `checkPermission`:
+ *   1. Start from the user's org role's granted capabilities.
+ *   2. Layer on user_capability_overrides — grants add, denies remove.
+ *   3. Drop expired overrides.
+ *
+ * Used by the frontend's `/api/me/permissions` endpoint so the UI can
+ * cache the full permission set in Redux and answer `usePermission()`
+ * calls locally without a round trip.
+ */
+export function listEffectiveCapabilities(
+  userId: number,
+  orgId: number,
+): string[] {
+  const now = Date.now();
+
+  // 1. Role's granted caps
+  const roleCaps = db
+    .prepare(
+      `SELECT rc.capability_name AS name
+         FROM user_org_roles uor
+         JOIN role_capabilities rc
+           ON rc.role_id = uor.role_id
+         WHERE uor.user_id = ?
+           AND uor.org_id  = ?
+           AND rc.granted  = 1
+           AND (uor.expires_at IS NULL OR uor.expires_at > ?)`,
+    )
+    .all(userId, orgId, now) as Array<{ name: string }>;
+
+  const set = new Set<string>(roleCaps.map((r) => r.name));
+
+  // Fallback for legacy users who never got a user_org_roles row
+  if (set.size === 0) {
+    const legacyUser = db
+      .prepare("SELECT role FROM users WHERE id = ?")
+      .get(userId) as { role: string } | undefined;
+    if (legacyUser?.role) {
+      const rows = db
+        .prepare(
+          `SELECT rc.capability_name AS name
+             FROM roles r
+             JOIN role_capabilities rc ON rc.role_id = r.id
+             WHERE r.name = ? AND r.is_system = 1 AND rc.granted = 1`,
+        )
+        .all(legacyUser.role) as Array<{ name: string }>;
+      for (const r of rows) set.add(r.name);
+    }
   }
 
-  const result = db.prepare("DELETE FROM roles WHERE id = ? AND is_system = 0").run(roleId);
+  // 2. User-level overrides (grants add, denies remove)
+  const overrides = db
+    .prepare(
+      `SELECT capability_name AS name, granted, expires_at
+         FROM user_capability_overrides
+         WHERE user_id = ? AND org_id = ?`,
+    )
+    .all(userId, orgId) as Array<{
+    name: string;
+    granted: number;
+    expires_at: number | null;
+  }>;
+  for (const o of overrides) {
+    if (o.expires_at && o.expires_at < now) continue;
+    if (o.granted === 1) set.add(o.name);
+    else set.delete(o.name);
+  }
+
+  return Array.from(set).sort();
+}
+
+/**
+ * Count how many users currently have a given role. Used to block
+ * deleting a custom role that still has active assignments (spec rule:
+ * return 409 with the affected count).
+ */
+export function countUsersWithRole(roleId: number): number {
+  const row = db
+    .prepare(
+      "SELECT COUNT(*) AS n FROM user_org_roles WHERE role_id = ?",
+    )
+    .get(roleId) as { n: number };
+  return row?.n ?? 0;
+}
+
+export function deleteCustomRole(roleId: number): boolean {
+  const role = db
+    .prepare("SELECT is_system FROM roles WHERE id = ?")
+    .get(roleId) as { is_system: number } | undefined;
+  if (!role) return false;
+  if (role.is_system) {
+    const err = new Error("Cannot delete built-in system roles");
+    (err as Error & { code?: string }).code = "RBAC_SYSTEM_ROLE_LOCKED";
+    throw err;
+  }
+
+  const activeUsers = countUsersWithRole(roleId);
+  if (activeUsers > 0) {
+    const err = new Error(
+      `${activeUsers} user${activeUsers === 1 ? " is" : "s are"} still assigned this role — reassign them before deleting.`,
+    );
+    (err as Error & { code?: string; count?: number }).code =
+      "RBAC_ROLE_IN_USE";
+    (err as Error & { count?: number }).count = activeUsers;
+    throw err;
+  }
+
+  const result = db
+    .prepare("DELETE FROM roles WHERE id = ? AND is_system = 0")
+    .run(roleId);
   return result.changes > 0;
 }
 

@@ -346,6 +346,39 @@ CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_started ON tasks(started_at);
 `);
 
+// Migration: add onboarding_complete to users.
+//   Default 0 for new accounts so the wizard runs.
+//   Backfill 1 for any existing user that already belongs to an org —
+//   they're effectively onboarded and shouldn't be forced through the
+//   wizard on next login.
+try {
+  db.prepare("SELECT onboarding_complete FROM users LIMIT 1").get();
+} catch {
+  db.exec(
+    "ALTER TABLE users ADD COLUMN onboarding_complete INTEGER NOT NULL DEFAULT 0",
+  );
+  db.exec(
+    "UPDATE users SET onboarding_complete = 1 WHERE org_id IS NOT NULL",
+  );
+}
+
+// Migration: add timezone to users (per-user display preference,
+// captured in the onboarding wizard's Step 2). IANA zone string
+// like "America/Los_Angeles", nullable so SSO users get NULL.
+try {
+  db.prepare("SELECT timezone FROM users LIMIT 1").get();
+} catch {
+  db.exec("ALTER TABLE users ADD COLUMN timezone TEXT");
+}
+
+// Migration: add industry to organizations (workspace metadata from
+// the onboarding wizard's Step 2). Free-text, nullable.
+try {
+  db.prepare("SELECT industry FROM organizations LIMIT 1").get();
+} catch {
+  db.exec("ALTER TABLE organizations ADD COLUMN industry TEXT");
+}
+
 // Migrations: add missing columns to api_tokens if they don't exist
 try {
   db.prepare("SELECT scopes FROM api_tokens LIMIT 1").get();
@@ -541,35 +574,102 @@ CREATE INDEX IF NOT EXISTS idx_pal_user ON permission_audit_log(user_id, org_id,
 CREATE INDEX IF NOT EXISTS idx_pal_cap ON permission_audit_log(capability_name, ts);
 `);
 
-// Seed system roles (idempotent)
-const seedRole = db.prepare(
-  "INSERT OR IGNORE INTO roles (org_id, name, display_name, description, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
-);
+// ── Seed system roles (fully idempotent) ────────────────────────────
+//
+// SQLite treats NULL as distinct in UNIQUE constraints, so `INSERT OR
+// IGNORE` on a row with org_id=NULL happily inserts duplicates on every
+// restart. We guard with an explicit existence check, and also clean
+// up any duplicates left behind by the previous (buggy) seed runs.
 const now = Date.now();
-seedRole.run(null, "admin", "Admin", "Full org control", now, now);
-seedRole.run(
-  null,
+
+// One-time cleanup: dedupe system roles by name, keeping only the
+// lowest id. Does NOTHING on a fresh DB.
+//
+// Safety: before deleting duplicate role rows, we:
+//   1. Repoint every user_org_roles / user_team_roles row from a
+//      duplicate role_id to the canonical (lowest-id) row. The
+//      capabilities are identical so the user's permissions are
+//      unchanged.
+//   2. Delete role_capabilities rows for the duplicates (the
+//      FK CASCADE handles this but doing it explicitly makes the
+//      transaction order obvious).
+//   3. Delete the duplicate role rows themselves.
+//
+// Wrapped in a transaction so a partial failure doesn't orphan users.
+try {
+  const dupes = db
+    .prepare(
+      `SELECT name, MIN(id) AS canonical_id, COUNT(*) AS cnt
+         FROM roles
+        WHERE is_system = 1 AND org_id IS NULL
+        GROUP BY name
+       HAVING COUNT(*) > 1`,
+    )
+    .all() as Array<{ name: string; canonical_id: number; cnt: number }>;
+
+  if (dupes.length > 0) {
+    const txn = db.transaction(() => {
+      for (const { name, canonical_id } of dupes) {
+        // Every duplicate id for this role name.
+        const duplicateIds = (
+          db
+            .prepare(
+              "SELECT id FROM roles WHERE is_system = 1 AND org_id IS NULL AND name = ? AND id != ?",
+            )
+            .all(name, canonical_id) as Array<{ id: number }>
+        ).map((r) => r.id);
+        if (duplicateIds.length === 0) continue;
+
+        const placeholders = duplicateIds.map(() => "?").join(",");
+
+        db.prepare(
+          `UPDATE user_org_roles SET role_id = ? WHERE role_id IN (${placeholders})`,
+        ).run(canonical_id, ...duplicateIds);
+        db.prepare(
+          `UPDATE user_team_roles SET role_id = ? WHERE role_id IN (${placeholders})`,
+        ).run(canonical_id, ...duplicateIds);
+        db.prepare(
+          `DELETE FROM role_capabilities WHERE role_id IN (${placeholders})`,
+        ).run(...duplicateIds);
+        db.prepare(
+          `DELETE FROM roles WHERE id IN (${placeholders})`,
+        ).run(...duplicateIds);
+      }
+    });
+    txn();
+  }
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error("[db] system role dedup failed:", err);
+}
+
+function ensureSystemRole(
+  name: string,
+  displayName: string,
+  description: string,
+): void {
+  const existing = db
+    .prepare(
+      "SELECT id FROM roles WHERE org_id IS NULL AND name = ? AND is_system = 1",
+    )
+    .get(name) as { id: number } | undefined;
+  if (existing) return;
+  db.prepare(
+    "INSERT INTO roles (org_id, name, display_name, description, is_system, created_at, updated_at) VALUES (NULL, ?, ?, ?, 1, ?, ?)",
+  ).run(name, displayName, description, now, now);
+}
+
+ensureSystemRole("admin", "Admin", "Full org control");
+ensureSystemRole(
   "security_lead",
   "Security Lead",
   "Policy, approvals, scanner config",
-  now,
-  now,
 );
-seedRole.run(
-  null,
-  "developer",
-  "Developer",
-  "AI coding tools, own logs",
-  now,
-  now,
-);
-seedRole.run(
-  null,
+ensureSystemRole("developer", "Developer", "AI coding tools, own logs");
+ensureSystemRole(
   "auditor",
   "Auditor",
   "Read-everything, write-nothing, no tools",
-  now,
-  now,
 );
 
 // Seed capabilities (idempotent)
@@ -792,6 +892,83 @@ const caps: Array<[string, string, string, string, string, string]> = [
     "Organisation",
     "low",
   ],
+
+  // ─── Uniform action model (view/create/edit/delete/export) ─────────
+  //
+  // These atoms match the spec for the role-matrix UI. They sit
+  // alongside the legacy atoms above (unchanged to avoid breaking
+  // existing `requireCapability("org:write")` checks) so the matrix
+  // UI has a clean permission space to display while routes continue
+  // to work. Over time, routes should migrate to the uniform atoms.
+  //
+  // Resource groupings (matches the UI's category sections):
+  //   Organisation : workspace settings, billing
+  //   Identity     : users, roles, tokens
+  //   Security     : policies, scanners, file restrictions, approvals
+  //   Vault        : providers
+  //   Audit        : logs, audit trail
+  //   Developer    : chat, agents, tools, MCP
+
+  // Users
+  ["users:view", "users", "view", "View user list and profiles", "Identity", "low"],
+  ["users:create", "users", "create", "Invite new users", "Identity", "high"],
+  ["users:edit", "users", "edit", "Edit user profiles and role assignments", "Identity", "high"],
+  ["users:delete", "users", "delete", "Remove users from the org", "Identity", "high"],
+  ["users:export", "users", "export", "Export the user directory", "Identity", "medium"],
+
+  // Roles
+  ["roles:view", "roles", "view", "View roles and permissions", "Identity", "low"],
+  ["roles:create", "roles", "create", "Create custom roles", "Identity", "critical"],
+  ["roles:edit", "roles", "edit", "Edit custom roles + assign to users", "Identity", "critical"],
+  ["roles:delete", "roles", "delete", "Delete custom roles", "Identity", "critical"],
+
+  // Teams (uniform re-expression)
+  ["teams:view", "teams", "view", "View team list and membership", "Organisation", "low"],
+  ["teams:create", "teams", "create", "Create new teams", "Organisation", "high"],
+  ["teams:edit", "teams", "edit", "Edit team name and members", "Organisation", "medium"],
+  ["teams:delete", "teams", "delete", "Delete teams", "Organisation", "high"],
+  ["teams:export", "teams", "export", "Export team roster", "Organisation", "low"],
+
+  // Organisation settings
+  ["org_settings:view", "org_settings", "view", "View org name, slug, settings", "Organisation", "low"],
+  ["org_settings:edit", "org_settings", "edit", "Edit org name, slug, industry, etc.", "Organisation", "critical"],
+
+  // Billing
+  ["billing:view", "billing", "view", "View billing + credit usage", "Organisation", "low"],
+  ["billing:edit", "billing", "edit", "Change billing details, top up credits", "Organisation", "critical"],
+  ["billing:export", "billing", "export", "Export billing history", "Organisation", "medium"],
+
+  // Policies
+  ["policies:view", "policies", "view", "View the active policy", "Security", "low"],
+  ["policies:edit", "policies", "edit", "Edit scanner rules and thresholds", "Security", "critical"],
+  ["policies:export", "policies", "export", "Export policy snapshots", "Security", "medium"],
+
+  // Providers (BYOK)
+  ["providers:view", "providers", "view", "View configured providers (masked)", "Vault", "low"],
+  ["providers:create", "providers", "create", "Add new BYOK providers", "Vault", "critical"],
+  ["providers:edit", "providers", "edit", "Edit provider keys and base URLs", "Vault", "critical"],
+  ["providers:delete", "providers", "delete", "Remove providers", "Vault", "critical"],
+
+  // Audit logs
+  ["audit_logs:view", "audit_logs", "view", "View the request + admin audit log", "Audit", "medium"],
+  ["audit_logs:export", "audit_logs", "export", "Export audit logs (CSV/JSON)", "Audit", "high"],
+
+  // Approvals
+  ["approvals:view", "approvals", "view", "View pending + resolved approvals", "Security", "low"],
+  ["approvals:edit", "approvals", "edit", "Resolve approval requests", "Security", "high"],
+
+  // File restrictions
+  ["file_restrictions:view", "file_restrictions", "view", "View file scope rules", "Security", "low"],
+  ["file_restrictions:edit", "file_restrictions", "edit", "Edit org/team/user file scope", "Security", "high"],
+
+  // Agents + chat + MCP (developer capabilities)
+  ["chat:view", "chat", "view", "Read chat history", "Developer", "low"],
+  ["chat:create", "chat", "create", "Send prompts to the agent", "Developer", "low"],
+  ["agents:view", "agents", "view", "View agent runs", "Developer", "low"],
+  ["agents:create", "agents", "create", "Spawn agents / sub-agents", "Developer", "high"],
+  ["mcp_tools:view", "mcp_tools", "view", "List configured MCP tools", "Developer", "low"],
+  ["mcp_tools:create", "mcp_tools", "create", "Register new MCP tools", "Developer", "high"],
+  ["mcp_tools:delete", "mcp_tools", "delete", "Remove MCP tools", "Developer", "high"],
 ];
 for (const [name, resource, action, desc, category, risk] of caps) {
   seedCap.run(name, resource, action, desc, category, risk, now);
@@ -824,28 +1001,143 @@ if (adminRole) {
   }
 }
 
-// Security lead: security + read + tools, no org:write/billing:write
-if (secLeadRole) {
-  const secLeadCaps = caps.filter(
-    ([n]) =>
-      ![
-        "org:write",
-        "billing:write",
-        "user:invite",
-        "user:remove",
-        "role:assign",
-        "role:manage",
-        "provider:manage",
-      ].includes(n),
-  );
-  for (const [capName] of secLeadCaps) {
-    seedRoleCap.run(secLeadRole.id, capName, "org", now);
+/**
+ * For the 3 non-admin system roles we compute their capability set
+ * from two inputs:
+ *   - A per-role exclude list of specific cap names
+ *   - A per-role include list of ADDITIONAL cap names
+ *
+ * The base is `caps.filter(not in excludes)` + explicit includes.
+ * Uses the uniform-action atoms from the spec so the matrix UI
+ * renders sensible defaults for every system role.
+ */
+function seedRoleWithCaps(
+  roleId: number,
+  opts: {
+    excludeLegacy?: string[];
+    allowAllLegacyRead?: boolean;
+    allowAllLegacyReadExport?: boolean;
+    uniformGrants?: string[];
+  },
+): void {
+  if (opts.allowAllLegacyReadExport) {
+    // Auditor-style: every legacy read/export atom + every uniform view
+    for (const [n, , action] of caps) {
+      if (["read", "export"].includes(action)) {
+        seedRoleCap.run(roleId, n, "org", now);
+      }
+    }
+  } else if (opts.allowAllLegacyRead) {
+    // Read-mostly: every legacy read atom
+    for (const [n, , action] of caps) {
+      if (action === "read") {
+        seedRoleCap.run(roleId, n, "org", now);
+      }
+    }
+  } else if (opts.excludeLegacy) {
+    const excl = new Set(opts.excludeLegacy);
+    for (const [n] of caps) {
+      if (!excl.has(n)) seedRoleCap.run(roleId, n, "org", now);
+    }
+  }
+  if (opts.uniformGrants) {
+    for (const capName of opts.uniformGrants) {
+      seedRoleCap.run(roleId, capName, "org", now);
+    }
   }
 }
 
-// Developer: use tools + read own
+// Security lead — everything EXCEPT user/role/provider management
+// (those stay admin-only). Gets full policy, audit, approvals, and
+// developer tools.
+if (secLeadRole) {
+  seedRoleWithCaps(secLeadRole.id, {
+    excludeLegacy: [
+      // legacy atoms to keep out
+      "org:write",
+      "billing:write",
+      "user:invite",
+      "user:remove",
+      "role:assign",
+      "role:manage",
+      "provider:manage",
+    ],
+    uniformGrants: [
+      // explicit uniform grants
+      "users:view",
+      "roles:view",
+      "teams:view",
+      "teams:edit",
+      "org_settings:view",
+      "billing:view",
+      "policies:view",
+      "policies:edit",
+      "policies:export",
+      "providers:view",
+      "audit_logs:view",
+      "audit_logs:export",
+      "approvals:view",
+      "approvals:edit",
+      "file_restrictions:view",
+      "file_restrictions:edit",
+      "chat:view",
+      "chat:create",
+      "agents:view",
+      "agents:create",
+      "mcp_tools:view",
+    ],
+  });
+  // Remove the uniform write atoms we DON'T want the filter to grant.
+  const blockedUniform = [
+    "users:create",
+    "users:edit",
+    "users:delete",
+    "users:export",
+    "roles:create",
+    "roles:edit",
+    "roles:delete",
+    "teams:create",
+    "teams:delete",
+    "teams:export",
+    "org_settings:edit",
+    "billing:edit",
+    "billing:export",
+    "providers:create",
+    "providers:edit",
+    "providers:delete",
+    "mcp_tools:create",
+    "mcp_tools:delete",
+  ];
+  const del = db.prepare(
+    "DELETE FROM role_capabilities WHERE role_id = ? AND capability_name = ?",
+  );
+  for (const c of blockedUniform) del.run(secLeadRole.id, c);
+}
+
+// Developer — limited to chat, agents, MCP. View-only on everything
+// else. Cannot edit policy, cannot invite users.
 if (devRole) {
-  const devCaps = [
+  seedRoleWithCaps(devRole.id, {
+    uniformGrants: [
+      "chat:view",
+      "chat:create",
+      "agents:view",
+      "agents:create",
+      "mcp_tools:view",
+      "users:view",
+      "roles:view",
+      "teams:view",
+      "policies:view",
+      "providers:view",
+      "audit_logs:view",
+      "org_settings:view",
+      "billing:view",
+    ],
+  });
+  // Also keep the legacy developer atoms so existing route checks
+  // for `requireCapability("agent:use")`, `terminal:execute`, etc.
+  // continue working.
+  const legacyDev = [
     "org:read",
     "team:read",
     "user:read",
@@ -865,7 +1157,7 @@ if (devRole) {
     "credit:read",
     "stats:read",
   ];
-  for (const capName of devCaps) {
+  for (const capName of legacyDev) {
     seedRoleCap.run(
       devRole.id,
       capName,
@@ -875,14 +1167,31 @@ if (devRole) {
   }
 }
 
-// Auditor: read everything, export, no write/execute
+// Auditor — read everything + export audit logs, no edits or tools.
 if (auditorRole) {
-  const auditorCaps = caps.filter(([, , action]) =>
-    ["read", "export"].includes(action),
-  );
-  for (const [capName] of auditorCaps) {
-    seedRoleCap.run(auditorRole.id, capName, "org", now);
-  }
+  seedRoleWithCaps(auditorRole.id, {
+    allowAllLegacyReadExport: true,
+    uniformGrants: [
+      "users:view",
+      "roles:view",
+      "teams:view",
+      "teams:export",
+      "policies:view",
+      "policies:export",
+      "providers:view",
+      "audit_logs:view",
+      "audit_logs:export",
+      "approvals:view",
+      "file_restrictions:view",
+      "chat:view",
+      "agents:view",
+      "mcp_tools:view",
+      "org_settings:view",
+      "billing:view",
+      "billing:export",
+      "users:export",
+    ],
+  });
 }
 
 // Migration: seed user_org_roles from existing users.role
@@ -915,6 +1224,68 @@ CREATE TABLE IF NOT EXISTS policies (
   UNIQUE(scope_type, scope_id)
 );
 `);
+
+// Role-scoped policies.
+//
+// Separate table because:
+//   1. The `policies` table's scope_id is INTEGER (FK to org/team); role
+//      is identified by its name (unique per org) — not a DB row id.
+//   2. Role policies are always nested under an org (a "developer" in
+//      org A is a different scope from "developer" in org B).
+//   3. The existing CHECK constraint on policies.scope_type would need
+//      a table rebuild to extend — a separate table is cheaper.
+//
+// Semantics: merged AFTER the org override and BEFORE team/project
+// overrides. Strictest-wins, so a role policy can only tighten the
+// org baseline, never relax it.
+//
+// The `role` column stores the role NAME (not a FK) so this table
+// works for both system roles (`admin`, `developer`, etc.) and custom
+// roles created via the RBAC UI — role names are unique per org via
+// the `roles.UNIQUE(org_id, name)` constraint.
+db.exec(`
+CREATE TABLE IF NOT EXISTS role_policies (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  role        TEXT NOT NULL,
+  policy_json TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  UNIQUE(org_id, role)
+);
+CREATE INDEX IF NOT EXISTS idx_role_policies_org ON role_policies(org_id);
+`);
+
+// Migration: drop the legacy CHECK constraint that restricted `role`
+// to the 4 system role names. SQLite doesn't support DROP CHECK, so
+// we rebuild the table if the old constraint is still in place.
+try {
+  const meta = db
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='role_policies'",
+    )
+    .get() as { sql: string } | undefined;
+  if (meta?.sql && meta.sql.includes("CHECK(role IN (")) {
+    db.exec(`
+      CREATE TABLE role_policies_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        role        TEXT NOT NULL,
+        policy_json TEXT NOT NULL,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL,
+        UNIQUE(org_id, role)
+      );
+      INSERT INTO role_policies_new (id, org_id, role, policy_json, created_at, updated_at)
+        SELECT id, org_id, role, policy_json, created_at, updated_at FROM role_policies;
+      DROP TABLE role_policies;
+      ALTER TABLE role_policies_new RENAME TO role_policies;
+      CREATE INDEX IF NOT EXISTS idx_role_policies_org ON role_policies(org_id);
+    `);
+  }
+} catch {
+  /* fresh DB — the block above created it without the constraint */
+}
 
 // SSO pending states (moved from in-memory Map)
 db.exec(`

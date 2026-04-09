@@ -23,6 +23,9 @@ import { registerUsageRoutes } from "./routes/usage.route";
 import { registerAuditRoutes } from "./routes/audit.route";
 import { registerPluginScanRoutes } from "./routes/pluginScan.route";
 import { registerSSORoutes } from "./routes/sso.route";
+import { registerAuthHandoffRoutes } from "./routes/authHandoff.route";
+import { registerWebLoginBridgeRoutes } from "./routes/webLoginBridge.route";
+import { registerPublicConfigRoute } from "./routes/publicConfig.route";
 import { registerWebhookRoutes } from "./routes/webhook.route";
 import { registerFileScanRoutes } from "./routes/fileScan.route";
 import { registerPreflightScanRoute } from "./routes/preflightScan.route";
@@ -54,6 +57,11 @@ import { logConfigSecurityWarnings } from "./middleware/configSecurityCheck";
 
 async function bootstrap(): Promise<void> {
   const app = Fastify({
+    // Fastify's default `maxParamLength` is 100, which truncates the
+    // signed invite tokens (≈208 chars) and causes /api/auth/invites/:token
+    // to 404. 1024 gives plenty of headroom for tokens, handoff nonces,
+    // and future long path params.
+    maxParamLength: 1024,
     logger: {
       level: process.env.LOG_LEVEL ?? "info",
       transport:
@@ -69,6 +77,34 @@ async function bootstrap(): Promise<void> {
       },
     },
   });
+
+  // Lenient JSON body parser: treats an empty body as `{}` instead of
+  // throwing FST_ERR_CTP_EMPTY_JSON_BODY. Matches the behaviour of
+  // most REST frameworks and means no-body POSTs (like
+  // `POST /api/users/me/onboarding/complete` or `POST /api/auth/logout`)
+  // work regardless of whether the client sent `Content-Type: application/json`.
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (_req, body, done) => {
+      const raw = typeof body === "string" ? body.trim() : "";
+      if (raw.length === 0) {
+        done(null, {});
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        done(null, parsed);
+      } catch (err) {
+        // Tag the error so Fastify returns 400 instead of the default 500.
+        const parseError = new Error(
+          err instanceof Error ? err.message : "Invalid JSON",
+        ) as Error & { statusCode?: number };
+        parseError.statusCode = 400;
+        done(parseError, undefined);
+      }
+    },
+  );
 
   // SECURITY: Only allow known origins — never use { origin: true } in production
   const ALLOWED_ORIGINS = [
@@ -94,6 +130,15 @@ async function bootstrap(): Promise<void> {
       cb(new Error(`Origin ${origin} not allowed by CORS`), false);
     },
     credentials: true,
+    // @fastify/cors's default allowed methods list is "GET, HEAD, POST",
+    // which blocks every PUT / PATCH / DELETE from the browser with a
+    // preflight failure. We use all five across the API — profile edits,
+    // policy uploads, role deletion, token revocation — so enumerate them
+    // explicitly here.
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    // Reflect the headers the browser asks for during preflight.
+    // `Authorization` + `Content-Type` cover every current route.
+    allowedHeaders: ["Authorization", "Content-Type", "X-Requested-With"],
   });
 
   // Serve dashboard static files when available (air-gapped single-container mode)
@@ -115,6 +160,11 @@ async function bootstrap(): Promise<void> {
 
   // Auth routes (register/login are public, token mgmt is authenticated)
   await registerAuthRoutes(app);
+
+  // Web-first auth bridge + local handoff (Phase 1 of unified auth refactor)
+  await registerPublicConfigRoute(app);
+  await registerWebLoginBridgeRoutes(app);
+  await registerAuthHandoffRoutes(app);
 
   // Authenticated / role-gated routes
   await registerLogsRoute(app);

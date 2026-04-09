@@ -105,6 +105,19 @@ export type ApprovalPolicyConfig = {
 
 export type PermissionMode = "off" | "auto" | "turbo";
 
+export type ResponseScanningConfig = {
+  enabled: boolean;
+  scan_secrets?: boolean;
+  scan_pii?: boolean;
+  redact_on_detection?: boolean;
+  stream_buffer_size?: number;
+};
+
+export type UnicodeNormalizationConfig = {
+  enabled: boolean;
+  block_on_anomaly?: boolean;
+};
+
 export type PolicyConfig = {
   version: string;
   rules: PolicyRules;
@@ -115,6 +128,13 @@ export type PolicyConfig = {
   strict_local?: boolean;
   model_policies?: Record<string, ModelPolicyRule>;
   prompt_injection?: PromptInjectionConfig;
+  /**
+   * Scan LLM RESPONSES (not just inputs) for leaked secrets or PII.
+   * Persisted in policy.json under the key of the same name.
+   */
+  response_scanning?: ResponseScanningConfig;
+  /** Unicode homoglyph / zero-width normalisation (policy.json). */
+  unicode_normalization?: UnicodeNormalizationConfig;
   audit?: AuditConfig;
   approval?: ApprovalPolicyConfig;
   /** Permission mode: off (ask all), auto (default), turbo (skip low-risk) */
@@ -251,6 +271,16 @@ export type User = {
   name: string;
   role: Role;
   orgId: number | null;
+  /**
+   * Whether the user has finished the post-signup onboarding wizard.
+   * Mirrors `users.onboarding_complete` (0/1) but typed as boolean.
+   */
+  onboardingComplete: boolean;
+  /**
+   * IANA timezone string captured in the onboarding wizard's Step 2.
+   * Nullable — SSO users and legacy rows may not have one.
+   */
+  timezone: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -259,6 +289,8 @@ export type Organization = {
   id: number;
   name: string;
   slug: string;
+  /** Free-text industry label from onboarding Step 2. */
+  industry?: string | null;
   createdAt: number;
 };
 
@@ -298,6 +330,12 @@ export type ApiToken = {
 export type AuthContext = {
   user: User;
   token: ApiToken;
+  /**
+   * The raw `afw_...` bearer string that came in on the Authorization header.
+   * Preserved so the handoff endpoint can write it to the shared auth file
+   * without forcing a second login. Never serialised, never logged.
+   */
+  rawToken: string;
 };
 
 export type ExportFormat = "csv" | "json";

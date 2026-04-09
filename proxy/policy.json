@@ -69,8 +69,8 @@
       "endpoint": "http://localhost:11434"
     },
     "cost_routing": {
-      "enabled": false,
-      "maxCostPerRequest": null,
+      "enabled": true,
+      "maxCostPerRequest": 1.5,
       "preferCheaper": false,
       "rules": []
     }
@@ -85,7 +85,7 @@
   },
   "unicode_normalization": {
     "enabled": true,
-    "block_on_anomaly": false
+    "block_on_anomaly": true
   },
   "rules_file_scanning": {
     "enabled": true,
@@ -94,10 +94,10 @@
   },
   "prompt_injection": {
     "enabled": true,
-    "threshold": 60
+    "threshold": 15
   },
   "response_scanning": {
-    "enabled": false,
+    "enabled": true,
     "scan_secrets": true,
     "scan_pii": true,
     "redact_on_detection": false,

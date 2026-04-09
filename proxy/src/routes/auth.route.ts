@@ -5,9 +5,11 @@ import {
   createApiToken,
   createUser,
   listApiTokens,
+  markOnboardingComplete,
   revokeApiToken,
   revokeAllUserTokens,
   rotateApiToken,
+  updateUserProfile,
   updateUserRole,
 } from "../auth/authService";
 import { requireAuth, requireCapability } from "../auth/authMiddleware";
@@ -113,6 +115,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           name: user.name,
           role: user.role,
           orgId: user.orgId ?? null,
+          onboardingComplete: user.onboardingComplete,
         },
         token,
       });
@@ -147,6 +150,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         name: user.name,
         role: user.role,
         orgId: user.orgId ?? null,
+        onboardingComplete: user.onboardingComplete,
       },
       token,
     };
@@ -161,9 +165,86 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         name: ctx.user.name,
         role: ctx.user.role,
         orgId: ctx.user.orgId,
+        onboardingComplete: ctx.user.onboardingComplete,
+        timezone: ctx.user.timezone,
       },
     };
   });
+
+  /**
+   * PUT /api/users/me
+   *
+   * Update display fields on the currently authenticated user. Accepts
+   * `name` and `timezone`; email / role / orgId are managed via
+   * dedicated admin routes. Fields omitted from the body are left
+   * untouched. Returns the refreshed user record.
+   */
+  const updateMeSchema = z
+    .object({
+      name: z.string().min(1).max(100).optional(),
+      timezone: z.string().max(64).nullable().optional(),
+    })
+    .refine((obj) => Object.keys(obj).length > 0, {
+      message: "Provide at least one field to update",
+    });
+
+  app.put(
+    "/api/users/me",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const ctx = request.authContext!;
+      const parsed = updateMeSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
+      const updated = updateUserProfile(ctx.user.id, parsed.data);
+      if (!updated) {
+        return reply.status(404).send({ error: "User not found" });
+      }
+      return {
+        user: {
+          id: updated.id,
+          email: updated.email,
+          name: updated.name,
+          role: updated.role,
+          orgId: updated.orgId,
+          onboardingComplete: updated.onboardingComplete,
+          timezone: updated.timezone,
+        },
+      };
+    },
+  );
+
+  /**
+   * POST /api/users/me/onboarding/complete
+   *
+   * Flips users.onboarding_complete to 1. The web dashboard's onboarding
+   * wizard hits this on the final "Finish" step. Once flipped, the gate
+   * in AppShell stops redirecting to /onboarding.
+   *
+   * Idempotent — safe to call repeatedly.
+   */
+  app.post(
+    "/api/users/me/onboarding/complete",
+    { preHandler: requireAuth },
+    async (request) => {
+      const ctx = request.authContext!;
+      markOnboardingComplete(ctx.user.id);
+      return {
+        ok: true,
+        user: {
+          id: ctx.user.id,
+          email: ctx.user.email,
+          name: ctx.user.name,
+          role: ctx.user.role,
+          orgId: ctx.user.orgId,
+          onboardingComplete: true,
+        },
+      };
+    },
+  );
 
   app.post(
     "/api/auth/tokens",

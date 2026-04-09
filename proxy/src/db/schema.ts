@@ -24,6 +24,11 @@ export const organizations = sqliteTable("organizations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  /**
+   * Free-text industry label captured in the onboarding wizard's Step 2.
+   * Purely metadata — never used for policy decisions.
+   */
+  industry: text("industry"),
   createdAt: integer("created_at").notNull(),
 });
 
@@ -36,6 +41,19 @@ export const users = sqliteTable("users", {
   orgId: integer("org_id").references(() => organizations.id, {
     onDelete: "set null",
   }),
+  /**
+   * 0 until the user has finished the post-signup onboarding wizard
+   * (workspace type, policy config, providers, etc.). The web dashboard
+   * gates access to /dashboard on this flag and redirects to /onboarding
+   * when 0.
+   */
+  onboardingComplete: integer("onboarding_complete").notNull().default(0),
+  /**
+   * IANA timezone (e.g. "America/Los_Angeles") captured in the
+   * onboarding wizard's Step 2. Nullable — SSO users may not have
+   * set it.
+   */
+  timezone: text("timezone"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });

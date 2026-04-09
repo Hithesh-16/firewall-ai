@@ -34,6 +34,7 @@ import {
   setupStatusBar,
   StatusBarStatus,
 } from "./autocomplete/statusBar";
+import { AiFirewallAuthService } from "./auth/aiFirewallAuthService";
 import { ContinueConsoleWebviewViewProvider } from "./ContinueConsoleWebviewViewProvider";
 import { ContinueGUIWebviewViewProvider } from "./ContinueGUIWebviewViewProvider";
 import { processDiff } from "./diff/processDiff";
@@ -129,6 +130,7 @@ const getCommandsMap: (
   quickEdit: QuickEdit,
   core: Core,
   editDecorationManager: EditDecorationManager,
+  aiFirewallAuth: AiFirewallAuthService,
 ) => { [command: string]: (...args: any) => any } = (
   ide,
   extensionContext,
@@ -140,6 +142,7 @@ const getCommandsMap: (
   quickEdit,
   core,
   editDecorationManager,
+  aiFirewallAuth,
 ) => {
   /**
    * Streams an inline edit to the vertical diff manager.
@@ -485,8 +488,32 @@ const getCommandsMap: (
     "aiFirewall.applyCodeFromChat": () => {
       void sidebar.webviewProtocol.request("applyCodeFromChat", undefined);
     },
-    "aiFirewall.login": () => {
-      vscode.commands.executeCommand("aiFirewall.navigateTo", "/login", false);
+    "aiFirewall.login": async () => {
+      // Phase 6: web-first sign-in. Opens the system browser to the
+      // AI Firewall web dashboard via the proxy's /web-login-start
+      // bridge, waits for the vscode:// URI handler to deliver the
+      // token, persists it to SecretStorage + the shared auth file
+      // (so CLI and JetBrains are automatically signed in too).
+      //
+      // A progress notification is shown while the browser is open
+      // so the user knows VS Code is waiting for them.
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Signing in to AI Firewall…",
+            cancellable: false,
+          },
+          async () => {
+            const state = await aiFirewallAuth.signIn();
+            const who = state.user?.email ?? "AI Firewall";
+            vscode.window.showInformationMessage(`Signed in as ${who}.`);
+          },
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`AI Firewall sign-in failed: ${msg}`);
+      }
     },
     "aiFirewall.logout": async () => {
       const confirm = await vscode.window.showWarningMessage(
@@ -496,28 +523,15 @@ const getCommandsMap: (
       );
       if (confirm !== "Sign Out") return;
 
-      // Try to revoke token on the proxy
-      const settings = vscode.workspace.getConfiguration("aiFirewall");
-      const token = settings.get<string | null>("userToken", null);
-      if (token) {
-        try {
-          await fetch("http://localhost:8080/api/auth/logout", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-          });
-        } catch {
-          // Proxy may be offline — proceed with local cleanup
-        }
-        await settings.update(
-          "userToken",
-          undefined,
-          vscode.ConfigurationTarget.Global,
+      try {
+        await aiFirewallAuth.signOut();
+        vscode.window.showInformationMessage("Signed out of AI Firewall.");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(
+          `Sign-out failed: ${msg}. Local state cleared anyway.`,
         );
       }
-
-      // Navigate to login page
-      vscode.commands.executeCommand("aiFirewall.navigateTo", "/login", false);
-      vscode.window.showInformationMessage("Signed out of AI Firewall.");
     },
     "aiFirewall.openConfigPage": () => {
       vscode.commands.executeCommand("aiFirewall.navigateTo", "/config", false);
@@ -1105,6 +1119,7 @@ export function registerAllCommands(
   quickEdit: QuickEdit,
   core: Core,
   editDecorationManager: EditDecorationManager,
+  aiFirewallAuth: AiFirewallAuthService,
 ) {
   for (const [command, callback] of Object.entries(
     getCommandsMap(
@@ -1118,6 +1133,7 @@ export function registerAllCommands(
       quickEdit,
       core,
       editDecorationManager,
+      aiFirewallAuth,
     ),
   )) {
     context.subscriptions.push(

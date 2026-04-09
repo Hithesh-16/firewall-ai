@@ -55,9 +55,54 @@ export function createUser(
     name,
     role,
     orgId,
+    onboardingComplete: false,
+    timezone: null,
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/**
+ * Mark a user as having finished the post-signup onboarding wizard.
+ * Idempotent — repeated calls are no-ops.
+ */
+export function markOnboardingComplete(userId: number): void {
+  db.update(users)
+    .set({ onboardingComplete: 1, updatedAt: Date.now() })
+    .where(eq(users.id, userId))
+    .run();
+}
+
+/**
+ * Update display fields on the current user.
+ *
+ * Currently editable: `name`, `timezone`. Email / role / orgId are
+ * managed via dedicated admin routes and intentionally NOT touchable
+ * here.
+ *
+ * Leaving a field undefined means "don't change it". Explicit empty
+ * strings clear the field.
+ */
+export function updateUserProfile(
+  userId: number,
+  updates: { name?: string; timezone?: string | null },
+): User | null {
+  const set: Record<string, unknown> = { updatedAt: Date.now() };
+  if (typeof updates.name === "string" && updates.name.trim().length > 0) {
+    set.name = updates.name.trim();
+  }
+  if (updates.timezone !== undefined) {
+    set.timezone =
+      typeof updates.timezone === "string" && updates.timezone.trim().length > 0
+        ? updates.timezone.trim()
+        : null;
+  }
+  if (Object.keys(set).length === 1) {
+    // Only updatedAt — nothing to do.
+    return getUserById(userId);
+  }
+  db.update(users).set(set).where(eq(users.id, userId)).run();
+  return getUserById(userId);
 }
 
 export function authenticateUser(email: string, password: string): User | null {
@@ -311,12 +356,19 @@ export function revokeAllUserTokens(userId: number): number {
 // --- Row mappers ---
 
 function rowToUser(row: any): User {
+  // Drizzle camelCases column names; raw better-sqlite3 rows are snake_case.
+  // Accept either so the same mapper works in both code paths.
+  const onboardingRaw =
+    row.onboardingComplete ?? row.onboarding_complete ?? 0;
+  const timezoneRaw = (row.timezone as string | null | undefined) ?? null;
   return {
     id: row.id as number,
     email: row.email as string,
     name: row.name as string,
     role: row.role as Role,
     orgId: (row.orgId as number | null) ?? null,
+    onboardingComplete: Number(onboardingRaw) === 1,
+    timezone: timezoneRaw,
     createdAt: row.createdAt as number,
     updatedAt: row.updatedAt as number,
   };

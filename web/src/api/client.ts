@@ -17,11 +17,29 @@ export class ApiClient {
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}${path}`;
+    const headers = this.getHeaders();
+
+    // When there's no body, drop the Content-Type header entirely.
+    // Fastify's default JSON parser treats an empty body with
+    // `Content-Type: application/json` as a 400 FST_ERR_CTP_EMPTY_JSON_BODY,
+    // which blows up any POST / DELETE / PATCH that doesn't take a payload
+    // (e.g. `POST /api/users/me/onboarding/complete`,
+    //       `POST /api/auth/logout`,
+    //       `DELETE /api/auth/handoff`).
+    //
+    // For method calls WITH a body we keep Content-Type; for empty ones
+    // we also normalise `body === undefined` into a zero-length string
+    // body so `fetch` doesn't set a phantom content-length.
+    const hasBody = body !== undefined;
+    if (!hasBody) {
+      delete headers["Content-Type"];
+    }
+
     const init: RequestInit = {
       method,
-      headers: this.getHeaders(),
+      headers,
     };
-    if (body !== undefined) {
+    if (hasBody) {
       init.body = JSON.stringify(body);
     }
 

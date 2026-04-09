@@ -15,13 +15,54 @@ import {
   deleteCustomRole,
   getRoleCapabilities,
   listAllCapabilities,
+  listEffectiveCapabilities,
   assignOrgRole,
   assignTeamRole,
   addCapabilityOverride,
   removeCapabilityOverride,
   listOverridesForUser,
   checkPermission,
+  countUsersWithRole,
 } from "../auth/rbacService";
+import { getUsersByOrg } from "../auth/authService";
+import rawDb from "../db/database";
+
+/**
+ * Map an RBAC service error (code on `err.code`) to a JSON response.
+ * Keeps the individual route handlers short and consistent.
+ */
+function rbacError(
+  reply: import("fastify").FastifyReply,
+  err: unknown,
+): import("fastify").FastifyReply {
+  const message = err instanceof Error ? err.message : "Unknown error";
+  const code =
+    err instanceof Error && "code" in err
+      ? (err as Error & { code?: string }).code
+      : undefined;
+  switch (code) {
+    case "RBAC_DEPENDENCY_VIOLATION":
+      return reply.status(422).send({ error: message, code });
+    case "RBAC_SYSTEM_ROLE_LOCKED":
+      return reply.status(403).send({ error: message, code });
+    case "RBAC_ROLE_IN_USE":
+      return reply.status(409).send({
+        error: message,
+        code,
+        count: (err as Error & { count?: number }).count ?? 0,
+      });
+    case "RBAC_EMPTY_ROLE":
+      return reply.status(422).send({ error: message, code });
+    case "RBAC_ROLE_NOT_FOUND":
+      return reply.status(404).send({ error: message, code });
+  }
+  if (message.includes("UNIQUE")) {
+    return reply
+      .status(409)
+      .send({ error: "Role name already exists in this org" });
+  }
+  return reply.status(400).send({ error: message });
+}
 
 const createRoleSchema = z.object({
   name: z.string().min(1).max(50),
@@ -54,6 +95,29 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
     "/api/capabilities",
     { preHandler: requireAuth },
     async () => ({ capabilities: listAllCapabilities() })
+  );
+
+  /**
+   * GET /api/me/permissions
+   *
+   * Returns the current user's flat effective permission atoms, e.g.
+   *   { "permissions": ["users:view", "chat:create", ...] }
+   *
+   * Consumed by the web/ Redux permissions slice on login + app
+   * startup. Hot-path for frontend permission checks — components
+   * never hit the DB, they read the cached Set from Redux.
+   */
+  app.get(
+    "/api/me/permissions",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const user = request.authContext?.user;
+      if (!user) return reply.status(401).send({ error: "Not authenticated" });
+      if (!user.orgId) {
+        return { permissions: [] };
+      }
+      return { permissions: listEffectiveCapabilities(user.id, user.orgId) };
+    },
   );
 
   // ── Roles ───────────────────────────────────────────────────────────
@@ -101,11 +165,7 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
         );
         return reply.status(201).send(role);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        if (message.includes("UNIQUE")) {
-          return reply.status(409).send({ error: "Role name already exists in this org" });
-        }
-        return reply.status(500).send({ error: message });
+        return rbacError(reply, err);
       }
     }
   );
@@ -125,13 +185,12 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
         updateRoleCapabilities(Number(id), parsed.data.capabilities);
         return { ok: true };
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        return reply.status(400).send({ error: message });
+        return rbacError(reply, err);
       }
     }
   );
 
-  /** Delete a custom role (cannot delete built-in) */
+  /** Delete a custom role (cannot delete built-in, cannot delete if users are assigned) */
   app.delete(
     "/api/roles/:id",
     { preHandler: [requireAuth, requireCapability("role:manage")] },
@@ -143,10 +202,83 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
         if (!deleted) return reply.status(404).send({ error: "Role not found" });
         return { ok: true };
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        return reply.status(400).send({ error: message });
+        return rbacError(reply, err);
       }
     }
+  );
+
+  /**
+   * GET /api/roles/:id/users-count
+   *
+   * Used by the matrix UI before confirming a delete — lets the
+   * frontend show "N users have this role" without a full user list.
+   */
+  app.get(
+    "/api/roles/:id/users-count",
+    { preHandler: [requireAuth, requireCapability("role:manage")] },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      return { count: countUsersWithRole(Number(id)) };
+    },
+  );
+
+  // ── Users list (for the role-assignment page) ──────────────────────
+
+  /**
+   * GET /api/users
+   *
+   * Returns every member of the caller's org with their current
+   * org-level role ID + display name. Single query feeding the
+   * matrix UI's Users tab and the standalone Users page.
+   */
+  app.get(
+    "/api/users",
+    { preHandler: [requireAuth, requireCapability("user:read")] },
+    async (request, reply) => {
+      const orgId = request.authContext?.user.orgId;
+      if (!orgId) {
+        return reply.status(400).send({ error: "User has no organization" });
+      }
+      const users = getUsersByOrg(orgId);
+      if (users.length === 0) return { users: [] };
+
+      // One query to pull every user's current org role in one hit.
+      const ids = users.map((u) => u.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const rows = rawDb
+        .prepare(
+          `SELECT uor.user_id AS userId, uor.role_id AS roleId, r.name AS roleName, r.display_name AS roleDisplayName, r.is_system AS isSystem
+             FROM user_org_roles uor
+             LEFT JOIN roles r ON r.id = uor.role_id
+            WHERE uor.org_id = ? AND uor.user_id IN (${placeholders})`,
+        )
+        .all(orgId, ...ids) as Array<{
+        userId: number;
+        roleId: number | null;
+        roleName: string | null;
+        roleDisplayName: string | null;
+        isSystem: number | null;
+      }>;
+      const byUser = new Map(rows.map((r) => [r.userId, r]));
+
+      return {
+        users: users.map((u) => {
+          const r = byUser.get(u.id);
+          return {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+            role: {
+              id: r?.roleId ?? null,
+              name: r?.roleName ?? u.role,
+              displayName: r?.roleDisplayName ?? u.role,
+              isSystem: r?.isSystem === 1,
+            },
+            createdAt: u.createdAt,
+          };
+        }),
+      };
+    },
   );
 
   // ── User Role Assignment ────────────────────────────────────────────

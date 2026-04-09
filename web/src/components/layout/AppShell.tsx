@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { Outlet, Navigate } from "react-router-dom";
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { MobileNav } from "./MobileNav";
 import { ToastContainer } from "../ui/Toast";
 import { useAppSelector, useAppDispatch } from "../../store/hooks";
 import { setCredentials, logout } from "../../store/slices/authSlice";
+import {
+  clearPermissions,
+  fetchUserPermissions,
+} from "../../store/slices/permissionsSlice";
 import { getToken } from "../../utils/storage";
 import { apiClient } from "../../api/client";
 import { ROUTES } from "../../utils/routes";
@@ -14,7 +18,9 @@ import type { User } from "../../api/types";
 
 export function AppShell() {
   const dispatch = useAppDispatch();
+  const location = useLocation();
   const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
+  const user = useAppSelector((s) => s.auth.user);
   const [checking, setChecking] = useState(!isAuthenticated);
 
   useEffect(() => {
@@ -30,9 +36,13 @@ export function AppShell() {
       .get<{ user: User }>("/api/auth/me")
       .then((res) => {
         dispatch(setCredentials({ user: res.user, token }));
+        // Page refresh: rehydrate the permission cache too so
+        // ProtectedRoute doesn't redirect authorised users to /403.
+        dispatch(fetchUserPermissions());
       })
       .catch(() => {
         dispatch(logout());
+        dispatch(clearPermissions());
       })
       .finally(() => {
         setChecking(false);
@@ -51,6 +61,16 @@ export function AppShell() {
     // Send unauthenticated visitors to the login page; they can click
     // "Back to home" from there to reach the public landing page.
     return <Navigate to={ROUTES.LOGIN} replace />;
+  }
+
+  // First-time users land here with onboardingComplete === false. Force
+  // them through the wizard before they can reach any other authed route.
+  // The /onboarding routes are themselves NOT inside this AppShell so the
+  // redirect doesn't loop.
+  const needsOnboarding = user?.onboardingComplete === false;
+  const onOnboardingRoute = location.pathname.startsWith("/onboarding");
+  if (needsOnboarding && !onOnboardingRoute) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return (

@@ -20,7 +20,15 @@ export interface User {
   email: string;
   name: string;
   role: "admin" | "security_lead" | "developer" | "auditor";
-  orgId?: string;
+  orgId?: string | number | null;
+  /**
+   * False until the post-signup wizard finishes. AppShell uses this to
+   * gate access to /dashboard and friends — anyone with `false` lands
+   * on /onboarding instead.
+   */
+  onboardingComplete?: boolean;
+  /** IANA timezone string, e.g. "America/Los_Angeles". */
+  timezone?: string | null;
 }
 
 export interface AuthResponse {

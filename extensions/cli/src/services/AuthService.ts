@@ -1,14 +1,19 @@
 import { AuthenticatedConfig } from "src/auth/workos-types.js";
 
 import {
-  login as doLogin,
-  logout as doLogout,
   ensureOrganization,
   isAuthenticated,
   listUserOrganizations,
   loadAuthConfig,
   saveAuthConfig,
 } from "../auth/workos.js";
+// Phase 5+ — both sign-in and sign-out now go through the shared
+// web-first flow in commands/login.ts and commands/logout.ts. The
+// legacy WorkOS device-auth `doLogin` / `doLogout` pair is gone: it
+// talked to a service we no longer operate and crashed the TUI with
+// "Token refresh error: fetch failed" on every start.
+import { authenticate as webAuthenticate } from "../commands/login.js";
+import { logout as webLogout } from "../commands/logout.js";
 import { logger } from "../util/logger.js";
 
 import { BaseService } from "./BaseService.js";
@@ -49,17 +54,28 @@ export class AuthService extends BaseService<AuthServiceState> {
   }
 
   /**
-   * Perform login flow
+   * Perform login flow via the web-first loopback handshake. The actual
+   * work lives in `commands/login.ts` — this wrapper just re-reads the
+   * auth file after `authenticate()` returns and updates service state.
    */
   async login(): Promise<AuthServiceState> {
-    logger.debug("Starting login flow");
+    logger.debug("Starting web-first login flow");
 
     try {
-      const newAuthConfig = await doLogin();
+      const ok = await webAuthenticate({ force: true });
+      if (!ok) {
+        throw new Error("Sign-in did not complete");
+      }
+
+      // The web flow writes ~/.ai-firewall/auth.json atomically; re-load
+      // it and re-check authenticated status from disk so the service
+      // state is accurate for every downstream consumer.
+      const newAuthConfig = loadAuthConfig();
+      const authenticated = await isAuthenticated();
 
       this.setState({
         authConfig: newAuthConfig,
-        isAuthenticated: true,
+        isAuthenticated: authenticated,
         organizationId: newAuthConfig?.organizationId || undefined,
       });
 
@@ -76,12 +92,21 @@ export class AuthService extends BaseService<AuthServiceState> {
   }
 
   /**
-   * Perform logout
+   * Perform logout via the shared web-first flow. Always clears local
+   * state even if the server revoke call fails — the user's intent is
+   * "get me signed out", and the worst case is a stale token the proxy
+   * will reject on next use.
    */
   async logout(): Promise<AuthServiceState> {
-    logger.debug("Logging out");
+    logger.debug("Logging out (web-first flow)");
 
-    doLogout();
+    try {
+      await webLogout();
+    } catch (error) {
+      // commands/logout.ts already swallows everything it can, but
+      // we still wrap defensively so a bug there can't wedge the TUI.
+      logger.error("webLogout threw — clearing local state anyway", error);
+    }
 
     this.setState({
       authConfig: null,

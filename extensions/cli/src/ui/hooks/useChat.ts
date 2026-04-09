@@ -412,12 +412,18 @@ export function useChat({
   const handleSlashCommandProcessing = async (
     message: string,
   ): Promise<string | null> => {
-    // Handle slash commands
-    if (!assistant) {
-      return message;
-    }
+    // Slash commands must keep working even when the assistant / model
+    // failed to load — otherwise `/login`, `/logout`, `/model`, `/config`
+    // and `/exit` are unreachable and the user is stranded at
+    // "Model: Loading..." with no way out. If the assistant config is
+    // missing we pass an empty one so the built-in system commands
+    // (which don't need any assistant-specific data) still dispatch.
+    const assistantForCommands = (assistant ??
+      ({ prompts: [], rules: [] } as unknown as NonNullable<
+        typeof assistant
+      >));
 
-    const commandResult = await handleSlashCommands(message, assistant, {
+    const commandResult = await handleSlashCommands(message, assistantForCommands, {
       remoteUrl,
       isRemoteMode,
     });

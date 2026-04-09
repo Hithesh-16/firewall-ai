@@ -4,6 +4,7 @@ import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { cn } from "../../utils/cn";
 import { useAppDispatch } from "../../store/hooks";
 import { setCredentials, setLoading } from "../../store/slices/authSlice";
+import { fetchUserPermissions } from "../../store/slices/permissionsSlice";
 import { apiClient } from "../../api/client";
 import { setToken } from "../../utils/storage";
 import { ROUTES } from "../../utils/routes";
@@ -13,6 +14,40 @@ import AnimatedBackdrop from "../../components/brand/AnimatedBackdrop";
 import BrandShield from "../../components/brand/BrandShield";
 
 type AuthTab = "login" | "register";
+
+/**
+ * Decodes the `?ext=<base64url>.<hmac>` payload the proxy's
+ * /web-login-start route appends to our URL when an extension kicks
+ * off a sign-in. We don't bother verifying the HMAC on the client —
+ * the only consumer of the decoded fields is the loopback delivery
+ * below, which itself validates the `state` nonce end-to-end, so a
+ * forged payload just produces a rejected loopback call. The HMAC
+ * exists to keep a malicious page from crafting its own redirect
+ * that the proxy trusts; by the time we're reading `window.location`
+ * we're already past that check.
+ */
+interface ExtPayload {
+  return?: "cli" | "vscode" | "jetbrains";
+  callback?: string | null;
+  port?: number | null;
+  state?: string | null;
+  createdAt?: number;
+}
+
+function decodeExtPayload(raw: string | null): ExtPayload | null {
+  if (!raw) return null;
+  const [payload] = raw.split(".");
+  if (!payload) return null;
+  try {
+    // Browsers don't have Buffer, so roll our own base64url → string.
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "===".slice((b64.length + 3) % 4);
+    const json = atob(padded);
+    return JSON.parse(json) as ExtPayload;
+  } catch {
+    return null;
+  }
+}
 
 interface SSOConfigResponse {
   enabled: boolean;
@@ -126,6 +161,94 @@ export function LoginPage() {
       });
   }, []);
 
+  /**
+   * Post-success housekeeping shared by every sign-in path:
+   *   1. Persist token + user in Redux + localStorage.
+   *   2. Tell the proxy to write the shared auth file (best-effort —
+   *      fails silently on remote-proxy deployments).
+   *   3. If the user came in via /web-login-start (an extension flow),
+   *      bounce the token to the loopback / vscode:// callback.
+   *   4. Otherwise, navigate to /onboarding (if first-time) or /dashboard.
+   */
+  async function finishSignIn(user: AuthResponse["user"], token: string) {
+    setToken(token);
+    dispatch(setCredentials({ user, token }));
+
+    // Load the user's effective permissions into Redux BEFORE any
+    // ProtectedRoute / PermissionGate gets a chance to render. Fire
+    // and forget — failures are non-fatal (the hooks treat an
+    // unfetched list as "no access" which will trigger /403 rather
+    // than admit the user falsely).
+    dispatch(fetchUserPermissions());
+
+    // Best-effort handoff to local extensions
+    try {
+      await apiClient.post("/api/auth/handoff", { source: "web" });
+    } catch (handoffErr) {
+      console.warn(
+        "[LoginPage] Local handoff failed (remote proxy?):",
+        handoffErr instanceof Error ? handoffErr.message : handoffErr,
+      );
+    }
+
+    // Step 3: bounce token to extension if `?from=extension` is in the URL.
+    //
+    // Handoff mechanism: the proxy's `/web-login-start` route signs the
+    // callback params (return, port, callback, state) into a base64url
+    // payload and appends it to this page as `?ext=<payload>`. We
+    // decode it inline — no cross-origin cookie round trip, which was
+    // broken in dev because the web dashboard runs on :5174 and the
+    // proxy on :8080, and SameSite=Lax cookies are dropped on
+    // cross-origin XHR.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("from") === "extension") {
+      const extRaw = params.get("ext");
+      const extInfo = decodeExtPayload(extRaw);
+      if (extInfo) {
+        if (extInfo.return === "vscode" && extInfo.callback) {
+          const stateQs = extInfo.state
+            ? `&state=${encodeURIComponent(extInfo.state)}`
+            : "";
+          const target = `${extInfo.callback}?token=${encodeURIComponent(
+            token,
+          )}${stateQs}`;
+          window.location.replace(target);
+          return;
+        }
+        if (
+          (extInfo.return === "cli" || extInfo.return === "jetbrains") &&
+          extInfo.port
+        ) {
+          // CRITICAL: the loopback server in @ai-firewall/shared-auth
+          // strictly validates `state` against the nonce the CLI
+          // generated when it opened the browser. Without it, the
+          // server 400s and the CLI sits at "Opening browser..."
+          // forever because the token delivery never completes.
+          const stateQs = extInfo.state
+            ? `&state=${encodeURIComponent(extInfo.state)}`
+            : "";
+          try {
+            await fetch(
+              `http://127.0.0.1:${extInfo.port}/?token=${encodeURIComponent(
+                token,
+              )}${stateQs}`,
+              { mode: "no-cors" },
+            );
+          } catch {
+            /* loopback delivery is best-effort */
+          }
+        }
+      }
+    }
+
+    // Step 4: route based on onboarding status
+    if (user.onboardingComplete === false) {
+      navigate("/onboarding");
+    } else {
+      navigate(ROUTES.CHAT);
+    }
+  }
+
   // Listen for SSO callback postMessage
   useEffect(() => {
     function handleSSOMessage(event: MessageEvent) {
@@ -136,10 +259,7 @@ export function LoginPage() {
       setToken(token);
       apiClient
         .get<{ user: AuthResponse["user"] }>("/api/auth/me")
-        .then((data) => {
-          dispatch(setCredentials({ user: data.user, token }));
-          navigate(ROUTES.CHAT);
-        })
+        .then((data) => finishSignIn(data.user, token))
         .catch(() => {
           setError("SSO login succeeded but token validation failed");
         });
@@ -147,6 +267,7 @@ export function LoginPage() {
 
     window.addEventListener("message", handleSSOMessage);
     return () => window.removeEventListener("message", handleSSOMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, navigate]);
 
   function handleSSOLogin(provider: string) {
@@ -181,9 +302,7 @@ export function LoginPage() {
         });
       }
 
-      setToken(response.token);
-      dispatch(setCredentials({ user: response.user, token: response.token }));
-      navigate(ROUTES.CHAT);
+      await finishSignIn(response.user, response.token);
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);

@@ -1,411 +1,306 @@
 import chalk from "chalk";
-import readline from "node:readline";
-import http from "node:http";
 
-import { login as workosLogin, saveAuthConfig } from "../auth/workos.js";
+import {
+  buildWebLoginUrl,
+  DEFAULT_LOOPBACK_PORTS,
+  generateStateNonce,
+  getAuthFilePath,
+  loadAuthFile,
+  saveAuthFile,
+  startLoopbackTokenServer,
+  type SharedAuthFile,
+  type UserRole,
+} from "@ai-firewall/shared-auth";
+
 import { gracefulExit } from "../util/exit.js";
 
-const PROXY_BASE = process.env.AI_FIREWALL_PROXY_URL || "http://localhost:8080";
+/**
+ * Phase 5 — CLI web-first login.
+ *
+ * The old flow (WorkOS device-authorization + terminal-prompted email
+ * and password + a "how do you want to get started?" interactive menu)
+ * is gone. The CLI now shares exactly one sign-in surface with every
+ * other surface in the product: the web dashboard.
+ *
+ * Flow:
+ *
+ *   1. Read the configured proxy URL (`AI_FIREWALL_PROXY_URL` env var
+ *      or the value baked into an existing auth.json; default
+ *      `http://localhost:8080`). `cn login --proxy <url>` overrides
+ *      it on the fly.
+ *
+ *   2. Start a tiny HTTP server on `127.0.0.1:19836` that expects a
+ *      single `?token=<afw_...>` GET. Gets its port from shared-auth
+ *      and automatically bumps up by 1 if 19836 is taken.
+ *
+ *   3. Open the user's browser at
+ *      `${proxyUrl}/web-login-start?return=cli&port=<port>&state=<nonce>`.
+ *      The proxy signs the callback info into a short-lived cookie
+ *      and redirects to `/login?from=extension`. The user signs in
+ *      (email/password or SSO), then the web dashboard's LoginPage
+ *      reads the cookie and `fetch()`es `http://127.0.0.1:<port>/?token=…&state=…`.
+ *
+ *   4. The loopback server receives the token, validates the state
+ *      nonce, and shuts down.
+ *
+ *   5. We call `GET /api/auth/me` on the proxy with the new token to
+ *      learn who we just signed in as, then `saveAuthConfig` writes
+ *      the shared-auth file (chmod 600).
+ *
+ *   6. Print a "✓ Signed in as <email>" line and return control. If
+ *      the caller was the top-level `cn login` command, it drops into
+ *      chat.
+ *
+ * Fallbacks / edge cases:
+ *
+ *   - If `AI_FIREWALL_API_KEY` is set, there's nothing to do — print
+ *     a note and exit 0.
+ *   - If a valid shared auth file already exists and hasn't expired,
+ *     print "Already signed in" and exit 0. `cn login --force` bypasses.
+ *   - If the user closes the browser without finishing, the loopback
+ *     server times out after 5 minutes and we print a clean error.
+ */
 
-function prompt(question: string, isPassword = false): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+// ─── Types for the proxy's /api/auth/me response ────────────────────
 
-  return new Promise((resolve) => {
-    if (isPassword && process.stdin.isTTY) {
-      // Mask password input
-      process.stdout.write(question);
-      let input = "";
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.setEncoding("utf8");
-      const onData = (char: string) => {
-        if (char === "\n" || char === "\r" || char === "\u0004") {
-          process.stdin.setRawMode(false);
-          process.stdin.pause();
-          process.stdin.removeListener("data", onData);
-          process.stdout.write("\n");
-          rl.close();
-          resolve(input);
-        } else if (char === "\u0003") {
-          // Ctrl+C
-          process.stdin.setRawMode(false);
-          rl.close();
-          process.exit(0);
-        } else if (char === "\u007F" || char === "\b") {
-          // Backspace
-          if (input.length > 0) {
-            input = input.slice(0, -1);
-            process.stdout.write("\b \b");
-          }
-        } else {
-          input += char;
-          process.stdout.write("*");
-        }
-      };
-      process.stdin.on("data", onData);
-    } else {
-      rl.question(question, (answer) => {
-        rl.close();
-        resolve(answer);
-      });
-    }
-  });
+interface MeResponse {
+  user: {
+    id: number;
+    email: string;
+    name?: string;
+    role?: string;
+    orgId?: number | null;
+    onboardingComplete?: boolean;
+  };
+}
+
+// ─── Options parsing ────────────────────────────────────────────────
+
+export interface AuthenticateOptions {
+  /**
+   * Override the configured proxy URL for this one sign-in attempt.
+   * Equivalent to the `--proxy <url>` flag on the login command.
+   */
+  proxyUrl?: string;
+  /** Skip the "already signed in" short-circuit. */
+  force?: boolean;
 }
 
 /**
- * Start a temporary local HTTP server to receive the OAuth callback token.
- * Returns a promise that resolves with the token string.
+ * Resolve the proxy URL to target for this sign-in attempt. Priority:
+ *   1. Explicit override from the caller / --proxy flag
+ *   2. `AI_FIREWALL_PROXY_URL` env var
+ *   3. The `proxyUrl` field from an existing shared-auth file (useful
+ *      when the user has an expired token but remembers which proxy
+ *      they were pointed at)
+ *   4. Default `http://localhost:8080`
  */
-function waitForOAuthCallback(
-  port: number,
-  timeoutMs = 120_000,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const url = new URL(req.url ?? "/", `http://localhost:${port}`);
-      const token = url.searchParams.get("token");
-
-      if (token) {
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(`
-          <html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#e2e8f0;">
-            <div style="text-align:center;">
-              <h2>Authenticated!</h2>
-              <p>You can close this window and return to the terminal.</p>
-            </div>
-          </body></html>
-        `);
-        server.close();
-        resolve(token);
-      } else {
-        res.writeHead(400, { "Content-Type": "text/plain" });
-        res.end("Missing token parameter");
-      }
-    });
-
-    server.listen(port, "127.0.0.1");
-
-    const timer = setTimeout(() => {
-      server.close();
-      reject(new Error("OAuth callback timed out"));
-    }, timeoutMs);
-
-    server.on("close", () => clearTimeout(timer));
-    server.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-  });
-}
-
-/**
- * Authenticate via Google OAuth through the proxy SSO flow.
- * Opens the browser, starts a local callback server, and waits for the token.
- */
-async function authenticateWithGoogle(): Promise<boolean> {
-  const callbackPort = 19836;
-
-  console.info(chalk.dim("\nOpening browser for Google sign-in..."));
-
-  // Start the local callback server before opening the browser
-  const tokenPromise = waitForOAuthCallback(callbackPort);
-
-  // Open the proxy SSO login URL — the proxy will redirect to Google
-  // After Google auth, the proxy callback HTML will post the token.
-  // We use a custom redirect that sends the token to our local server.
-  try {
-    const open = (await import("open")).default;
-    await open(`${PROXY_BASE}/api/auth/sso/login?provider=google`);
-  } catch {
-    console.info(
-      chalk.yellow(
-        `Could not open browser. Please visit: ${PROXY_BASE}/api/auth/sso/login?provider=google`,
-      ),
-    );
+function resolveProxyUrl(opts: AuthenticateOptions): string {
+  if (opts.proxyUrl && opts.proxyUrl.trim().length > 0) {
+    return opts.proxyUrl.trim().replace(/\/+$/, "");
   }
-
-  console.info(chalk.dim("Waiting for authentication in browser..."));
-
-  try {
-    const token = await tokenPromise;
-
-    // Verify the token and get user info
-    const meRes = await fetch(`${PROXY_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!meRes.ok) {
-      console.error(chalk.red("Failed to verify token from OAuth flow."));
-      return false;
-    }
-
-    const meData = (await meRes.json()) as {
-      user: { id: number; email: string; name: string; role: string };
-    };
-
-    saveAuthConfig({
-      userId: String(meData.user.id),
-      userEmail: meData.user.email,
-      accessToken: token,
-      refreshToken: "",
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-      organizationId: null,
-    });
-
-    console.info(
-      chalk.green(`\nLogged in as ${meData.user.email} (${meData.user.role})`),
-    );
-    return true;
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`Google OAuth failed: ${msg}`));
-    return false;
+  if (process.env.AI_FIREWALL_PROXY_URL) {
+    return process.env.AI_FIREWALL_PROXY_URL.replace(/\/+$/, "");
   }
+  const existing = loadAuthFile();
+  if (existing?.proxyUrl) {
+    return existing.proxyUrl.replace(/\/+$/, "");
+  }
+  return "http://localhost:8080";
 }
 
-/**
- * Authenticate against the proxy (or WorkOS fallback).
- * Returns true if auth succeeded, false if the user aborted.
- * Does NOT start chat — callers decide what to do next.
- */
-export async function authenticate(): Promise<boolean> {
-  console.info(chalk.yellow("AI Firewall — Login\n"));
+// ─── Public API ─────────────────────────────────────────────────────
 
-  // Check for env var shortcut
+/**
+ * Run the web-first sign-in flow. Returns true on success, false on
+ * any recoverable failure (timeout, bad token, network error). Callers
+ * should either show a friendly message or call `gracefulExit(1)`.
+ *
+ * Never throws for user-visible conditions — everything routes through
+ * a chalk.red console.error so the exit code and UX are consistent.
+ */
+export async function authenticate(
+  opts: AuthenticateOptions = {},
+): Promise<boolean> {
+  // 1. Env var shortcut — nothing to do.
   if (process.env.AI_FIREWALL_API_KEY) {
-    console.info(chalk.green("Using AI_FIREWALL_API_KEY from environment."));
+    console.info(
+      chalk.green("✓ Using AI_FIREWALL_API_KEY from environment — no sign-in needed."),
+    );
     return true;
   }
 
-  // Check if proxy is reachable and has SSO configured
-  let ssoProviders: string[] = [];
-  try {
-    const ssoRes = await fetch(`${PROXY_BASE}/api/auth/sso/config`);
-    if (ssoRes.ok) {
-      const ssoData = (await ssoRes.json()) as {
-        enabled: boolean;
-        providers: string[];
-      };
-      if (ssoData.enabled) {
-        ssoProviders = ssoData.providers;
-      }
-    }
-  } catch {
-    // Proxy not reachable — will fall back below
-  }
+  const proxyUrl = resolveProxyUrl(opts);
 
-  // Show auth method selection if SSO is available
-  if (ssoProviders.length > 0) {
-    console.info(chalk.white("Choose sign-in method:\n"));
-    console.info(chalk.white("  1) Email & Password"));
-    if (ssoProviders.includes("google")) {
-      console.info(chalk.white("  2) Google OAuth"));
-    }
-    if (ssoProviders.includes("github")) {
-      console.info(chalk.white("  3) GitHub OAuth"));
-    }
-    console.info("");
-
-    const choice = await prompt(chalk.white("Enter choice (1): "));
-    const selected = choice.trim() || "1";
-
-    if (selected === "2" && ssoProviders.includes("google")) {
-      return authenticateWithGoogle();
-    }
-    if (selected === "3" && ssoProviders.includes("github")) {
-      // GitHub uses the same OAuth flow pattern
-      return authenticateWithSSO("github");
-    }
-    // Default: fall through to email/password
-  }
-
-  // Try proxy-based email/password auth
-  try {
-    const email = await prompt(chalk.white("Email: "));
-    const password = await prompt(chalk.white("Password: "), true);
-
-    if (!email || !password) {
-      console.error(chalk.red("Email and password are required."));
-      return false;
-    }
-
-    const res = await fetch(`${PROXY_BASE}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: res.statusText }));
-      const errMsg = (body as { error?: string }).error ?? `HTTP ${res.status}`;
-
-      // If proxy is running but credentials are wrong
-      if (res.status === 401 || res.status === 400) {
-        console.error(chalk.red(`Login failed: ${errMsg}`));
-
-        // Offer registration
-        const register = await prompt(
-          chalk.yellow("\nNo account? Register now? (y/n): "),
-        );
-        if (register.toLowerCase() === "y") {
-          const name = await prompt(chalk.white("Name: "));
-          const regRes = await fetch(`${PROXY_BASE}/api/auth/register`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, name, password }),
-          });
-          if (regRes.ok) {
-            const data = (await regRes.json()) as {
-              user: { id: string; email: string; name: string; role: string };
-              token: string;
-            };
-            saveAuthConfig({
-              userId: String(data.user.id),
-              userEmail: data.user.email,
-              accessToken: data.token,
-              refreshToken: "",
-              expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-              organizationId: null,
-            });
-            console.info(
-              chalk.green(
-                `\nRegistered and logged in as ${data.user.email} (${data.user.role})`,
-              ),
-            );
-            return true;
-          }
-          const regBody = await regRes.json().catch(() => ({}));
-          console.error(
-            chalk.red(
-              `Registration failed: ${(regBody as { error?: string }).error ?? regRes.statusText}`,
+  // 2. Already-signed-in short-circuit unless --force.
+  if (!opts.force) {
+    const existing = loadAuthFile();
+    if (
+      existing &&
+      existing.accessToken &&
+      (!existing.expiresAt || existing.expiresAt > Date.now())
+    ) {
+      // Validate the token against the proxy — cheap, catches the
+      // case where the proxy was wiped but the file wasn't.
+      try {
+        const ok = await validateToken(proxyUrl, existing.accessToken);
+        if (ok) {
+          console.info(
+            chalk.green(
+              `✓ Already signed in as ${existing.user.email} (${proxyUrl})`,
             ),
           );
-          return false;
+          return true;
         }
-        return false;
-      }
-
-      throw new Error(errMsg);
-    }
-
-    const data = (await res.json()) as {
-      user: { id: string; email: string; name: string; role: string };
-      token: string;
-    };
-
-    saveAuthConfig({
-      userId: String(data.user.id),
-      userEmail: data.user.email,
-      accessToken: data.token,
-      refreshToken: "",
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-      organizationId: null,
-    });
-
-    console.info(
-      chalk.green(`\nLogged in as ${data.user.email} (${data.user.role})`),
-    );
-    return true;
-  } catch (error: unknown) {
-    const err = error as {
-      code?: string;
-      cause?: { code?: string };
-      message?: string;
-    };
-    // If proxy is unreachable, fall back to WorkOS
-    if (err.code === "ECONNREFUSED" || err.cause?.code === "ECONNREFUSED") {
-      console.info(
-        chalk.yellow(
-          "\nProxy not running on localhost:8080. Falling back to legacy auth...",
-        ),
-      );
-      try {
-        await workosLogin();
-        console.info(chalk.green("Successfully logged in!"));
-        return true;
-      } catch (fallbackErr: unknown) {
-        const fbErr = fallbackErr as { message?: string };
-        console.error(chalk.red(`Login failed: ${fbErr.message}`));
-        return false;
+      } catch {
+        // fall through to a fresh sign-in
       }
     }
-
-    console.error(chalk.red(`Login failed: ${err.message}`));
-    return false;
   }
-}
 
-/**
- * Authenticate via any SSO provider through the proxy.
- */
-async function authenticateWithSSO(provider: string): Promise<boolean> {
-  const callbackPort = 19836;
+  console.info(chalk.yellow("AI Firewall — Sign in"));
+  console.info(chalk.dim(`  proxy:     ${proxyUrl}`));
 
-  console.info(chalk.dim(`\nOpening browser for ${provider} sign-in...`));
+  // 3. Spin up the loopback receiver.
+  const state = generateStateNonce();
+  const port = DEFAULT_LOOPBACK_PORTS.cli;
+  const server = startLoopbackTokenServer({ port, state });
 
-  const tokenPromise = waitForOAuthCallback(callbackPort);
+  // 4. Open the browser.
+  const url = buildWebLoginUrl({
+    proxyUrl,
+    return: "cli",
+    port,
+    state,
+  });
+  console.info(chalk.dim(`  callback:  http://127.0.0.1:${port}`));
+  console.info(chalk.dim("  Opening browser..."));
 
   try {
-    const open = (await import("open")).default;
-    await open(`${PROXY_BASE}/api/auth/sso/login?provider=${provider}`);
+    const { default: open } = await import("open");
+    await open(url);
   } catch {
     console.info(
       chalk.yellow(
-        `Could not open browser. Please visit: ${PROXY_BASE}/api/auth/sso/login?provider=${provider}`,
+        `  Could not open browser. Open this URL manually:\n  ${url}`,
       ),
     );
   }
 
-  console.info(chalk.dim("Waiting for authentication in browser..."));
-
+  // 5. Wait for the token. The shared-auth server auto-shuts-down on
+  //    success; we only need to catch a timeout.
+  let token: string;
   try {
-    const token = await tokenPromise;
-
-    const meRes = await fetch(`${PROXY_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!meRes.ok) {
-      console.error(chalk.red("Failed to verify token from OAuth flow."));
-      return false;
-    }
-
-    const meData = (await meRes.json()) as {
-      user: { id: number; email: string; name: string; role: string };
-    };
-
-    saveAuthConfig({
-      userId: String(meData.user.id),
-      userEmail: meData.user.email,
-      accessToken: token,
-      refreshToken: "",
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-      organizationId: null,
-    });
-
-    console.info(
-      chalk.green(`\nLogged in as ${meData.user.email} (${meData.user.role})`),
-    );
-    return true;
-  } catch (err: unknown) {
+    const result = await server;
+    token = result.token;
+  } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`${provider} OAuth failed: ${msg}`));
+    console.error(chalk.red(`Sign-in failed: ${msg}`));
+    return false;
+  }
+
+  // 6. Fetch the user record from the proxy and persist.
+  try {
+    const me = await fetchMe(proxyUrl, token);
+    persistToken(proxyUrl, token, me);
+    const onboardingHint =
+      me.user.onboardingComplete === false
+        ? chalk.dim("  (onboarding not finished — open the web dashboard to continue setup)")
+        : "";
+    console.info(
+      chalk.green(
+        `\n✓ Signed in as ${me.user.email}${me.user.role ? ` (${me.user.role})` : ""}`,
+      ),
+    );
+    console.info(chalk.dim(`  token saved to ${getAuthFilePath()}`));
+    if (onboardingHint) console.info(onboardingHint);
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(chalk.red(`Token validation failed: ${msg}`));
     return false;
   }
 }
 
 /**
- * Login command — authenticates and then starts chat.
+ * `cn login` entry point — authenticates then starts the TUI chat.
+ *
+ * Accepts the same options as `authenticate` so `cn login --proxy https://…`
+ * works at the shell level.
  */
-export async function login() {
-  const success = await authenticate();
-  if (success) {
-    const { chat } = await import("./chat.js");
-    await chat();
-  } else {
+export async function login(opts: AuthenticateOptions = {}): Promise<void> {
+  const success = await authenticate(opts);
+  if (!success) {
     await gracefulExit(1);
+    return;
   }
+  // Lazy-import chat so the heavy yoga-layout / Ink chain only loads
+  // when we actually need the TUI. See notes in index.ts.
+  const { chat } = await import("./chat.js");
+  await chat();
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+
+/**
+ * Hit `/api/auth/me` on the proxy with the given bearer token. Throws
+ * with a human-readable error on 401 / network failure.
+ */
+async function fetchMe(proxyUrl: string, token: string): Promise<MeResponse> {
+  const res = await fetch(`${proxyUrl}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  }
+  return (await res.json()) as MeResponse;
+}
+
+/**
+ * Quick GET /api/auth/me purely for the "still valid?" check during
+ * the already-signed-in short-circuit. Swallows errors into a
+ * boolean so the caller can decide whether to fall through.
+ */
+async function validateToken(
+  proxyUrl: string,
+  token: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${proxyUrl}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      // Short timeout via AbortController — don't hang the CLI if
+      // the proxy is unreachable.
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Write the shared-auth file from a (proxy URL, token, /me response)
+ * triple. Uses shared-auth's atomic-write helper so the file always
+ * ends up chmod 600.
+ */
+function persistToken(
+  proxyUrl: string,
+  token: string,
+  me: MeResponse,
+): void {
+  const file: SharedAuthFile = {
+    version: 1,
+    proxyUrl,
+    accessToken: token,
+    user: {
+      id: me.user.id,
+      email: me.user.email,
+      name: me.user.name,
+      role: (me.user.role as UserRole) ?? "developer",
+      orgId: me.user.orgId ?? null,
+    },
+    savedAt: Date.now(),
+    savedBy: "cli",
+    onboardingComplete: me.user.onboardingComplete,
+  };
+  saveAuthFile(file);
 }

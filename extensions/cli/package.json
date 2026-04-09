@@ -56,6 +56,7 @@
     "@ai-firewall/config-yaml": "file:../../packages/config-yaml",
     "@ai-firewall/openai-adapters": "file:../../packages/openai-adapters",
     "@ai-firewall/sdk": "npm:@continuedev/sdk@^0.0.13",
+    "@ai-firewall/shared-auth": "file:../../packages/shared-auth",
     "@ai-firewall/terminal-security": "file:../../packages/terminal-security",
     "@modelcontextprotocol/sdk": "^1.24.0",
     "@opentelemetry/api": "^1.9.0",

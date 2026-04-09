@@ -100,6 +100,148 @@ export function listScopedPolicies(orgId: number): StoredPolicy[] {
   }));
 }
 
+// ── Role-scoped policies ──────────────────────────────────────────────
+
+import {
+  ROLE_DEFAULT_POLICIES,
+  SYSTEM_ROLE_NAMES,
+  isSystemRoleName,
+} from "./roleDefaults";
+
+/**
+ * Legacy export: the four proxy-wide system role names. Kept for
+ * backward compatibility with callers that want to enumerate the
+ * built-ins. Custom roles are stored in the same `role_policies`
+ * table using their own name, so the accepted `role` argument type
+ * everywhere is `string`.
+ */
+export const SYSTEM_ROLES = SYSTEM_ROLE_NAMES;
+export type SystemRole = (typeof SYSTEM_ROLE_NAMES)[number];
+
+export interface StoredRolePolicy {
+  id: number;
+  orgId: number;
+  role: string;
+  policy: PartialPolicy;
+  policyJson: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+function rowToRolePolicy(row: Record<string, unknown>): StoredRolePolicy {
+  const json = row.policy_json as string;
+  let policy: PartialPolicy;
+  try {
+    policy = JSON.parse(json) as PartialPolicy;
+  } catch {
+    policy = {};
+  }
+  return {
+    id: row.id as number,
+    orgId: row.org_id as number,
+    role: row.role as string,
+    policy,
+    policyJson: json,
+    createdAt: row.created_at as number,
+    updatedAt: row.updated_at as number,
+  };
+}
+
+/**
+ * Read the role-scoped policy override for a given (org, role) pair.
+ *
+ * If no row exists AND the role name matches one of the four system
+ * roles, we LAZY-SEED the default from `ROLE_DEFAULT_POLICIES` before
+ * returning. This makes the Policy tab in the RBAC UI always show
+ * populated defaults for system roles instead of an empty `{}`, and
+ * gives users a starting point they can edit.
+ *
+ * For custom roles with no override, we still return `null` so the
+ * UI can render the commented JSONC template from
+ * `ROLE_POLICY_TEMPLATE_JSONC` as a starting point.
+ */
+export function getRolePolicy(
+  orgId: number,
+  role: string,
+): StoredRolePolicy | null {
+  const row = db
+    .prepare(
+      "SELECT id, org_id, role, policy_json, created_at, updated_at FROM role_policies WHERE org_id = ? AND role = ?",
+    )
+    .get(orgId, role) as Record<string, unknown> | undefined;
+  if (row) return rowToRolePolicy(row);
+
+  // Lazy-seed defaults for system roles only. Custom roles stay null
+  // so the UI can show the template instead.
+  if (isSystemRoleName(role)) {
+    const defaults = ROLE_DEFAULT_POLICIES[role];
+    return saveRolePolicy(orgId, role, defaults);
+  }
+
+  return null;
+}
+
+/**
+ * List all role-scoped policies for an org. Returns one row per role
+ * that has an override; roles without an override are omitted.
+ */
+export function listRolePolicies(orgId: number): StoredRolePolicy[] {
+  const rows = db
+    .prepare(
+      "SELECT id, org_id, role, policy_json, created_at, updated_at FROM role_policies WHERE org_id = ? ORDER BY role",
+    )
+    .all(orgId) as Array<Record<string, unknown>>;
+  return rows.map(rowToRolePolicy);
+}
+
+/**
+ * Upsert a role-scoped policy. The policy is stored as a JSON string in
+ * SQLite — we validate it's JSON.stringify-able but don't enforce the
+ * full PolicyConfig shape here (the route handler does Zod validation).
+ */
+export function saveRolePolicy(
+  orgId: number,
+  role: string,
+  policy: PartialPolicy,
+): StoredRolePolicy {
+  const now = Date.now();
+  const json = JSON.stringify(policy);
+
+  const existing = db
+    .prepare("SELECT id FROM role_policies WHERE org_id = ? AND role = ?")
+    .get(orgId, role) as { id: number } | undefined;
+
+  if (existing) {
+    db.prepare(
+      "UPDATE role_policies SET policy_json = ?, updated_at = ? WHERE id = ?",
+    ).run(json, now, existing.id);
+  } else {
+    db.prepare(
+      "INSERT INTO role_policies (org_id, role, policy_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(orgId, role, json, now, now);
+  }
+
+  // Fetch directly (bypass the lazy-seed path in getRolePolicy) so
+  // this never recurses.
+  const row = db
+    .prepare(
+      "SELECT id, org_id, role, policy_json, created_at, updated_at FROM role_policies WHERE org_id = ? AND role = ?",
+    )
+    .get(orgId, role) as Record<string, unknown>;
+  return rowToRolePolicy(row);
+}
+
+/**
+ * Remove a role-scoped policy override. Returns true if a row was
+ * deleted, false if no override existed for that (org, role) pair.
+ */
+export function deleteRolePolicy(orgId: number, role: string): boolean {
+  const result = db
+    .prepare("DELETE FROM role_policies WHERE org_id = ? AND role = ?")
+    .run(orgId, role);
+  return result.changes > 0;
+}
+
 // ── Merge Logic (strictest wins) ──────────────────────────────────────
 
 function mergeRulesStrictest(base: PolicyRules, override: Partial<PolicyRules>): PolicyRules {
@@ -184,13 +326,26 @@ function mergeTwoLevels(base: PolicyConfig, override: PartialPolicy): PolicyConf
 /**
  * Resolve the effective policy for a request by merging all applicable levels.
  *
- * Chain: global → org → team → project
+ * Chain (strictest wins at every level):
+ *   1. global policy.json
+ *   2. org-level override
+ *   3. role-level override (new in Phase 4.5)
+ *   4. team-level override
+ *   5. project-level override (.aifirewall.json)
+ *
+ * Role slots between org and team because:
+ *   - Role is less specific than a team (one team has many roles)
+ *   - Role is more specific than an org (one org has many roles)
+ *   - Every user has exactly one role at a time, so resolution is
+ *     deterministic.
+ *
  * Each level can only ADD restrictions, never relax a parent-level block.
  */
 export function resolveEffectivePolicy(
   orgId?: number | null,
   teamId?: number | null,
-  projectRoot?: string
+  projectRoot?: string,
+  role?: string | null,
 ): PolicyConfig {
   // 1. Start with global policy.json
   let policy = loadPolicyConfig();
@@ -203,7 +358,15 @@ export function resolveEffectivePolicy(
     }
   }
 
-  // 3. Merge team-level override
+  // 3. Merge role-level override (requires orgId — role is org-scoped)
+  if (orgId && role) {
+    const roleOverride = getRolePolicy(orgId, role);
+    if (roleOverride) {
+      policy = mergeTwoLevels(policy, roleOverride.policy);
+    }
+  }
+
+  // 4. Merge team-level override
   if (teamId) {
     const teamOverride = getPolicyForScope("team", teamId);
     if (teamOverride) {
@@ -211,7 +374,7 @@ export function resolveEffectivePolicy(
     }
   }
 
-  // 4. Merge project-level override (.aifirewall.json)
+  // 5. Merge project-level override (.aifirewall.json)
   if (projectRoot) {
     policy = mergeProjectPolicy(policy, projectRoot);
   }

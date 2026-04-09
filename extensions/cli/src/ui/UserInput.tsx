@@ -4,7 +4,10 @@ import { type AssistantConfig } from "@ai-firewall/sdk";
 import { Box, Text, useApp, useInput } from "ink";
 import React, { useCallback, useRef, useState } from "react";
 
-import { getAllSlashCommands } from "../commands/commands.js";
+import {
+  getAllSlashCommands,
+  SYSTEM_SLASH_COMMANDS,
+} from "../commands/commands.js";
 import { useServices } from "../hooks/useService.js";
 import type { PermissionMode } from "../permissions/types.js";
 import type { FileIndexServiceState } from "../services/FileIndexService.js";
@@ -55,8 +58,11 @@ const SlashCommandsMaybe: React.FC<{
   filter,
   selectedIndex,
 }) => {
-  if (!show || !inputMode || hideNormalUI || !(isRemoteMode || assistant))
-    return null;
+  // Render the dropdown whenever the input is showing slash commands.
+  // Previously this was gated on `isRemoteMode || assistant`, which
+  // silently hid the palette for users who hadn't configured a model
+  // yet — exactly the users most likely to need `/login` or `/model`.
+  if (!show || !inputMode || hideNormalUI) return null;
   return (
     <SlashCommandUI
       assistant={assistant}
@@ -187,12 +193,14 @@ const UserInput: React.FC<UserInputProps> = ({
       });
     }
 
-    // Fallback - basic commands without assistant
-    return [
-      { name: "help", description: "Show help message" },
-      { name: "clear", description: "Clear the chat history" },
-      { name: "exit", description: "Exit the chat" },
-    ];
+    // No assistant yet (e.g. no model configured, auth expired, offline
+    // proxy). The old fallback only returned help/clear/exit, which
+    // silently hid /login, /logout, /model, /config — the exact
+    // commands a user in this state needs most. Return the full system
+    // command list; the assistant-only commands (`prompts`, invokable
+    // `rules`) are skipped because there's no assistant to draw them
+    // from, but every built-in stays reachable.
+    return SYSTEM_SLASH_COMMANDS;
   };
 
   // Cycle through permission modes

@@ -91,6 +91,10 @@ try {
         __dirname,
         "../../packages/terminal-security/dist/index.js",
       ),
+      "@ai-firewall/shared-auth": resolve(
+        __dirname,
+        "../../packages/shared-auth/dist/index.js",
+      ),
       "@ai-firewall/brand": resolve(
         __dirname,
         "../../packages/brand/dist/index.js",

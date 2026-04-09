@@ -2,7 +2,10 @@ import { type AssistantConfig } from "@ai-firewall/sdk";
 import { Box, Text } from "ink";
 import React, { useMemo } from "react";
 
-import { getAllSlashCommands } from "../commands/commands.js";
+import {
+  getAllSlashCommands,
+  SYSTEM_SLASH_COMMANDS,
+} from "../commands/commands.js";
 
 const MAX_DESCRIPTION_LENGTH = 80;
 
@@ -29,20 +32,19 @@ const SlashCommandUI: React.FC<SlashCommandUIProps> = ({
   selectedIndex,
   isRemoteMode = false,
 }) => {
-  // Memoize the slash commands to prevent excessive re-renders
+  // Memoize the slash commands to prevent excessive re-renders.
+  // When there's no assistant (no model configured, auth expired,
+  // proxy offline) we still return the full built-in command list so
+  // the user can reach /login, /logout, /model, /config, /exit, etc.
+  // The previous 3-command fallback effectively hid sign-in from
+  // anyone in a broken state.
   const allCommands = useMemo(() => {
     if (assistant || isRemoteMode) {
       return getAllSlashCommands(assistant || ({} as AssistantConfig), {
         isRemoteMode,
       });
     }
-
-    // Fallback - basic commands without assistant
-    return [
-      { name: "help", description: "Show help message" },
-      { name: "clear", description: "Clear the chat history" },
-      { name: "exit", description: "Exit the chat" },
-    ];
+    return SYSTEM_SLASH_COMMANDS;
   }, [isRemoteMode, assistant?.prompts, assistant?.rules]);
 
   // Filter commands based on the current filter

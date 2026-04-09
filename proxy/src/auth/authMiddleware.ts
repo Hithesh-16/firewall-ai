@@ -25,7 +25,9 @@ export async function requireAuth(
     return reply.status(401).send({ error: "Invalid or expired API token" });
   }
 
-  request.authContext = result;
+  // Preserve the raw bearer string on the context so downstream endpoints
+  // (e.g. /api/auth/handoff) can hand it off to the local shared auth file.
+  request.authContext = { ...result, rawToken: raw };
 }
 
 /**

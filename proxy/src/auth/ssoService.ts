@@ -175,6 +175,12 @@ export function findOrCreateSSOUser(profile: SSOUserProfile): {
       name: existing.name,
       role: existing.role as Role,
       orgId: existing.orgId,
+      onboardingComplete:
+        Number(
+          (existing as { onboardingComplete?: number }).onboardingComplete ?? 0,
+        ) === 1,
+      timezone:
+        (existing as { timezone?: string | null }).timezone ?? null,
       createdAt: existing.createdAt,
       updatedAt: existing.updatedAt,
     };

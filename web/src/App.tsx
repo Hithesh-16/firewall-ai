@@ -3,10 +3,14 @@ import { ROUTES } from "./utils/routes";
 import { AppShell } from "./components/layout/AppShell";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { LandingPage } from "./pages/landing/LandingPage";
+import { OnboardingRoot } from "./pages/onboarding/OnboardingRoot";
+import { ForbiddenPage } from "./pages/ForbiddenPage";
+import { AppInitializer } from "./components/shared/AppInitializer";
 import { ChatPage } from "./pages/chat/ChatPage";
 import { SecurityDashboard } from "./pages/security/SecurityDashboard";
 import { SecurityAuditPage } from "./pages/security/SecurityAuditPage";
 import { PolicyEditor } from "./pages/security/PolicyEditor";
+import { RolePoliciesPage } from "./pages/security/RolePoliciesPage";
 import { OrgSettingsPage } from "./pages/org/OrgSettingsPage";
 import { RbacPage } from "./pages/rbac/RbacPage";
 import { TeamDashboard } from "./pages/team/TeamDashboard";
@@ -37,6 +41,13 @@ const router = createBrowserRouter([
     path: ROUTES.REGISTER,
     element: <LoginPage />,
   },
+  // Onboarding wizard — mounted OUTSIDE the AppShell so it has its own
+  // full-screen brand layout. The wizard enforces its own auth + gate
+  // logic internally (see OnboardingRoot).
+  {
+    path: "/onboarding",
+    element: <OnboardingRoot />,
+  },
   // Authenticated dashboard — moved from "/" to "/dashboard" so the
   // landing page can live at "/" for unauthenticated users.
   {
@@ -52,6 +63,7 @@ const router = createBrowserRouter([
       { path: "security", element: <SecurityDashboard /> },
       { path: "security/audit", element: <SecurityAuditPage /> },
       { path: "policy", element: <PolicyEditor /> },
+      { path: "policy/roles", element: <RolePoliciesPage /> },
       { path: "rbac", element: <RbacPage /> },
       { path: "org", element: <OrgSettingsPage /> },
       { path: "team", element: <TeamDashboard /> },
@@ -68,10 +80,17 @@ const router = createBrowserRouter([
       { path: "providers/add", element: <AddProviderPage /> },
     ],
   },
+  // Public 403 — rendered by <ProtectedRoute> when the user lacks a
+  // required capability. Never a blank page.
+  { path: "/403", element: <ForbiddenPage /> },
   // Fallback — anything unknown goes back to landing
   { path: "*", element: <Navigate to="/" replace /> },
 ]);
 
 export function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <AppInitializer>
+      <RouterProvider router={router} />
+    </AppInitializer>
+  );
 }

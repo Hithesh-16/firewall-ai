@@ -30,6 +30,7 @@ import { registerAllCodeLensProviders } from "../lang-server/codeLens";
 import { registerAllPromptFilesCompletionProviders } from "../lang-server/promptFileCompletions";
 import EditDecorationManager from "../quickEdit/EditDecorationManager";
 import { QuickEdit } from "../quickEdit/QuickEditQuickPick";
+import { AiFirewallAuthService } from "../auth/aiFirewallAuthService";
 import { setupRemoteConfigSync } from "../stubs/activation";
 import { UriEventHandler } from "../stubs/uriHandler";
 import {
@@ -84,6 +85,7 @@ export class VsCodeExtension {
   private core: Core;
   private battery: Battery;
   private workOsAuthProvider: WorkOsAuthProvider;
+  public aiFirewallAuth: AiFirewallAuthService;
   private fileSearch: FileSearch;
   private uriHandler = new UriEventHandler();
   private completionProvider: ContinueCompletionProvider;
@@ -203,6 +205,17 @@ export class VsCodeExtension {
     // Defer session refresh — network call that can block
     setTimeout(() => void this.workOsAuthProvider.refreshSessions(), 1500);
     context.subscriptions.push(this.workOsAuthProvider);
+
+    // Phase 6: AI Firewall web-first auth. Lives alongside the legacy
+    // WorkOS provider for now — the UI will be flipped over to this
+    // service in Phase 8 when we delete the device-auth flow. On boot
+    // we try SecretStorage, then fall back to ~/.ai-firewall/auth.json
+    // so a user who signs in via `cn login` is already signed in here.
+    this.aiFirewallAuth = new AiFirewallAuthService(context);
+    void this.aiFirewallAuth.initialize();
+    context.subscriptions.push({
+      dispose: () => this.aiFirewallAuth.dispose(),
+    });
 
     this.editDecorationManager = new EditDecorationManager(context);
 
@@ -411,6 +424,16 @@ export class VsCodeExtension {
 
     // Handle uri events
     this.uriHandler.event((uri) => {
+      // Phase 6: intercept the AI Firewall auth callback before any
+      // other handler. The web dashboard posts
+      // `vscode://ai-firewall.ai-firewall/authCallback?token=...&state=...`
+      // after a successful sign-in. The auth service validates the
+      // state nonce and stores the token in SecretStorage.
+      if (uri.path === "/authCallback") {
+        const consumed = this.aiFirewallAuth.handleCallbackUri(uri);
+        if (consumed) return;
+      }
+
       const queryParams = new URLSearchParams(uri.query);
       let profileId = queryParams.get("profile_id");
       let orgId = queryParams.get("org_id");
@@ -472,6 +495,7 @@ export class VsCodeExtension {
       quickEdit,
       this.core,
       this.editDecorationManager,
+      this.aiFirewallAuth,
     );
 
     // Disabled due to performance issues

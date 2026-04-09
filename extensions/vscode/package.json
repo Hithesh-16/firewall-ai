@@ -207,6 +207,11 @@
           "type": "string",
           "default": "http://localhost:5174",
           "markdownDescription": "Base URL of the AI Firewall **web dashboard** (the standalone admin UI). Used by commands that open the dashboard in your browser (e.g. _AI Firewall: View Dashboard_, _View Logs_). The IDE chat UI is **not** affected by this setting — it runs in the webview."
+        },
+        "aiFirewall.proxyUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "markdownDescription": "Base URL of the AI Firewall **proxy** — every LLM request, scan, and sign-in flow goes through here. Invited users should point this at the URL their admin shared (e.g. `https://firewall.acme.com`). Leave at the default when running the proxy locally."
         }
       }
     },
@@ -483,6 +488,16 @@
         "command": "aiFirewall.viewExternalLogs",
         "category": "AI Firewall",
         "title": "AI Firewall: View Audit Logs"
+      },
+      {
+        "command": "aiFirewall.login",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Sign In"
+      },
+      {
+        "command": "aiFirewall.logout",
+        "category": "AI Firewall",
+        "title": "AI Firewall: Sign Out"
       },
       {
         "command": "aiFirewall.scanExtensions",
@@ -862,6 +877,7 @@
   "dependencies": {
     "@ai-firewall/config-types": "file:../../packages/config-types",
     "@ai-firewall/fetch": "file:../../packages/fetch",
+    "@ai-firewall/shared-auth": "file:../../packages/shared-auth",
     "@electron/rebuild": "^4.0.3",
     "@reduxjs/toolkit": "^1.9.3",
     "@vscode/ripgrep": "^1.15.9",

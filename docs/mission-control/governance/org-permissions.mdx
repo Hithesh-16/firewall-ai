@@ -1,13 +1,138 @@
 ---
-title: "Organization Permissions"
-description: "Users can have the following roles within an organization:"
+title: "Roles, Permissions & Policies"
+description: "How to manage who can do what in AI Firewall — system roles, custom roles, per-role policies, and the RBAC editor"
 ---
 
-1. Admins are users who can manage members, secrets, blocks, configs, etc.
-2. Members are users who can use configs, blocks, secrets, etc.
+## The four built-in roles
 
-**User permissions for each role depend on the pricing plan:**
+Every AI Firewall org ships with four system roles. These cannot be deleted, renamed, or have their capabilities changed — they exist so every install has a predictable baseline.
 
-- [Solo](/mission-control/governance/pricing#solo)
-- [Teams](/mission-control/governance/pricing#teams)
-- [Enterprise](/mission-control/governance/pricing#enterprise)
+| Role | Intended user | Can do |
+|---|---|---|
+| **Admin** | Org owner, platform team | Everything: manage members, policies, providers, billing, secrets, audit logs, RBAC itself |
+| **Security Lead** | AppSec / SecOps | Edit policies + scanners, review audit logs, approve/deny high-risk actions, export logs — but cannot manage billing or assign new admins |
+| **Developer** | Engineers using the CLI / IDE | Run chat + agents, use MCP servers, read their own audit logs, see the dashboard — but cannot edit policies or see other users' audit history |
+| **Auditor** | Compliance / legal | Read-only across all modules + export audit logs. Cannot make any write calls |
+
+New users created via the onboarding wizard are assigned the `developer` role by default. Admins can change role assignments any time from the RBAC page.
+
+## Custom roles
+
+If the built-in roles don't fit your org, create a custom role in **Settings → RBAC → New Role**. Custom roles can:
+
+- Start from scratch (empty capability set)
+- Clone from one of the built-in roles as a starting point
+- Be scoped to your org (invisible to other orgs)
+- Have their own policy (see below)
+
+Custom roles **cannot** have the same name as a system role, and they cannot be deleted while any user is currently assigned to them (you'll see "Role in use by N users" — reassign first).
+
+### The permission matrix
+
+The RBAC editor uses a uniform resource × action matrix. Every module supports the same five actions:
+
+| Action | What it lets the user do |
+|---|---|
+| **View** | Read the resource (list + detail pages) |
+| **Create** | Create new instances |
+| **Edit** | Modify existing instances |
+| **Delete** | Remove instances |
+| **Export** | Export data to JSON / CSV / PDF |
+| **Full Access** | All of the above |
+
+Modules include Dashboard, Chat, Security, Audit Logs, Policies, RBAC, Organization, Teams, Providers, Billing, Usage, Plugins, and Skills.
+
+### Dependency rules
+
+AI Firewall enforces a simple rule: **you cannot grant Create, Edit, Delete, or Export on a module without also granting View**. The matrix UI automatically checks View when you enable any dependent action, and the server rejects any attempt to bypass this with `HTTP 422 RBAC_DEPENDENCY_VIOLATION`.
+
+This means a role is always internally consistent — you can never end up with "can edit policies but can't list them".
+
+## Per-role policies
+
+Every role can carry its own `policy.json`. When a user's request is scanned, AI Firewall merges the org policy with the role policy (strictest wins), so a stricter role can tighten the org-wide default without the org admin having to rewrite everything.
+
+Example: your org-wide policy is permissive for productivity, but you want your auditors to have a read-only view with enforced audit log retention. Open the RBAC page, select **Auditor**, switch to the **Policy** tab, and add:
+
+```json
+{
+  "rules": {
+    "write_routes_blocked": true
+  },
+  "audit": {
+    "retention_days": 365,
+    "require_immutable": true
+  }
+}
+```
+
+Save. Every auditor now gets those restrictions on top of the org policy, without any other role being affected.
+
+### The JSONC template
+
+When you create a new custom role, the Policy tab shows the full `policy.json` template with `//` comments explaining every key:
+
+```jsonc
+{
+  // === Scanner Rules ===
+  // Boolean flags for pre-baked scanners. true = enforce, false = skip.
+  "rules": {
+    "block_private_keys": true,
+    "block_db_urls": false,
+    // ...
+  },
+
+  // === Severity Threshold ===
+  // Scanner findings at or above this level trigger the policy action.
+  // Values: "low" | "medium" | "high" | "critical"
+  "severity_threshold": "medium",
+
+  // === File Scope ===
+  // Which files agents are allowed to read. Blocklist always wins.
+  "file_scope": {
+    "blocklist": ["*.env", "*.key", "secrets/**"],
+    "allowlist": ["src/**"],
+    "max_size_mb": 10
+  },
+
+  // ...
+}
+```
+
+You can delete every commented section you don't care about — the defaults come from the built-in policy you cloned from. The template is documentation, not boilerplate.
+
+### System role defaults
+
+| Role | Default policy |
+|---|---|
+| **Admin** | Empty — inherits the org-wide policy unchanged |
+| **Security Lead** | Stricter scanner thresholds, mandatory response scanning |
+| **Developer** | Looser file scope, no approval prompts, autocomplete enabled |
+| **Auditor** | Read-only enforcement, export enabled, write routes blocked |
+
+These are **lazy-seeded**: the first time a role's policy is read, if the DB has no row for it, the default is written in. After that, any admin edit replaces the default — and deleting the policy (via the trash icon) falls back to the default again.
+
+## Managing user-level exceptions
+
+Sometimes one user needs a temporary grant or deny that doesn't fit their role. Use the **Overrides** panel on the user's detail page to add a per-user capability exception. Overrides take precedence over role capabilities, can carry a reason (audit trail), and can expire automatically.
+
+Example: Grant a developer `audit_logs.export` for the next 7 days so they can help with an incident investigation — without moving them to the Auditor role.
+
+## Quick walkthrough
+
+1. Sign in as an admin
+2. Open **Settings → RBAC**
+3. Click **New Role** → name it `compliance_reviewer` → clone from `auditor`
+4. In the **Permissions** tab, check `audit_logs.export` and `policies.view`
+5. In the **Policy** tab, paste a JSONC snippet that enables `response_scanning.enabled` and sets `severity_threshold: "high"`
+6. Save
+7. Go to the **Users** page, find the reviewer's email, change their role to `compliance_reviewer`
+
+The next time they sign in, the frontend calls `/api/me/permissions` and gets back only the capabilities their role grants. Pages they can't access redirect to `/403`. Buttons they can't click are hidden. Requests they make carry the merged role + org policy automatically.
+
+## Related docs
+
+- [RBAC — Roles, Permissions & Per-Role Policies (developer)](/developer/rbac) — the technical reference for the same system
+- [Policy Inheritance Chain](/developer/policy-chain) — how org, role, team, and project policies merge
+- [Creating an Organization](/mission-control/governance/creating-an-org)
+- [Pricing](/mission-control/governance/pricing) — what features each plan includes

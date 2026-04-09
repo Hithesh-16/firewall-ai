@@ -1,93 +1,229 @@
 ---
-title: "Setup Wizard"
-description: "Guided onboarding flow for first-time AI Firewall setup"
+title: "Auth & Onboarding Architecture"
+description: "The unified web-first authentication and onboarding pipeline shared by the web dashboard, CLI, VS Code, and JetBrains"
 ---
 
 ## Overview
 
-The setup wizard walks new users through initial configuration in 5 steps. It is accessible at the `/setup` route in the web dashboard and is shown automatically on first launch when no providers are configured.
+AI Firewall has exactly **one** sign-in surface — the standalone web dashboard (`web/`, dev port 5174). Every client — the web dashboard itself, the CLI TUI, the VS Code extension, and the JetBrains plugin — delegates sign-in to that page via a small loopback / URI handshake run by the proxy's `/web-login-start` bridge.
 
-## Steps
+The entire flow was built across Phases 0-8. This doc is the reference for how the pieces fit together.
 
-<Steps>
+```
+┌───────────┐        ┌─────────────┐        ┌────────────┐
+│  CLI TUI  │───┐    │  VS Code    │───┐    │  JetBrains │───┐
+│ (cn login)│   │    │ (Sign In)   │   │    │ (Sign In)  │   │
+└───────────┘   │    └─────────────┘   │    └────────────┘   │
+                │                      │                     │
+                ▼                      ▼                     ▼
+      ┌───────────────────────────────────────────────────────┐
+      │         Proxy: /web-login-start (Fastify)             │
+      │  signs return=+port/callback+state into ?ext=payload  │
+      └───────────────────────────────────────────────────────┘
+                             │ 302
+                             ▼
+              ┌──────────────────────────────┐
+              │  Web Dashboard /login page   │
+              │ (email+password, SSO)        │
+              └──────────────────────────────┘
+                             │ on success
+                             ▼
+              ┌──────────────────────────────┐
+              │  Decode ?ext= payload        │
+              │  CLI/JB: fetch loopback      │
+              │  VS Code: window.location    │
+              └──────────────────────────────┘
+                             │
+                             ▼
+            ~/.ai-firewall/auth.json (chmod 600)
+                             │
+                             ▼
+         Every extension's background watcher picks it up
+```
 
-### Step 1: Environment Check
+## Shared Package: `@ai-firewall/shared-auth`
 
-Verifies the proxy is running and reachable.
+Lives at `packages/shared-auth/`. Publishes the single set of primitives every client uses:
 
-**API call:** `GET /health`
+| Export | Purpose |
+|---|---|
+| `SharedAuthFile` | TS type for the on-disk `~/.ai-firewall/auth.json` file |
+| `loadAuthFile()` / `saveAuthFile()` / `deleteAuthFile()` | Atomic file I/O with chmod 600 on POSIX |
+| `startLoopbackTokenServer({ port, state })` | 127.0.0.1 HTTP server that waits for `?token=...&state=...`, verifies the state nonce, returns the token, then shuts down |
+| `DEFAULT_LOOPBACK_PORTS` | `{ cli: 19836, jetbrains: 19837 }` |
+| `buildWebLoginUrl()` | Formats `${proxyUrl}/web-login-start?return=cli&port=19836&state=<nonce>` |
+| `generateStateNonce()` | 16-byte CSRF nonce |
+| `UserRole` | Canonical role union (`admin | security_lead | developer | auditor`) |
 
-Checks:
-- Proxy is responding on port 8080
-- SQLite database is initialized
-- Scanner package is loaded
+The file is JSON with the shape:
 
-If the health check fails, the wizard displays troubleshooting steps (is the proxy running? check `npm start` output).
-
-### Step 2: Provider Setup
-
-Configure at least one AI provider with an API key.
-
-**API call:** `POST /api/providers`
-
-```json
-{
-  "name": "openai",
-  "apiKey": "sk-proj-...",
-  "baseUrl": "https://api.openai.com/v1"
+```ts
+interface SharedAuthFile {
+  version: 1;
+  proxyUrl: string;
+  accessToken: string;
+  user: { id, email, name?, role, orgId };
+  savedAt: number;
+  savedBy: "cli" | "vscode" | "jetbrains" | "web";
+  onboardingComplete?: boolean;
 }
 ```
 
-Supported providers: OpenAI, Anthropic, Google Gemini, Ollama (local). The API key is encrypted with AES-256-GCM before storage in the token vault.
+All extensions read and write the same file, so signing in on the CLI automatically signs you in on VS Code and JetBrains the next time they boot.
 
-<Tip>
-For local-only setups, select Ollama — no API key required. Just ensure Ollama is running on `localhost:11434`.
-</Tip>
+## Phase 0-2: Proxy Bridge + Handoff
 
-### Step 3: Security Configuration
+### `POST/GET/DELETE /api/auth/handoff`
 
-Set the base security policy. The wizard presents three presets:
+Implemented in `proxy/src/routes/authHandoff.route.ts`. Only callable from localhost. Writes/reads/deletes `~/.ai-firewall/auth.json` via the shared-auth package.
 
-| Preset | Description | Behavior |
-|--------|-------------|----------|
-| **Strict** | Block all detected secrets and PII | `action: BLOCK` for any risk > 0 |
-| **Balanced** | Redact secrets, allow low-risk PII | `action: REDACT` for secrets, `ALLOW` for low-risk |
-| **Permissive** | Warn only, never block | `action: ALLOW` with warning headers |
+- `POST /api/auth/handoff` — called by the web dashboard after a successful sign-in, writes the shared file with whatever token the current web session holds. Lets an "already signed in" web user bootstrap their CLI / IDE.
+- `GET /api/auth/handoff` — returns the current shared file contents for debugging.
+- `DELETE /api/auth/handoff` — called during sign-out to wipe the file.
 
-The selected preset writes to `policy.json`. Users can customize the policy later via the Security page or `PUT /api/policy`.
+### `GET /web-login-start`
 
-### Step 4: First Scan
+Implemented in `proxy/src/routes/webLoginBridge.route.ts`. The entrypoint every extension opens in the browser:
 
-Runs a test scan to verify the pipeline works end-to-end.
+1. Validates `?return=cli|vscode|jetbrains` and, depending on the channel, either a `?port=` (CLI, JetBrains) or a `?callback=vscode://...` (VS Code).
+2. Signs the callback params (`return`, `port`, `callback`, `state`, `createdAt`) into a base64url payload with an HMAC-SHA256 suffix keyed on `env.MASTER_KEY`.
+3. Sets a `SameSite=Lax` cookie with the same payload (defence-in-depth for same-origin production deployments).
+4. 302-redirects the browser to `${dashboardUrl}/login?from=extension&ext=<signed-payload>`.
 
-**API call:** `POST /api/estimate`
+**Dev default:** when `NODE_ENV !== "production"`, the dashboard URL defaults to `http://localhost:5174` (the Vite dev server for `web/`). In production it defaults to the same origin so `fastify-static` serves the dashboard. Override with `AI_FIREWALL_DASHBOARD_URL`.
 
-```json
-{
-  "model": "gpt-4o",
-  "messages": [
-    { "role": "user", "content": "Hello, this is a test message." }
-  ]
-}
+**Why `?ext=` instead of the cookie:** in dev the dashboard runs on :5174 and the proxy on :8080. `SameSite=Lax` cookies are dropped on cross-origin XHR, so the web LoginPage's `/api/auth/ext-callback/peek` call always saw `present: false` and sign-in hung. The `?ext=` payload travels with the redirect and is readable directly from `window.location.search`.
+
+## Phase 3-4: Web Dashboard
+
+`web/src/pages/auth/LoginPage.tsx` does two things after a successful sign-in:
+
+1. **Always:** `POST /api/auth/handoff` (best-effort — 403 on remote proxies is ignored).
+2. **If `?from=extension`:** decode `?ext=<base64url>.<hmac>` → read `return`, `port`, `callback`, `state` → deliver the token:
+   - `return=vscode`: `window.location.replace(${callback}?token=<t>&state=<s>)` — the IDE's URI handler picks it up.
+   - `return=cli|jetbrains`: `fetch(http://127.0.0.1:${port}/?token=<t>&state=<s>, { mode: "no-cors" })` — the loopback server consumes it.
+
+The state nonce is forwarded verbatim on every path. The loopback server strictly rejects any request whose `state` doesn't match the nonce it was started with, which is our CSRF / replay defence.
+
+The LoginPage also handles:
+
+- Email/password auth (`POST /api/auth/login`)
+- SSO popup flow (Google, GitHub, Microsoft, WorkOS) via `postMessage` from a popup window
+- First-time users → redirect to `/onboarding` (7-step wizard in `web/src/pages/onboarding/OnboardingRoot.tsx`)
+
+## Phase 5: CLI
+
+Entrypoints (all in `extensions/cli/src/commands/`):
+
+- `login.ts` — `authenticate({ force?, proxyUrl? })` runs the web-first flow: start loopback → `buildWebLoginUrl(return="cli")` → `open` the URL → `await` loopback → `GET /api/auth/me` → `saveAuthFile`. Used by `cn login` and by `/login` inside the TUI.
+- `logout.ts` — `logout()` is a three-step sequence: `POST /api/auth/logout` (proxy revoke) → `DELETE /api/auth/handoff` → `deleteAuthFile` → legacy sidecar cleanup. Every step is best-effort so the user's local state always ends clean.
+
+### Slash commands
+
+`/login`, `/logout`, `/model`, `/config`, `/exit`, `/whoami`, etc. in the TUI. Three bugs that used to hide them have been fixed:
+
+1. `src/ui/hooks/useChat.ts` no longer short-circuits slash-command handling when `assistant` is null (no model configured → still need to reach `/login`).
+2. `src/ui/UserInput.tsx` + `src/ui/SlashCommandUI.tsx` return the full `SYSTEM_SLASH_COMMANDS` list when there's no assistant instead of a 3-command fallback.
+3. `SlashCommandsMaybe` no longer gates the dropdown on `isRemoteMode || assistant`.
+
+### Onboarding prompt
+
+`src/onboarding.ts` adds `ensureSignedInOrPrompt()`: if the user isn't first-time but isn't signed in (e.g., they logged out or `auth.json` was wiped), the TUI prints a `Sign in now? (Y/n)` prompt before handing control to chat. Escape hatches: `AI_FIREWALL_API_KEY`, `AI_FIREWALL_USE_BEDROCK=1`, `--config <path>`, non-TTY shells.
+
+### Service layer
+
+`src/services/AuthService.ts` — `login()` and `logout()` both route through the web-first `authenticate()` / `logout()` helpers now. The legacy WorkOS device-auth `doLogin` / `doLogout` pair is no longer called from interactive paths (the file itself stays as a dormant helper until Phase 10).
+
+## Phase 6: VS Code
+
+`extensions/vscode/src/auth/aiFirewallAuthService.ts` — the single class that owns VS Code sign-in state.
+
+**Storage:** token lives in `vscode.ExtensionContext.secrets` (SecretStorage, encrypted per-profile). On boot, it falls back to `~/.ai-firewall/auth.json` so a `cn login` session flows through.
+
+**Sign-in:**
+
+```
+signIn()
+  → buildCallbackUri()   // vscode://ai-firewall.ai-firewall/authCallback
+  → asExternalUri()      // Remote/Codespaces-safe
+  → buildWebLoginUrl({ return: "vscode", callback, state })
+  → openExternal(url)    // system browser
+  → await URI callback   // <- URI handler in VsCodeExtension.ts
+  → validate state nonce
+  → GET /api/auth/me
+  → secrets.store() + saveAuthFile()
+  → fire onDidChangeAuth
 ```
 
-The wizard displays the scan results: token count, estimated cost, risk score, and any findings. This confirms the scanner pipeline, token counter, and cost estimator are all functioning.
+5-minute timeout on pending sign-in.
 
-### Step 5: Completion
+**URI handler:** `VsCodeExtension.ts` routes `/authCallback` URI paths to `aiFirewallAuth.handleCallbackUri(uri)` before the existing profile/org refresh logic. If the auth service consumes the URI it short-circuits.
 
-Confirms setup is complete and provides next steps:
+**Commands:**
 
-- Open the Chat page to start using the agent
-- Visit the Security dashboard to review scan history
-- Configure additional providers or adjust policy
-- Set up team members (if using org features)
+- `aiFirewall.login` — shows a progress notification, calls `signIn()`, displays "Signed in as <email>"
+- `aiFirewall.logout` — confirms intent, calls `signOut()` (proxy revoke → secrets.delete → deleteAuthFile), displays "Signed out"
 
-</Steps>
+Registered in `commands.ts` and surfaced through the `AI Firewall` activity bar menu via `package.json`.
 
-## Route
+**Configuration:** `aiFirewall.proxyUrl` (default `http://localhost:8080`) controls which proxy the web flow targets. Override per-workspace or globally in Settings.
 
-The setup wizard lives at `/setup` in the GUI. It is a single-page flow with a step indicator and back/next navigation. Each step validates before allowing progression to the next.
+## Phase 7: JetBrains
 
-## Skipping Setup
+`extensions/intellij/src/main/kotlin/.../auth/AiFirewallAuthService.kt` mirrors the VS Code design in Kotlin:
 
-Users can skip the wizard at any time. The wizard will reappear on next launch until at least one provider is configured. To permanently dismiss, the wizard sets a `setup_completed` flag in local storage.
+- Bearer token in IntelliJ `PasswordSafe` (`CredentialAttributes("AiFirewall", "AiFirewallAuthToken.v1")`)
+- Falls back to `~/.ai-firewall/auth.json` on first run (same file the CLI + VS Code use)
+- Uses `com.sun.net.httpserver.HttpServer` (JDK built-in — zero new deps) as the loopback on port 19837 with a 10-port fallback range
+- Generates state nonce with `SecureRandom`, validates on callback
+- `BrowserUtil.browse(url)` opens the dashboard
+- Actions registered in `plugin.xml`:
+  - `aiFirewall.signIn` → `AiFirewallSignInAction` (runs on a `Task.Backgroundable` so the EDT stays free)
+  - `aiFirewall.signOut` → `AiFirewallSignOutAction` (confirm dialog → 3-step cleanup)
+
+All three extensions write the shared file with the exact same shape, so any one can hand off to the others.
+
+## Phase 8: GUI Cleanup
+
+`gui/` is the IDE webview only. Phase 8 removed the 918-line in-webview login + onboarding stack and left minimal redirect stubs:
+
+- `gui/src/pages/login/index.tsx` → 51 lines, points the user at the host IDE's `AI Firewall: Sign In` command
+- `gui/src/pages/onboarding/index.tsx` → 22-line `<Navigate to={ROUTES.HOME} replace />`
+- `gui/src/pages/setup/index.tsx` → 17-line redirect; the old `OnboardingWizard` (572 lines) was deleted entirely
+- `IdeOnlyGate` already blocks standalone browser access to `gui/` on port 5173
+
+Total reduction: **1497 → 90 lines** across 4 files.
+
+Onboarding itself (the 7-step flow: workspace type → profile → teams → policy → providers → notifications → review) lives exclusively in `web/src/pages/onboarding/OnboardingRoot.tsx` + the 7 step components in `web/src/pages/onboarding/Step*.tsx`.
+
+## Phase 10: Legacy WorkOS (follow-up)
+
+`extensions/cli/src/auth/workos.ts` and `extensions/vscode/src/stubs/WorkOsAuthProvider.ts` still exist but are no longer reachable from interactive flows. They will be removed in a follow-up PR once the web-first flow has been battle-tested in CI. Until then:
+
+- CLI: `loadAuthConfig()` tries shared-auth first, bridges to the legacy type as a fallback; `isAuthenticated()` skips the token-refresh loop when the loaded config came from shared-auth.
+- VS Code: `WorkOsAuthProvider` is still instantiated but only for legacy profile/org session lookups — the new `AiFirewallAuthService` owns sign-in/sign-out.
+
+## Environment Variables
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `AI_FIREWALL_PROXY_URL` | Target proxy URL for all extensions | `http://localhost:8080` |
+| `AI_FIREWALL_DASHBOARD_URL` | Where `/web-login-start` 302s to | `http://localhost:5174` in dev, same-origin in prod |
+| `AI_FIREWALL_API_KEY` | Skip sign-in entirely, use this static key | unset |
+| `AI_FIREWALL_USE_BEDROCK` | Skip sign-in and use AWS Bedrock | unset |
+| `MASTER_KEY` | HMAC secret for `?ext=` payload signing and vault AES-256-GCM | required in prod |
+
+## File Locations Reference
+
+| File | Role |
+|---|---|
+| `~/.ai-firewall/auth.json` | Shared bearer token, chmod 600, atomic writes |
+| `~/.ai-firewall/config.yaml` | User's model config (CLI reads this) |
+| `~/.ai-firewall/.onboarding_complete` | First-run marker for the CLI |
+| `packages/shared-auth/` | TypeScript primitives for every JS client |
+| `proxy/src/routes/authHandoff.route.ts` | localhost-only file I/O endpoint |
+| `proxy/src/routes/webLoginBridge.route.ts` | `/web-login-start` + `/api/auth/ext-callback/*` |
+| `web/src/pages/auth/LoginPage.tsx` | The one and only sign-in UI |
+| `extensions/cli/src/commands/login.ts` | CLI loopback flow |
+| `extensions/vscode/src/auth/aiFirewallAuthService.ts` | VS Code URI handler flow |
+| `extensions/intellij/src/.../auth/AiFirewallAuthService.kt` | JetBrains loopback flow |

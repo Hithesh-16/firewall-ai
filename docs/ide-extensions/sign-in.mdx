@@ -1,0 +1,119 @@
+---
+title: "Sign In"
+description: "Signing in to AI Firewall from VS Code and JetBrains"
+---
+
+## Overview
+
+VS Code and JetBrains both use the **same web-first sign-in flow** as the CLI: the extension opens your browser to the AI Firewall web dashboard, you sign in there, and the token is delivered back to the IDE through a one-shot callback.
+
+The resulting bearer token is written to `~/.ai-firewall/auth.json` and **shared across all clients** — CLI, VS Code, JetBrains, and the web dashboard. Sign in on any one of them and the others pick it up automatically.
+
+## VS Code
+
+### Signing In
+
+Run the command:
+
+```
+AI Firewall: Sign In
+```
+
+(Command Palette — `⌘/Ctrl + Shift + P` → type "AI Firewall".)
+
+You'll see a "Signing in to AI Firewall…" progress notification. Your default browser opens to the AI Firewall web dashboard's sign-in page. Enter your credentials (or click an SSO button). Once you're signed in, the browser redirects back to a `vscode://` URL that VS Code intercepts. The extension verifies the callback's state nonce, fetches your user record from the proxy, stores the token in VS Code's encrypted `SecretStorage`, and shows:
+
+```
+Signed in as you@example.com.
+```
+
+If you're using VS Code Remote, Codespaces, or Web, the callback is automatically tunneled via `vscode.env.asExternalUri()` — no manual setup needed.
+
+### Signing Out
+
+```
+AI Firewall: Sign Out
+```
+
+Confirms intent, then runs a 3-step cleanup: revoke the token on the proxy → delete it from SecretStorage → delete `~/.ai-firewall/auth.json`. Always finishes with a "Signed out" toast even if the proxy is offline.
+
+### Configuration
+
+In Settings → Extensions → AI Firewall, or in your `settings.json`:
+
+```json
+{
+  "aiFirewall.proxyUrl": "http://localhost:8080"
+}
+```
+
+Override per-workspace or globally. Defaults to `http://localhost:8080`.
+
+### Where the Token Lives
+
+| Location | Purpose |
+|---|---|
+| VS Code SecretStorage (`aiFirewall.authToken.v1`) | Primary, encrypted, scoped to this VS Code install |
+| `~/.ai-firewall/auth.json` | Shared copy, chmod 600, read by CLI + JetBrains |
+
+The extension prefers SecretStorage on boot but falls back to the shared file if SecretStorage is empty — so signing in on the CLI with `cn login` automatically signs you in in VS Code the next time the extension loads.
+
+## JetBrains (IntelliJ, PyCharm, WebStorm, etc.)
+
+### Signing In
+
+Open **Go to Action** (`⌘/Ctrl + Shift + A`) and run:
+
+```
+AI Firewall: Sign In
+```
+
+A background progress indicator appears while your browser opens to the AI Firewall web dashboard. Sign in there. On success, the dashboard posts your token back to a loopback HTTP server the plugin started on `127.0.0.1:19837`. The plugin verifies the state nonce, fetches your user record, stores the token in IntelliJ's encrypted `PasswordSafe`, and shows a dialog:
+
+```
+Signed in as you@example.com.
+```
+
+### Signing Out
+
+Go to Action → `AI Firewall: Sign Out`. Confirm the dialog. The plugin runs the same 3-step cleanup as VS Code: proxy revoke → PasswordSafe clear → shared auth file delete.
+
+### Configuration
+
+Set the proxy URL via an environment variable before launching the IDE:
+
+```bash
+export AI_FIREWALL_PROXY_URL=http://my-proxy:9090
+```
+
+(A proper Settings → Tools → AI Firewall panel is planned for a follow-up release.)
+
+### Where the Token Lives
+
+| Location | Purpose |
+|---|---|
+| IntelliJ PasswordSafe (`AiFirewall / AiFirewallAuthToken.v1`) | Primary, encrypted, scoped to this IntelliJ install |
+| `~/.ai-firewall/auth.json` | Shared copy, chmod 600, read by CLI + VS Code |
+
+### Loopback Port
+
+JetBrains sign-in binds `127.0.0.1:19837` (one port up from the CLI's `19836`, so both can run side-by-side). If the port is busy it tries `19838-19846`. Listens on loopback only — other machines on your LAN cannot reach it.
+
+## Cross-Client Token Sharing
+
+Because every client writes to the same `~/.ai-firewall/auth.json` file, you only ever need to sign in once per machine. The first client you sign in on (CLI, VS Code, or JetBrains) creates the file; the others pick it up on next launch.
+
+To test: run `cn login` from the terminal, then open VS Code. The `AI Firewall: Sign In` command is unnecessary — you'll already be signed in, and the extension will reflect your authenticated state immediately.
+
+## Troubleshooting
+
+**Browser opens but the IDE never confirms sign-in.** The callback didn't reach the extension. Check:
+
+- VS Code: the registered URI handler might be shadowed by another extension. Run `AI Firewall: Sign Out` to clear pending state and try again.
+- JetBrains: port `19837` (and fallbacks `19838-19846`) are all busy. Shut down any other JetBrains IDE running AI Firewall, or kill the process holding the port.
+
+**"Sign-in timed out."** You took longer than 5 minutes in the browser. Run the sign-in command again.
+
+**"state mismatch."** The browser completed sign-in with a stale nonce — e.g. you opened sign-in twice and the second run overwrote the first. Run the sign-in command once more and complete it without opening a second sign-in attempt.
+
+**Remote / Codespaces: browser doesn't open.** VS Code Remote forwards `vscode.env.openExternal()` to the local browser automatically. If it fails, the extension falls back to the raw URL in a notification — click the link to open it manually.

@@ -1,40 +1,65 @@
 ---
 title: "Policy Inheritance Chain"
-description: "How policies merge across org, team, and project levels — strictest wins"
+description: "How policies merge across global, org, role, team, and project levels — strictest wins"
 ---
 
 ## Chain Order
 
 ```
-global policy.json  →  org DB override  →  team DB override  →  project .aifirewall.json
-  (baseline)           (extends global)    (extends org)        (extends team)
+global policy.json  →  org DB override  →  ROLE policy (NEW)  →  team DB override  →  project .aifirewall.json
+   (baseline)         (extends global)     (extends org)          (extends role)         (extends team)
 ```
 
-Each level can only ADD restrictions. No child scope can relax a parent-level block.
+Each level can only **add** restrictions. No child scope can relax a parent-level block.
+
+### Phase 0-4 addition: per-role layer
+
+Phase 0-4 inserted a **role** layer between org and team. Every user's effective policy now includes whatever restrictions are configured for their role in `role_policies` (JSON column). System roles are lazy-seeded from `ROLE_DEFAULT_POLICIES`; custom roles start from the JSONC template and are edited in the RBAC page.
+
+This lets you, for example:
+
+- Keep a permissive org-wide policy for productivity
+- Attach a stricter `security_lead` role policy that blocks `*.env` files and forces `medium` scanner severity
+- Leave the `developer` role policy empty so devs inherit org defaults
+- Give `auditor` a role policy with `write_routes_blocked: true`
+
+See [RBAC](./rbac#per-role-policies) for the API surface and the JSONC template.
 
 ## Merge Semantics (Strictest Wins)
 
 | Setting | Merge Rule | Example |
-|---------|-----------|---------|
-| Boolean rules (`block_private_keys`, etc.) | OR — if ANY level says `true`, result is `true` | Org enables `block_db_urls` → team can't disable it |
-| Severity threshold | MIN — use the strictest (medium < high < critical) | Org sets `high`, team sets `medium` → effective is `medium` |
-| Blocklists | UNION — combine all patterns | Org blocks `*.env`, team blocks `*.key` → both blocked |
+|---|---|---|
+| Boolean rules (`block_private_keys`, etc.) | OR — if ANY level says `true`, result is `true` | Org enables `block_db_urls` → role can't disable it |
+| Severity threshold | MIN — use the strictest (medium < high < critical) | Role sets `high`, team sets `medium` → effective is `medium` |
+| Blocklists | UNION — combine all patterns | Org blocks `*.env`, role blocks `*.key` → both blocked |
 | Allowlists | INTERSECTION — file must be in ALL allowlists | Org allows `src/**`, team allows `src/frontend/**` → only `src/frontend/**` |
-| Prompt injection threshold | MIN — lower threshold is stricter | Global: 60, org: 40 → effective: 40 |
+| Prompt injection threshold | MIN — lower threshold is stricter | Global: 60, role: 40 → effective: 40 |
+| `response_scanning.enabled` | OR | Any level enabling it flips it on everywhere |
+| `unicode_normalization.enabled` | OR | Same |
 
-## Database Table
+## Database Tables
 
 ```sql
 CREATE TABLE policies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   scope_type TEXT CHECK('global','org','team','project'),
-  scope_id INTEGER,           -- org_id, team_id, or NULL for global
-  policy_json TEXT NOT NULL,   -- partial PolicyConfig JSON
+  scope_id INTEGER,              -- org_id, team_id, or NULL for global
+  policy_json TEXT NOT NULL,     -- partial PolicyConfig JSON
   created_at INTEGER,
   updated_at INTEGER,
   UNIQUE(scope_type, scope_id)
 );
+
+CREATE TABLE role_policies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role_name TEXT NOT NULL UNIQUE,  -- system or custom role slug
+  policy_json TEXT NOT NULL,       -- partial PolicyConfig JSON
+  created_at INTEGER,
+  updated_at INTEGER
+);
 ```
+
+The `role_policies.role_name` CHECK constraint was dropped in Phase 3 so custom role slugs (beyond the 4 built-ins) can be saved alongside system roles.
 
 ## Core Function
 
@@ -42,40 +67,112 @@ CREATE TABLE policies (
 // proxy/src/policy/policyChain.ts
 function resolveEffectivePolicy(
   orgId?: number | null,
+  role?: string | null,            // ← NEW
   teamId?: number | null,
-  projectRoot?: string
+  projectRoot?: string,
 ): PolicyConfig
 ```
 
-Called by `policyEnforcer.ts` middleware on every request. Uses the authenticated user's `orgId` from `request.authContext`.
+Called by `policyEnforcer.ts` middleware on every request. Uses the authenticated user's `orgId` and `role` from `request.authContext`.
 
-## API Routes
+The role layer is merged strictest-wins between the org and team layers. System roles that don't yet have a row in `role_policies` get their defaults from `ROLE_DEFAULT_POLICIES` and the row is inserted (lazy-seed) so subsequent reads come from the DB.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/policies/effective` | requireAuth | Resolved policy for current user |
-| GET | `/api/policies/scoped` | `policy:read` | All scoped overrides for org |
-| PUT | `/api/policies/org` | `policy:write` | Set org-level override |
-| PUT | `/api/policies/team/:teamId` | `policy:write` | Set team-level override |
-| DELETE | `/api/policies/org` | `policy:write` | Remove org override (revert to global) |
-| DELETE | `/api/policies/team/:teamId` | `policy:write` | Remove team override |
+## Policy Editing
 
-## Example: Override Request Body
+### Via the Wizard API (onboarding)
+
+```http
+POST /api/policy/wizard
+PUT  /api/policy/wizard
+GET  /api/policy/wizard
+```
+
+These translate a simplified wizard shape (security level, blocklist toggles, provider allowlist) into a full `PolicyConfig` so the 7-step onboarding flow doesn't have to expose every field. Implemented in `proxy/src/routes/policy.route.ts`.
+
+### Via the full PolicyConfig API
+
+```http
+GET  /api/policy           # effective policy for the caller
+PUT  /api/policy           # replace the org-level policy
+```
+
+Send the full `PolicyConfig` JSON. Requires `policies.edit`.
+
+### Via the per-role API
+
+```http
+GET    /api/policies/role/:roleName       # lazy-seeds defaults for system roles
+PUT    /api/policies/role/:roleName
+DELETE /api/policies/role/:roleName       # falls back to ROLE_DEFAULT_POLICIES for system roles
+GET    /api/policies/role-template        # returns ROLE_POLICY_TEMPLATE_JSONC
+```
+
+The role template is a 64-line JSONC document with `//` comments describing every key. The RBAC page's Policy tab shows this template verbatim when you create a new custom role, so the creator sees every option with its meaning before saving. On save, the client strips comments with `stripJsonComments()` and the server parses the result with `JSON.parse`.
+
+## Example: Role Policy Override
 
 ```json
 {
-  "rules": { "block_db_urls": true },
-  "file_scope": { "blocklist": ["secrets/**", "*.key"] },
-  "severity_threshold": "medium"
+  "rules": {
+    "block_db_urls": true,
+    "block_private_keys": true
+  },
+  "scanner": {
+    "severity_threshold": "medium",
+    "prompt_injection_threshold": 40
+  },
+  "file_scope": {
+    "blocklist": ["secrets/**", "*.key", "*.env", "*.env.*"]
+  },
+  "response_scanning": {
+    "enabled": true,
+    "block_leaked_secrets": true
+  }
 }
 ```
 
-Only include fields you want to override. Omitted fields inherit from the parent level.
+Only include fields you want to override. Omitted fields inherit from the parent level (org → global).
+
+## Business Logic DSL
+
+For rules that can't be expressed with simple allow/block flags, use the business-logic DSL:
+
+```yaml
+# proxy/src/policy/businessLogicDsl.ts
+rules:
+  - name: "no-contracts-to-external-llm"
+    priority: 10
+    when:
+      - field: "prompt"
+        op: "contains"
+        value: "contract"
+      - field: "model"
+        op: "startsWith"
+        value: "openai/"
+    action: BLOCK
+    reason: "Contract text may not leave the compliance boundary"
+```
+
+Nine operators (`contains`, `matches`, `startsWith`, `endsWith`, `length_gt`, `length_lt`, `category_is`, `role_is`, `model_is`), AND/OR/NOT logic, 5 actions (`BLOCK`, `REDACT`, `WARN`, `LOG`, `ESCALATE`), priority ordering. Rules are evaluated after the policy chain but before the gateway dispatch, so a business-logic `BLOCK` takes precedence over an otherwise-allowed request.
+
+Endpoints:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/policy/rules/parse` | Validate YAML → AST |
+| `POST` | `/api/policy/rules/evaluate` | Dry-run a request against the loaded rules |
+| `POST` | `/api/policy/rules/validate` | Lint a single rule for syntax + field references |
 
 ## Key Files
 
 | File | Purpose |
-|------|---------|
-| `proxy/src/policy/policyChain.ts` | resolveEffectivePolicy, merge logic, DB operations |
-| `proxy/src/policy/projectPolicy.ts` | .aifirewall.json file-based overrides |
-| `proxy/src/middleware/policyEnforcer.ts` | Calls resolveEffectivePolicy on every request |
+|---|---|
+| `proxy/src/policy/policyChain.ts` | `resolveEffectivePolicy`, merge logic, role policy CRUD |
+| `proxy/src/policy/roleDefaults.ts` | `ROLE_DEFAULT_POLICIES`, `ROLE_POLICY_TEMPLATE_JSONC` |
+| `proxy/src/policy/businessLogicDsl.ts` | 9-operator DSL, rule evaluation |
+| `proxy/src/policy/projectPolicy.ts` | `.aifirewall.json` file-based overrides |
+| `proxy/src/middleware/policyEnforcer.ts` | Calls `resolveEffectivePolicy` on every request |
+| `proxy/src/routes/policy.route.ts` | Wizard + per-role + business-logic endpoints |
+| `web/src/pages/security/RolePoliciesPage.tsx` | Dedicated page for editing role policies outside the RBAC matrix UI |
+| `web/src/pages/rbac/RbacPage.tsx` | RBAC page Policy tab (inline role policy editor) |
+| `web/src/utils/jsonc.ts` | `stripJsonComments()`, `parseJsonc()` |

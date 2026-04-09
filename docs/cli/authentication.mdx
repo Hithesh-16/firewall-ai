@@ -1,138 +1,150 @@
 ---
 title: "Authentication"
-description: "CLI login, registration, Google OAuth, and token management"
+description: "Signing in to the AI Firewall CLI via the web dashboard"
 ---
 
 ## Overview
 
-The AI Firewall CLI authenticates against the local proxy server (`localhost:8080`). On login, it stores a session token at `~/.ai-firewall/auth.json`.
+The CLI signs in through the AI Firewall **web dashboard** — the same place you'd sign in a browser. There is no email/password prompt in the terminal anymore; every client (CLI, VS Code, JetBrains, web) goes through the same loopback / URI handshake so a single sign-in carries across all surfaces.
 
-## Login
+The bearer token lives in `~/.ai-firewall/auth.json` (chmod 600). Signing in on the CLI automatically signs you in on VS Code and JetBrains the next time they boot, and vice versa.
 
-```bash
-ai-firewall login
-```
-
-If the proxy has SSO providers configured (e.g., Google OAuth), the CLI presents a choice:
-
-```
-AI Firewall — Login
-
-Choose sign-in method:
-
-  1) Email & Password
-  2) Google OAuth
-  3) GitHub OAuth
-
-Enter choice (1):
-```
-
-### Email & Password (Default)
-
-Select option `1` (or just press Enter). You'll be prompted for email and password:
-
-```
-Email: you@example.com
-Password: ********
-
-Logged in as you@example.com (admin)
-```
-
-### Google OAuth
-
-Select option `2` to sign in with Google:
-
-```
-Opening browser for Google sign-in...
-Waiting for authentication in browser...
-
-Logged in as you@example.com (developer)
-```
-
-The CLI opens your browser for Google OAuth. After you authenticate, the browser redirects back and the CLI receives your token automatically.
-
-<Info>
-Google OAuth requires the proxy to have `SSO_GOOGLE_CLIENT_ID` and `SSO_GOOGLE_CLIENT_SECRET` configured in its environment.
-</Info>
-
-### GitHub OAuth
-
-Select option `3` to sign in with GitHub. Works identically to Google OAuth.
-
-### First-Time Registration
-
-If your credentials don't match an existing account, the CLI offers to register:
-
-```
-Login failed: Invalid credentials
-
-No account? Register now? (y/n): y
-Name: Your Name
-
-Registered and logged in as you@example.com (admin)
-```
-
-Self-signup users are assigned the **admin** role by default.
-
-### Environment Variable Auth
-
-Skip the interactive prompt by setting:
+## Signing In
 
 ```bash
-export AI_FIREWALL_API_KEY=afw_your_token_here
+cn login
 ```
 
-The CLI will use this token directly without prompting.
+What happens:
 
-### Custom Proxy URL
+1. The CLI starts a tiny HTTP server on `127.0.0.1:19836` (falls back through `19837-19845` if the port is busy).
+2. It generates a random state nonce and opens your browser to:
+   ```
+   http://localhost:8080/web-login-start?return=cli&port=19836&state=<nonce>
+   ```
+3. The proxy signs the return info and 302-redirects you to the web dashboard's `/login` page with `?from=extension&ext=<signed-payload>`.
+4. You sign in in the browser — email + password, or SSO (Google / GitHub / Microsoft / WorkOS), whatever your org has enabled.
+5. On success, the web dashboard fetches `http://127.0.0.1:19836/?token=<...>&state=<...>` which the CLI is listening for.
+6. The CLI verifies the state nonce, fetches `/api/auth/me` to get your user record, writes `~/.ai-firewall/auth.json`, and prints:
 
-If your proxy runs on a different host/port:
+```
+✓ Signed in as you@example.com (developer)
+  token saved to /Users/you/.ai-firewall/auth.json
+```
+
+The browser tab closes with a "You're signed in" confirmation page.
+
+### Flags
+
+| Flag | Purpose |
+|---|---|
+| `--proxy <url>` | Target a different proxy for this sign-in (e.g. `https://firewall.acme.com`) |
+| `--force` | Re-run the browser flow even if a valid token is already cached |
+
+Examples:
+
+```bash
+# Default — local proxy, reuse existing token if valid
+cn login
+
+# Point at a remote proxy
+cn login --proxy https://firewall.acme.com
+
+# Force a fresh sign-in
+cn login --force
+```
+
+## Signing Out
+
+```bash
+cn logout
+```
+
+Three steps, each best-effort:
+
+1. `POST /api/auth/logout` on the proxy (revokes the server-side token)
+2. `DELETE /api/auth/handoff` (wipes the shared auth file via the proxy)
+3. Local cleanup — deletes `~/.ai-firewall/auth.json`
+
+The CLI always prints `Signed out of AI Firewall.` at the end, even if the proxy is offline.
+
+## Inside the TUI
+
+You don't have to leave the TUI to sign in or out. Once `cn` is running, type `/` to open the command palette and pick:
+
+- `/login` — same flow as `cn login --force` but without restarting the TUI
+- `/logout` — same as `cn logout`
+- `/whoami` — prints the current signed-in email
+- `/model` — opens the model selector
+- `/config` — switches configs / orgs
+
+The command palette shows the full list of built-in commands even when no model is configured, so `/login` is always reachable after a `cn logout` or on a brand-new install.
+
+## First-Run Prompt
+
+If you launch `cn` without ever signing in, the TUI detects that `~/.ai-firewall/auth.json` is missing and shows:
+
+```
+You're not signed in to AI Firewall.
+  Sign-in opens your browser to the AI Firewall web dashboard.
+  Sign in now? (Y/n)
+```
+
+Press Enter (or `y`) to run the web-first flow. Press `n` to skip — the TUI will still start but you won't be able to use model-backed features until you run `/login`.
+
+## Environment Variable Shortcut
+
+If you prefer to skip the browser flow entirely (headless runners, CI jobs, etc.), set:
+
+```bash
+export AI_FIREWALL_API_KEY=afw_your_static_token_here
+```
+
+The CLI respects this env var at every step — no prompt, no handoff, no file writes. This is the recommended path for CI and Docker images.
+
+## Custom Proxy URL
+
+Set once in your shell profile:
 
 ```bash
 export AI_FIREWALL_PROXY_URL=http://my-proxy:9090
-ai-firewall login
 ```
 
-## Logout
+Applies to every `cn` invocation. Override per-command with `cn login --proxy <url>`.
 
-```bash
-ai-firewall logout
-```
+## Token File Format
 
-Revokes the session token on the proxy, then removes it from `~/.ai-firewall/auth.json`.
-
-## Token Storage
-
-Tokens are saved to `~/.ai-firewall/auth.json`:
+`~/.ai-firewall/auth.json`:
 
 ```json
 {
-  "userId": "1",
-  "userEmail": "you@example.com",
+  "version": 1,
+  "proxyUrl": "http://localhost:8080",
   "accessToken": "afw_...",
-  "expiresAt": 1712345678000,
-  "organizationId": null
+  "user": {
+    "id": 7,
+    "email": "you@example.com",
+    "name": "Your Name",
+    "role": "developer",
+    "orgId": 14
+  },
+  "savedAt": 1712345678000,
+  "savedBy": "cli",
+  "onboardingComplete": true
 }
 ```
 
-The token is sent as `Authorization: Bearer afw_...` on all API requests.
+The file is chmod 600 (user-read only) on Linux and macOS. The CLI sends the token as `Authorization: Bearer afw_...` on every proxy request.
 
-## Fallback Auth
+## Loopback Port
 
-If the proxy is not running (`ECONNREFUSED`), the CLI falls back to the legacy AI Firewall WorkOS device flow. This is for backward compatibility only — the proxy-based auth is preferred.
+CLI sign-in binds `127.0.0.1:19836`. If that port is busy on your machine, the CLI tries `19837` through `19845` in sequence. The actual port is embedded in the `?port=` query param so the web dashboard knows where to post the token.
 
-## OAuth Technical Flow
-
-When using Google/GitHub OAuth from the CLI:
-
-1. CLI starts a temporary local HTTP server on port `19836`
-2. CLI opens the proxy's SSO login URL in the browser
-3. Proxy redirects to Google/GitHub for consent
-4. After consent, Google/GitHub redirects back to the proxy callback
-5. Proxy creates/finds the user, generates an API token
-6. Proxy callback page sends the token to the CLI's local server
-7. CLI receives the token, verifies it via `GET /api/auth/me`, and saves it
+- The server is bound to **127.0.0.1 only** — never `0.0.0.0`. Other machines on your LAN cannot reach it.
+- It accepts exactly one successful `?token=...&state=...` request, then shuts down.
+- It enforces a strict state-nonce check — any request whose `state` doesn't match the value the CLI generated is rejected with HTTP 400. This is our CSRF / replay guard.
+- Idle timeout is 5 minutes. If you close the browser without completing sign-in, the CLI exits with a clean error.
 
 <Warning>
-Port `19836` must be available on your machine for CLI OAuth to work. If it's in use, the OAuth flow will fail with a connection error.
+If port `19836` (and the fallback range) are all busy on your machine, `cn login` will fail with `EADDRINUSE`. Shut down whatever's holding the port and retry.
 </Warning>

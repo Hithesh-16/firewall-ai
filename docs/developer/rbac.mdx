@@ -1,11 +1,71 @@
 ---
-title: "RBAC — Roles & Permissions"
-description: "Capability-based access control: roles, permissions, overrides, and custom role creation"
+title: "RBAC — Roles, Permissions & Per-Role Policies"
+description: "Capability-based access control, uniform resource×action matrix, dependency rules, custom roles, per-role policies, and frontend permission primitives"
 ---
 
 ## Overview
 
-AI Firewall uses **capability-based RBAC**. Instead of checking "is user an admin?", routes check "does this user have the `policy:write` capability?". This enables custom roles, per-user overrides, and team-scoped permissions.
+AI Firewall ships with **capability-based RBAC**. Routes never check "is user an admin?" — they check "does this user have the `policies.edit` capability?". The model is designed for:
+
+- 4 built-in roles (`admin`, `security_lead`, `developer`, `auditor`) plus unlimited org-defined custom roles
+- Uniform resource × action matrix so every module gets the same 5 actions
+- Dependency rules (`edit`/`create`/`delete`/`export` require `view`)
+- Per-role `policy.json` stored as a JSON column, editable in the UI
+- Frontend permission primitives (`usePermission`, `PermissionGate`, `ProtectedRoute`) that share the same effective-capability list the backend enforces
+
+## Phase 0-4 Model
+
+### Uniform actions
+
+Every module supports the same action set:
+
+| Action | Meaning |
+|---|---|
+| `view` | Read the resource (list + detail) |
+| `create` | Create new instances |
+| `edit` | Modify existing instances |
+| `delete` | Remove instances |
+| `export` | Export to JSON / CSV / PDF |
+| `full_access` | Shorthand for all of the above |
+
+Capability atoms are `{module}.{action}`, e.g. `policies.edit`, `audit_logs.export`, `rbac.full_access`.
+
+### Modules
+
+13 top-level modules (see `web/src/constants/permissions.constants.ts`):
+
+```
+dashboard, chat, security, audit_logs, policies,
+rbac, organization, teams, providers, billing,
+usage, plugins, skills
+```
+
+Each one is declared in `MODULE_META` with a human label, category, and supported action list — the frontend builds the RBAC matrix UI directly from that metadata, so adding a new module to the matrix is a one-line change.
+
+### Dependency rules
+
+`create`, `edit`, `delete`, and `export` all require `view`. The validation runs on both the server (`validatePermissionDependencies` in `rbacService.ts`) and the client (`togglePermission` in `web/src/pages/rbac/permissionMatrix.ts`). Attempting to grant `policies.edit` without `policies.view` returns `RBAC_DEPENDENCY_VIOLATION` (HTTP 422). The matrix UI automatically force-enables `view` when any dependent action is checked.
+
+### System role immutability
+
+The 4 built-in roles are marked `is_system = 1` in the `roles` table. They cannot be deleted or renamed, and their capabilities cannot be modified (`RBAC_SYSTEM_ROLE_LOCKED`, HTTP 403). You **can** create a custom role by cloning a system role and then editing the clone — the RBAC UI's "New Role" dialog has a "Clone from" dropdown.
+
+### Safe delete
+
+`DELETE /api/roles/:id` checks `countUsersWithRole(roleId)` first. If any user is currently assigned the role, the request fails with `RBAC_ROLE_IN_USE` (HTTP 409). Reassign users before deleting.
+
+## Database Tables
+
+| Table | Purpose |
+|---|---|
+| `roles` | 4 built-in (`is_system=1`) + custom (`org_id` scoped) roles |
+| `capabilities` | Pre-seeded `{module}.{action}` atoms + legacy granular caps |
+| `role_capabilities` | Maps roles → capabilities (`granted=1` or `granted=0`) with scope (`org`/`team`/`own`) |
+| `user_org_roles` | One role per user per org |
+| `user_team_roles` | Per-team role overrides |
+| `user_capability_overrides` | Per-user grant/deny exceptions (with reason + expiry) |
+| `role_policies` | **Per-role policy JSON**, lazy-seeded from `ROLE_DEFAULT_POLICIES` on first read |
+| `permission_audit_log` | Append-only hash-chained audit trail |
 
 ## Permission Resolution Order
 
@@ -20,102 +80,210 @@ AI Firewall uses **capability-based RBAC**. Instead of checking "is user an admi
    → team role lacks it → fall through
 
 3. user_org_roles (default)
-   → role has capability (granted=1) → ALLOWED
-   → role has capability (granted=0) → DENIED
-   → role lacks capability → DENIED (no_capability)
-   → no role assigned → DENIED (no_role)
+   → role has granted=1 → ALLOWED
+   → role has granted=0 → DENIED (explicit)
+   → role has no row    → DENIED (no_capability)
+   → no role assigned   → DENIED (no_role)
 ```
 
-## Database Tables
+Every decision writes a row to `permission_audit_log` with the resolution reason so you can trace why any given request was allowed or blocked.
 
-| Table | Purpose |
-|-------|---------|
-| `roles` | 4 built-in + custom org-defined roles |
-| `capabilities` | 36 granular `resource:action` permission atoms |
-| `role_capabilities` | Maps roles → capabilities with scope (`org`/`team`/`own`) |
-| `user_org_roles` | Assigns one role per user per org |
-| `user_team_roles` | Per-team role overrides |
-| `user_capability_overrides` | Per-user grant/deny exceptions (with reason + expiry) |
-| `permission_audit_log` | Append-only hash-chained audit trail |
+## Per-Role Policies
 
-## 36 Capabilities
+Each role has its own `policy.json` stored as a JSON column in `role_policies`. Users who hold that role get the role's policy merged into the org-wide policy via the policy chain (see [Policy Chain](./policy-chain)). System roles get sensible defaults lazy-seeded the first time they're read; custom roles start from a fully-commented JSONC template so the user knows exactly what every key means.
 
-### Organisation
-`org:read` `org:write` `billing:read` `billing:write` `credit:read` `stats:read`
+### Default policies (lazy-seeded)
 
-### Teams
-`team:create` `team:read` `team:write` `team:delete`
+```ts
+// proxy/src/policy/roleDefaults.ts
+export const ROLE_DEFAULT_POLICIES: Record<SystemRoleName, PartialPolicyConfig> = {
+  admin: {},                 // empty → inherits all org defaults
+  security_lead: { ... },    // stricter scanner thresholds
+  developer: { ... },        // looser file scope, no approvals
+  auditor: { export_enabled: true, write_routes_blocked: true },
+};
+```
 
-### Identity
-`user:invite` `user:remove` `user:read` `role:assign` `role:manage` `token:create` `token:revoke` `token:read`
+`admin` is intentionally empty so admins see the org-wide policy unchanged. Other roles layer restrictions on top.
 
-### Security
-`policy:read` `policy:write` `scanner:configure` `scanner:read` `file_restrictions:manage` `approval:resolve` `approval:read`
+### JSONC template for custom roles
 
-### Vault
-`provider:manage` `provider:read`
+When a user creates a new custom role, the RBAC UI shows the full JSONC template (`ROLE_POLICY_TEMPLATE_JSONC`) with `//` comments explaining every key. The client strips the comments before sending with `stripJsonComments()` (`web/src/utils/jsonc.ts`), and the server parses it with standard `JSON.parse` after the same strip.
 
-### Audit
-`log:read_all` `log:read_own` `log:export` `audit:read`
+### API
 
-### Developer
-`agent:use` `terminal:execute` `subagent:spawn` `mcp:use` `web_search:use` `autocomplete:use`
+| Method | Path | Capability | Purpose |
+|---|---|---|---|
+| `GET` | `/api/policies/role/:roleName` | `policies.view` | Read the policy for a role (lazy-seeds defaults for system roles) |
+| `PUT` | `/api/policies/role/:roleName` | `policies.edit` | Replace the policy for a role |
+| `DELETE` | `/api/policies/role/:roleName` | `policies.edit` | Remove a role policy (fall back to org defaults) |
+| `GET` | `/api/policies/role-template` | `policies.view` | Return the JSONC template for the custom-role editor |
 
 ## Built-in Roles
 
 | Capability | Admin | Security Lead | Developer | Auditor |
-|-----------|:-----:|:-----:|:-----:|:-----:|
+|---|:---:|:---:|:---:|:---:|
 | All org/billing write | Y | - | - | - |
-| Policy/scanner write | Y | Y | - | - |
-| File restrictions manage | Y | Y | - | - |
-| Role assign/manage | Y | - | - | - |
-| Agent/terminal/MCP use | Y | Y | Y | - |
-| Log read all + export | Y | Y | - | Y |
-| Log read own | Y | Y | Y | Y |
-| Stats read | Y | Y | Y | Y |
+| `policies.*` / `scanner.*` | Y | Y | - | - |
+| `rbac.full_access` | Y | - | - | - |
+| `chat.*`, `agent.*`, `terminal.*` | Y | Y | Y | - |
+| `audit_logs.view` + `.export` | Y | Y | - | Y |
+| `audit_logs.view_own` | Y | Y | Y | Y |
+| `dashboard.view` | Y | Y | Y | Y |
 
 ## Middleware Usage
 
 ```typescript
 // New routes — capability-based (preferred)
-app.put("/api/file-restrictions/org", {
-  preHandler: [requireAuth, requireCapability("file_restrictions:manage")]
+app.put("/api/policy", {
+  preHandler: [requireAuth, requireCapability("policies.edit")],
 }, handler);
 
 // Legacy routes — role-based (still works)
 app.get("/api/orgs", {
-  preHandler: requireRole("admin", "security_lead")
+  preHandler: requireRole("admin", "security_lead"),
 }, handler);
 ```
 
-## API Routes
+Error codes the middleware emits (via `rbacError()` in `proxy/src/routes/rbac.route.ts`):
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/roles` | requireAuth | List built-in + custom roles |
-| POST | `/api/roles` | `role:manage` | Create custom role |
-| PUT | `/api/roles/:id` | `role:manage` | Update role capabilities |
-| DELETE | `/api/roles/:id` | `role:manage` | Delete custom role |
-| GET | `/api/capabilities` | requireAuth | List all 36 capabilities |
-| POST | `/api/users/:id/role` | `role:assign` | Assign org-level role |
-| POST | `/api/users/:id/team-role/:teamId` | `role:assign` | Assign team-level role |
-| POST | `/api/users/:id/overrides` | `role:manage` | Add capability override |
-| GET | `/api/users/:id/overrides` | `user:read` | List user's overrides |
-| DELETE | `/api/users/:id/overrides/:cap` | `role:manage` | Remove override |
-| GET | `/api/permissions/check?capability=X` | requireAuth | Test permission |
+| Code | HTTP | Meaning |
+|---|:---:|---|
+| `RBAC_DEPENDENCY_VIOLATION` | 422 | Attempted to grant X without its prerequisite (e.g. `edit` without `view`) |
+| `RBAC_EMPTY_ROLE` | 422 | Custom role created with zero capabilities |
+| `RBAC_SYSTEM_ROLE_LOCKED` | 403 | Tried to modify or delete a built-in role |
+| `RBAC_ROLE_IN_USE` | 409 | Tried to delete a custom role that users are assigned to |
+| `NO_CAPABILITY` | 403 | User's effective capability set doesn't include the required atom |
+| `NO_ROLE` | 403 | User has no role assigned in this org |
+
+## API Routes (full list)
+
+| Method | Path | Capability | Purpose |
+|---|---|---|---|
+| `GET` | `/api/roles` | `requireAuth` | List built-in + custom roles |
+| `POST` | `/api/roles` | `rbac.create` | Create a custom role (body: `{ name, capabilities: string[] }`) |
+| `PUT` | `/api/roles/:id` | `rbac.edit` | Update role capabilities |
+| `DELETE` | `/api/roles/:id` | `rbac.delete` | Delete custom role (fails if in use) |
+| `GET` | `/api/roles/:id/users-count` | `requireAuth` | How many users hold this role (for delete confirmation) |
+| `GET` | `/api/capabilities` | `requireAuth` | All capability atoms + metadata |
+| `POST` | `/api/users/:id/role` | `rbac.edit` | Assign org-level role |
+| `POST` | `/api/users/:id/team-role/:teamId` | `rbac.edit` | Assign team-level role |
+| `POST` | `/api/users/:id/overrides` | `rbac.edit` | Add per-user capability override |
+| `GET` | `/api/users/:id/overrides` | `rbac.view` | List user's overrides |
+| `DELETE` | `/api/users/:id/overrides/:cap` | `rbac.edit` | Remove override |
+| `GET` | `/api/permissions/check?capability=X` | `requireAuth` | Test a single capability |
+| `GET` | `/api/me/permissions` | `requireAuth` | **Flat list of the caller's effective capabilities** — used by the frontend `fetchUserPermissions` thunk |
+| `GET` | `/api/users` | `rbac.view` | List users (for the matrix UI) |
+
+## Frontend Permission Primitives
+
+The web dashboard (`web/`) consumes `/api/me/permissions` at boot via `<AppInitializer>` and stores the flat capability list in Redux. Every page and button that needs to be gated reads from the same slice — there's no manual string-matching spread across components.
+
+### Redux slice
+
+```ts
+// web/src/store/slices/permissionsSlice.ts
+interface PermissionsState {
+  permissions: string[];   // ["policies.view", "audit_logs.export", ...]
+  isLoading: boolean;
+  isFetched: boolean;
+  error: string | null;
+}
+
+// Usage
+dispatch(fetchUserPermissions()); // called once by AppInitializer
+```
+
+### Constants (single source of truth)
+
+Never hardcode capability strings. Always import from `permissions.constants.ts`:
+
+```ts
+import { PERMISSION_KEYS, makePermissionKey } from "@/constants/permissions.constants";
+
+// Prebuilt lookups
+PERMISSION_KEYS.POLICIES_EDIT          // "policies.edit"
+PERMISSION_KEYS.AUDIT_LOGS_EXPORT      // "audit_logs.export"
+
+// Dynamic
+makePermissionKey("plugins", "delete") // "plugins.delete"
+```
+
+### Hooks
+
+```tsx
+const canEdit = usePermission(PERMISSION_KEYS.POLICIES_EDIT);
+const canDoAny = useHasAnyPermission([
+  PERMISSION_KEYS.PLUGINS_VIEW,
+  PERMISSION_KEYS.SKILLS_VIEW,
+]);
+```
+
+### Declarative guards
+
+```tsx
+<PermissionGate capability={PERMISSION_KEYS.POLICIES_EDIT}>
+  <button onClick={savePolicy}>Save</button>
+</PermissionGate>
+
+<ProtectedRoute capability={PERMISSION_KEYS.RBAC_VIEW}>
+  <RbacPage />
+</ProtectedRoute>
+```
+
+- `<PermissionGate>` renders children only if the user holds the capability. Optional `fallback={...}` prop.
+- `<ProtectedRoute>` redirects to `/403` (renders `ForbiddenPage`) if the user lacks the capability. Used to wrap route elements.
+- `<AppInitializer>` is mounted once at the root of `App.tsx` and fetches the permission list. Until `isFetched` is true, no protected route will admit the user — this prevents a "flash of allowed content" on slow networks.
+
+### Imperative HOC
+
+```tsx
+const SecureButton = withPermission(MyButton, PERMISSION_KEYS.BILLING_EDIT);
+```
+
+## RBAC UI
+
+`web/src/pages/rbac/RbacPage.tsx` is a 3-panel layout:
+
+- **Left:** role list (system roles pinned, custom roles below) with a "New Role" button
+- **Center:** role detail editor with 3 tabs — **Permissions** (matrix), **Policy** (JSONC editor), **Users** (assignments)
+- **Right:** live summary of selected capabilities (counts per module, dependency status, missing prerequisites)
+
+The Permissions tab uses `permissionMatrix.ts` helpers to enforce dependency rules in real time:
+
+```ts
+togglePermission(matrix, "policies", "edit", true)
+// → returns a new matrix with policies.view ALSO set to true
+//   (because edit depends on view)
+```
+
+The Policy tab for **system roles** shows the lazy-seeded JSON; for **custom roles** it shows the full `ROLE_POLICY_TEMPLATE_JSONC` with comments so the creator can see every key with its description before saving.
 
 ## Adding New Capabilities
 
-1. Add seed entry in `proxy/src/db/database.ts` caps array
-2. Assign to roles in the seeding section
-3. Use `requireCapability("new:cap")` on routes
-4. Automatically appears in RBAC UI for custom role creation
+1. Add an entry to `MODULE_META` in `web/src/constants/permissions.constants.ts` (or just a new action on an existing module).
+2. Seed the atom in `proxy/src/db/database.ts` capabilities array.
+3. Assign it to the appropriate built-in roles in the same seed block.
+4. Use `requireCapability("module.action")` on routes that enforce it.
+5. The RBAC matrix UI picks it up automatically — no frontend changes needed.
 
 ## Key Files
 
 | File | Purpose |
-|------|---------|
-| `proxy/src/auth/rbacService.ts` | checkPermission, role CRUD, overrides, audit logging |
-| `proxy/src/auth/authMiddleware.ts` | requireCapability() + requireRole() shim |
-| `proxy/src/routes/rbac.route.ts` | All RBAC API endpoints |
-| `gui/src/pages/rbac/index.tsx` | Role editor UI |
+|---|---|
+| `proxy/src/auth/rbacService.ts` | `checkPermission`, role CRUD, dependency validation, `listEffectiveCapabilities`, audit logging |
+| `proxy/src/auth/authMiddleware.ts` | `requireCapability()` + `requireRole()` preHandlers |
+| `proxy/src/routes/rbac.route.ts` | All RBAC API endpoints + `rbacError()` mapper |
+| `proxy/src/policy/roleDefaults.ts` | `ROLE_DEFAULT_POLICIES`, `ROLE_POLICY_TEMPLATE_JSONC`, `stripLineComments` |
+| `proxy/src/policy/policyChain.ts` | `resolveEffectivePolicy` (org → role → team → project merge) + role policy CRUD |
+| `proxy/src/db/database.ts` | Table schemas + `seedRoleWithCaps` helper |
+| `web/src/constants/permissions.constants.ts` | `MODULES`, `ACTIONS`, `MODULE_META`, `PERMISSION_KEYS` |
+| `web/src/store/slices/permissionsSlice.ts` | Redux state + `fetchUserPermissions` thunk |
+| `web/src/hooks/usePermission.ts` | Single-capability hook |
+| `web/src/hooks/useHasAnyPermission.ts` | Multi-capability hook |
+| `web/src/components/shared/guard/PermissionGate.tsx` | Declarative render gate |
+| `web/src/components/shared/guard/ProtectedRoute.tsx` | Route-level gate with /403 redirect |
+| `web/src/components/shared/AppInitializer.tsx` | Boot-time permission fetch |
+| `web/src/pages/rbac/RbacPage.tsx` | Full RBAC editor UI |
+| `web/src/pages/rbac/permissionMatrix.ts` | `togglePermission`, `buildSummary`, dependency rules |
+| `web/src/utils/jsonc.ts` | `stripJsonComments`, `parseJsonc` |

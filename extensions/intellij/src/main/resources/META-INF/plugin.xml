@@ -196,5 +196,26 @@
             </action>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
         </group>
+
+        <!--
+            Phase 7 — web-first sign-in / sign-out.
+
+            Kicks off the loopback handoff defined in
+            `AiFirewallAuthService.kt`. The actions are reachable from
+            Go to Action (⌘/Ctrl + Shift + A) and share the proxy bearer
+            token with the CLI and VS Code via `~/.ai-firewall/auth.json`.
+        -->
+        <action id="aiFirewall.signIn"
+                class="com.github.continuedev.continueintellijextension.auth.AiFirewallSignInAction"
+                text="AI Firewall: Sign In"
+                description="Sign in to AI Firewall via the web dashboard">
+            <override-text place="GoToAction" text="AI Firewall: Sign In"/>
+        </action>
+        <action id="aiFirewall.signOut"
+                class="com.github.continuedev.continueintellijextension.auth.AiFirewallSignOutAction"
+                text="AI Firewall: Sign Out"
+                description="Revoke the current AI Firewall session">
+            <override-text place="GoToAction" text="AI Firewall: Sign Out"/>
+        </action>
     </actions>
 </idea-plugin>

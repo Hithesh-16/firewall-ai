@@ -6,6 +6,7 @@ import {
   generateStateNonce,
   loadAuthFile,
   saveAuthFile,
+  watchAuthFile,
   type SharedAuthFile,
   type UserRole,
 } from "@ai-firewall/shared-auth";
@@ -68,6 +69,7 @@ export class AiFirewallAuthService {
 
   private state: AiFirewallAuthState = { signedIn: false };
   private pending: PendingSignIn | null = null;
+  private watcherDispose: (() => void) | null = null;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -105,7 +107,70 @@ export class AiFirewallAuthService {
     }
 
     this._onDidChangeAuth.fire(this.state);
+
+    // Start watching ~/.ai-firewall/auth.json so cross-process auth
+    // changes (e.g. `cn logout` in the CLI, or a second VS Code
+    // window running sign-out) propagate into this process without
+    // an extension reload. We intentionally start the watcher AFTER
+    // the initial state is hydrated so the first event doesn't race
+    // the boot sequence.
+    this._startWatchingSharedFile();
+
     return this.state;
+  }
+
+  /**
+   * Watch the shared auth file and react to external edits:
+   *
+   *   - File deleted (e.g. CLI ran `cn logout`, or JetBrains
+   *     called deleteAuthFile()) → perform a local-only sign-out:
+   *     clear SecretStorage + in-memory state and fire
+   *     onDidChangeAuth. We do NOT hit /api/auth/logout again —
+   *     the process that deleted the file already revoked the
+   *     token, and re-POSTing would just 401.
+   *
+   *   - File changed to a different token (e.g. user signed in via
+   *     CLI on a different account) → rehydrate state from the new
+   *     file, overwrite SecretStorage, and emit a change event so
+   *     file-scope / assistant sync / UI pick up the new identity.
+   *
+   *   - Same token → no-op (debounced fs events from our own
+   *     saveAuthFile() call still reach us, but comparing against
+   *     this.state.token short-circuits).
+   */
+  private _startWatchingSharedFile(): void {
+    if (this.watcherDispose) return;
+    this.watcherDispose = watchAuthFile(async (file) => {
+      try {
+        if (!file || !file.accessToken) {
+          if (this.state.signedIn) {
+            try {
+              await this.context.secrets.delete(SECRET_KEY);
+            } catch {
+              /* ignore */
+            }
+            this.state = { signedIn: false };
+            this._onDidChangeAuth.fire(this.state);
+          }
+          return;
+        }
+
+        if (file.accessToken === this.state.token) return;
+
+        try {
+          await this.context.secrets.store(SECRET_KEY, JSON.stringify(file));
+        } catch {
+          /* ignore — SecretStorage is a cache of the shared file */
+        }
+        this.state = this.fromSharedFile(file);
+        this._onDidChangeAuth.fire(this.state);
+      } catch (err) {
+        console.warn(
+          "[AiFirewallAuthService] shared auth watcher failed:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    });
   }
 
   getState(): AiFirewallAuthState {
@@ -355,6 +420,14 @@ export class AiFirewallAuthService {
       clearTimeout(this.pending.timeoutHandle);
       this.pending.reject(new Error("Extension shutting down"));
       this.pending = null;
+    }
+    if (this.watcherDispose) {
+      try {
+        this.watcherDispose();
+      } catch {
+        /* ignore */
+      }
+      this.watcherDispose = null;
     }
     this._onDidChangeAuth.dispose();
   }

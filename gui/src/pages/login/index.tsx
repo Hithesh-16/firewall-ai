@@ -1,14 +1,53 @@
-import { useContext } from "react";
+import { useContext, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
+import { useWebviewListener } from "../../hooks/useWebviewListener";
+import { ROUTES } from "../../util/navigation";
 
 /**
  * IDE webview login/logout page. Delegates to the host IDE's
  * native commands via the `command:` URL prefix, which the
  * VsCodeMessenger `openUrl` handler intercepts and routes to
  * `vscode.commands.executeCommand()`.
+ *
+ * The page is also reactive to `aiFirewall/authState` pushes from
+ * the extension host: when a sign-in completes (via the browser
+ * loopback / URI handler), the extension fires `onDidChangeAuth`
+ * which surfaces here as a webview message, and we navigate to
+ * the chat view automatically — no manual refresh required.
  */
 export default function LoginPage() {
   const ideMessenger = useContext(IdeMessengerContext);
+  const navigate = useNavigate();
+
+  // Poll the current state on mount so a page-refresh (or opening
+  // /login while already signed in) redirects straight to chat.
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await ideMessenger.request(
+          "aiFirewall/getAuthState",
+          undefined,
+        );
+        if (response.status === "success" && response.content.signedIn) {
+          navigate(ROUTES.HOME);
+        }
+      } catch {
+        /* ignore — extension host may not have the handler yet */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useWebviewListener(
+    "aiFirewall/authState",
+    async (data) => {
+      if (data.signedIn) {
+        navigate(ROUTES.HOME);
+      }
+    },
+    [navigate],
+  );
 
   function signIn() {
     try {

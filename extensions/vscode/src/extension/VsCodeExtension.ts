@@ -207,19 +207,25 @@ export class VsCodeExtension {
     }, 1000);
     context.subscriptions.push({ dispose: () => this.proxyManager.dispose() });
 
+    // Phase 6: AI Firewall web-first auth. Constructed BEFORE the
+    // legacy WorkOS provider so we can inject it — that provider's
+    // removeSession() needs to call aiFirewallAuth.signOut() so a
+    // VS Code Accounts-menu "Sign Out" clears the shared auth file,
+    // revokes the proxy token, and clears SecretStorage (otherwise
+    // the next profile-icon click silently rehydrates the old
+    // session from ~/.ai-firewall/auth.json). Constructor is I/O-free.
+    this.aiFirewallAuth = new AiFirewallAuthService(context);
+
     // Register auth provider
-    this.workOsAuthProvider = new WorkOsAuthProvider(context, this.uriHandler);
+    this.workOsAuthProvider = new WorkOsAuthProvider(
+      context,
+      this.uriHandler,
+      this.aiFirewallAuth,
+    );
 
     // Defer session refresh — network call that can block
     setTimeout(() => void this.workOsAuthProvider.refreshSessions(), 1500);
     context.subscriptions.push(this.workOsAuthProvider);
-
-    // Phase 6: AI Firewall web-first auth. Lives alongside the legacy
-    // WorkOS provider for now — the UI will be flipped over to this
-    // service in Phase 8 when we delete the device-auth flow. On boot
-    // we try SecretStorage, then fall back to ~/.ai-firewall/auth.json
-    // so a user who signs in via `cn login` is already signed in here.
-    this.aiFirewallAuth = new AiFirewallAuthService(context);
 
     // Phase F2+ — pull the assistant YAML from /api/me/assistant and
     // write it to ~/.ai-firewall/config.yaml so Continue core's
@@ -277,6 +283,24 @@ export class VsCodeExtension {
         clearFileScope();
       }
       refreshRestrictedFileDecorations();
+
+      // Push the new auth state to every open webview so the chat
+      // UI can (a) clear the previous user's chat history via
+      // `newSession` and (b) render the sign-in gate when the user
+      // is no longer authenticated. `send()` is a fire-and-forget
+      // postMessage; if the webview hasn't booted yet the message
+      // is dropped, but the webview also polls `aiFirewall/getAuthState`
+      // on mount to cover that race.
+      try {
+        this.sidebar.webviewProtocol.send("aiFirewall/authState", {
+          signedIn: state.signedIn,
+          email: state.user?.email,
+          userId: state.user?.id,
+        });
+      } catch {
+        // Sidebar not ready yet — the webview's on-mount poll will
+        // pick up the current state as soon as it finishes booting.
+      }
     });
 
     // Background sync every 10 minutes as a safety net for changes

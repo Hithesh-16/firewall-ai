@@ -84,6 +84,19 @@ export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
     },
     void,
   ];
+
+  // Webview polls this on mount to hydrate the sign-in gate before
+  // any push event from the extension arrives (protocol messages
+  // sent by the host are dropped if the webview hasn't finished
+  // booting yet, so we can't rely on push-only state).
+  "aiFirewall/getAuthState": [
+    undefined,
+    {
+      signedIn: boolean;
+      email?: string;
+      userId?: number;
+    },
+  ];
 };
 
 export type ToWebviewFromIdeProtocol = ToWebviewFromIdeOrCoreProtocol & {
@@ -116,4 +129,16 @@ export type ToWebviewFromIdeProtocol = ToWebviewFromIdeOrCoreProtocol & {
   generateRule: [undefined, void];
   addToChat: [AddToChatPayload, void];
   customEvent: [{ eventName: string; data: any }, void];
+
+  // Pushed by the extension host whenever AiFirewallAuthService.onDidChangeAuth
+  // fires. The webview uses this to clear chat history on sign-out or
+  // account switch, and to toggle the sign-in gate vs the chat UI.
+  "aiFirewall/authState": [
+    {
+      signedIn: boolean;
+      email?: string;
+      userId?: number;
+    },
+    void,
+  ];
 };

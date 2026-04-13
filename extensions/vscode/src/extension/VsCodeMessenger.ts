@@ -760,11 +760,39 @@ export class VsCodeMessenger {
         msg.data.useOnboarding,
       );
     });
+    // Webview asks "am I signed in?" on mount so it can render the
+    // sign-in gate vs the chat UI without waiting for an
+    // onDidChangeAuth push event (which is dropped if the webview
+    // boots after the change fires).
+    this.onWebview("aiFirewall/getAuthState", async () => {
+      const s = this.vsCodeExtension.aiFirewallAuth.getState();
+      return {
+        signedIn: s.signedIn,
+        email: s.user?.email,
+        userId: s.user?.id,
+      };
+    });
+
     this.onWebviewOrCore("logoutOfControlPlane", async (msg) => {
       const sessions = await this.workOsAuthProvider.getSessions();
+      // workOsAuthProvider.removeSession() now delegates to
+      // aiFirewallAuth.signOut() internally, so this loop already
+      // triggers the full proxy revoke + shared-file delete +
+      // SecretStorage clear. We still call signOut() explicitly
+      // below as a belt-and-braces guarantee for the case where
+      // the stub has zero sessions (e.g. first boot after a stale
+      // cache was cleared but the shared file is still on disk).
       await Promise.all(
         sessions.map((session) => workOsAuthProvider.removeSession(session.id)),
       );
+      try {
+        await this.vsCodeExtension.aiFirewallAuth.signOut();
+      } catch (err) {
+        console.warn(
+          "[VsCodeMessenger] aiFirewallAuth.signOut failed:",
+          err instanceof Error ? err.message : err,
+        );
+      }
       vscode.commands.executeCommand(
         "setContext",
         "aiFirewall.isSignedInToControlPlane",

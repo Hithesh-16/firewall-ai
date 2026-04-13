@@ -44,10 +44,22 @@ let cachedBearer: string | null = null;
 
 /**
  * Phase E: fetch the caller's **effective** policy (role + org merged)
- * from `/api/me/policy` and extract `file_scope`. The older
- * `/api/file-scope` endpoint returned a global, un-authenticated
- * view that ignored the user's role, so a developer-role policy
- * with `file_scope.blocklist: ["*.env"]` was silently dropped.
+ * from `/api/me/policy` and extract both `file_scope.blocklist` AND
+ * the flat `blocked_paths` list. The older `/api/file-scope` endpoint
+ * returned a global, un-authenticated view that ignored the user's
+ * role, so a developer-role policy with `file_scope.blocklist: ["*.env"]`
+ * was silently dropped.
+ *
+ * IMPORTANT: the role-policy schema exposes TWO places where an admin
+ * can put file restrictions — `file_scope.blocklist` (glob patterns
+ * handled by picomatch) and the flat `blocked_paths` array (also glob
+ * patterns in the merged PolicyConfig). The web Role Policies editor
+ * at `web/src/pages/security/RolePoliciesPage.tsx` writes into
+ * `blocked_paths` for the top-level "Restricted paths" field, while
+ * `file_scope.blocklist` is reserved for the advanced editor. We read
+ * both here and merge them into a single blocklist — otherwise every
+ * path an admin sets from the simple UI is silently ignored in the
+ * VS Code client.
  *
  * Call this twice:
  *   1. At startup with no token (falls back to org defaults where
@@ -77,21 +89,59 @@ export async function refreshFileScope(
       });
       if (res.ok) {
         const data = (await res.json()) as {
-          policy: { file_scope?: FileScope };
+          policy: {
+            file_scope?: FileScope;
+            blocked_paths?: string[];
+          };
         };
-        cachedScope = data.policy?.file_scope ?? null;
+        cachedScope = mergeScope(
+          data.policy?.file_scope,
+          data.policy?.blocked_paths,
+        );
         return;
       }
     }
 
     const res = await fetch(`${proxyBaseUrl}/api/file-scope`);
     if (res.ok) {
-      const data = (await res.json()) as { file_scope: FileScope };
-      cachedScope = data.file_scope;
+      const data = (await res.json()) as {
+        file_scope: FileScope;
+        blocked_paths?: string[];
+      };
+      cachedScope = mergeScope(data.file_scope, data.blocked_paths);
     }
   } catch {
     // Proxy not ready — use empty scope (no restrictions)
   }
+}
+
+/**
+ * Build a unified FileScope from the PolicyConfig's two overlapping
+ * restriction fields. De-duplicates patterns so picomatch isn't asked
+ * to check the same glob twice.
+ */
+function mergeScope(
+  fileScope: FileScope | undefined,
+  blockedPaths: string[] | undefined,
+): FileScope {
+  const mode: "blocklist" | "allowlist" =
+    fileScope?.mode === "allowlist" ? "allowlist" : "blocklist";
+  const blocklist = new Set<string>();
+  const allowlist = new Set<string>();
+  if (fileScope?.blocklist) {
+    for (const p of fileScope.blocklist) if (p) blocklist.add(p);
+  }
+  if (fileScope?.allowlist) {
+    for (const p of fileScope.allowlist) if (p) allowlist.add(p);
+  }
+  if (Array.isArray(blockedPaths)) {
+    for (const p of blockedPaths) if (p) blocklist.add(p);
+  }
+  return {
+    mode,
+    blocklist: Array.from(blocklist),
+    allowlist: Array.from(allowlist),
+  };
 }
 
 /**

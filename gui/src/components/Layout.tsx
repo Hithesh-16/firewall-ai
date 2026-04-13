@@ -1,5 +1,5 @@
 import { OnboardingModes } from "core/protocol/core";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import { CustomScrollbarDiv } from ".";
@@ -98,6 +98,92 @@ const Layout = () => {
     },
     [isInEdit],
   );
+
+  // ── AI Firewall sign-in gate ───────────────────────────────────────
+  //
+  // Listen for auth-state pushes from the extension host
+  // (`AiFirewallAuthService.onDidChangeAuth` → `aiFirewall/authState`)
+  // and also poll once on mount because push events sent before the
+  // webview finished booting are dropped by `postMessage`.
+  //
+  // When the signed-in user changes (including signed-in → signed-out
+  // and account A → account B), we:
+  //   1. End the current chat session so the previous user's messages
+  //      disappear from the UI (otherwise User B sees User A's chat).
+  //   2. Navigate to `ROUTES.LOGIN` on sign-out so the webview renders
+  //      the sign-in card instead of an empty chat that can't actually
+  //      talk to any provider.
+  //
+  // The previous email is tracked in a ref so we don't dispatch a
+  // `newSession` on every re-render — only on actual identity change.
+  const lastAuthKeyRef = useRef<string | null>(null);
+
+  const reactToAuthChange = async (
+    signedIn: boolean,
+    email: string | undefined,
+  ) => {
+    const key = signedIn ? `in:${email ?? ""}` : "out";
+    const prev = lastAuthKeyRef.current;
+    lastAuthKeyRef.current = key;
+
+    // First observation on mount — don't clear anything, just sync.
+    if (prev === null) {
+      if (!signedIn) {
+        navigate(ROUTES.LOGIN);
+      }
+      return;
+    }
+
+    if (prev === key) return;
+
+    // Identity actually changed — drop the in-progress chat so it
+    // isn't visible to the next user (or to the "no user" state).
+    try {
+      if (isInEdit) {
+        await dispatch(exitEdit({}));
+      } else {
+        await dispatch(
+          saveCurrentSession({
+            openNewSession: true,
+            generateTitle: false,
+          }),
+        );
+      }
+    } catch {
+      /* non-fatal — next render will still show the new user */
+    }
+
+    navigate(signedIn ? ROUTES.HOME : ROUTES.LOGIN);
+  };
+
+  useWebviewListener(
+    "aiFirewall/authState",
+    async (data) => {
+      await reactToAuthChange(data.signedIn, data.email);
+    },
+    [isInEdit],
+  );
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await ideMessenger.request(
+          "aiFirewall/getAuthState",
+          undefined,
+        );
+        if (response.status === "success") {
+          await reactToAuthChange(
+            response.content.signedIn,
+            response.content.email,
+          );
+        }
+      } catch {
+        /* extension host may not have the handler (older build) —
+           fall through to the default "show chat" behavior */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useWebviewListener(
     "isFirewallInputFocused",

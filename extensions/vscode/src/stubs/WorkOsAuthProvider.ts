@@ -26,6 +26,8 @@ import {
   window,
 } from "vscode";
 
+import { AiFirewallAuthService } from "../auth/aiFirewallAuthService";
+
 import { PromiseAdapter, promiseFromEvent } from "./promiseUtils";
 import { SecretStorage } from "./SecretStorage";
 import { UriEventHandler } from "./uriHandler";
@@ -90,6 +92,7 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
   constructor(
     private readonly context: ExtensionContext,
     private readonly _uriHandler: UriEventHandler,
+    private readonly aiFirewallAuth: AiFirewallAuthService,
   ) {
     this._disposable = Disposable.from(
       authentication.registerAuthenticationProvider(
@@ -448,8 +451,26 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
   }
 
   /**
-   * Remove an existing session
-   * @param sessionId
+   * Remove an existing session.
+   *
+   * This is what VS Code invokes when the user clicks "Sign Out" from
+   * the Accounts (profile) menu. Historically it only spliced the
+   * session from our legacy stub's in-memory list, which meant the
+   * shared auth file at ~/.ai-firewall/auth.json and the proxy-side
+   * token row were left behind — and the next profile-icon click
+   * silently rehydrated the old identity from the stale file via
+   * AiFirewallAuthService.signIn()'s short-circuit.
+   *
+   * We now also invoke AiFirewallAuthService.signOut(), which:
+   *   - POSTs /api/auth/logout to revoke the token on the proxy
+   *   - deletes ~/.ai-firewall/auth.json (so CLI + JetBrains are
+   *     logged out too)
+   *   - clears the aiFirewall.authToken.v1 SecretStorage entry
+   *   - fires onDidChangeAuth so file-scope / assistant sync / UI
+   *     state reset immediately
+   *
+   * signOut() is idempotent, so calling it once per session (when the
+   * user had multiple) is safe — subsequent calls are no-ops.
    */
   public async removeSession(sessionId: string): Promise<void> {
     const sessions = await this.getSessions();
@@ -458,6 +479,17 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
     sessions.splice(sessionIdx, 1);
 
     await this.storeSessions(sessions);
+
+    try {
+      await this.aiFirewallAuth.signOut();
+    } catch (err) {
+      // Never block VS Code's sign-out UX on a proxy/network failure;
+      // local cleanup inside signOut() runs regardless.
+      console.warn(
+        "[WorkOsAuthProvider] aiFirewallAuth.signOut failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
 
     if (session) {
       this._sessionChangeEmitter.fire({

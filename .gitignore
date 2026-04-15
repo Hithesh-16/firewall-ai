@@ -211,3 +211,10 @@ claude-code/
 
 # AI Firewall runtime data (DB, memory files, test artifacts)
 proxy/data/
+
+# SQLite runtime files (defense-in-depth, catches any stray DB anywhere)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3

@@ -6,8 +6,16 @@ import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
 import { getStringArg } from "../parseArgs";
 import { throwIfFileExceedsHalfOfContext } from "./readFileLimit";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
-import { scanFileViaProxy } from "../../util/fileScanProxy";
+import {
+  scanFileViaProxy,
+  type FileScanFinding,
+} from "../../util/fileScanProxy";
+import {
+  formatScanFindingsMarkdown,
+  formatScanFindingsSummary,
+} from "../../util/formatScanFindings";
 import { countTokensAsync } from "../../llm/countTokens";
+import type { ContextItem } from "../../index";
 
 /**
  * Default proxy URL for the AI Firewall reducer endpoint.
@@ -43,10 +51,30 @@ export const readFileImpl: ToolImpl = async (args, extras) => {
     extras.fetch as typeof fetch,
   );
 
+  const findings = scanDecision.findings ?? [];
+  const scanReportItem = buildScanReportItem(
+    resolvedPath.displayPath,
+    scanDecision.action,
+    scanDecision.riskScore,
+    findings,
+  );
+
   if (scanDecision.action === "BLOCK") {
+    // Attach finding details to the error so the agent (and the chat
+    // UI's error renderer) can show file/line breakdowns instead of
+    // an opaque "blocked by security scan".
+    const detail =
+      findings.length > 0
+        ? `\n\n${formatScanFindingsMarkdown(
+            resolvedPath.displayPath,
+            "BLOCK",
+            scanDecision.riskScore,
+            findings,
+          )}`
+        : "";
     throw new ContinueError(
       ContinueErrorReason.FileIsSecurityConcern,
-      `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+      `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})${detail}`,
     );
   }
 
@@ -70,7 +98,7 @@ export const readFileImpl: ToolImpl = async (args, extras) => {
     extras.config.selectedModelByRole.chat,
   );
 
-  return [
+  const items: ContextItem[] = [
     {
       name: getUriPathBasename(resolvedPath.uri),
       description: resolvedPath.displayPath,
@@ -81,7 +109,29 @@ export const readFileImpl: ToolImpl = async (args, extras) => {
       },
     },
   ];
+  if (scanReportItem) items.push(scanReportItem);
+  return items;
 };
+
+/**
+ * Build a "AI Firewall" context item that the chat renders alongside
+ * the file content. Returns undefined when the scan is silent (ALLOW
+ * with no findings) so we don't add noise to clean reads.
+ */
+function buildScanReportItem(
+  filePath: string,
+  action: "ALLOW" | "BLOCK" | "REDACT",
+  riskScore: number,
+  findings: FileScanFinding[],
+): ContextItem | undefined {
+  if (action === "ALLOW" && findings.length === 0) return undefined;
+  return {
+    name: "AI Firewall",
+    description: formatScanFindingsSummary(action, findings),
+    content: formatScanFindingsMarkdown(filePath, action, riskScore, findings),
+    icon: "shield",
+  };
+}
 
 /**
  * Try to reduce file content via the proxy reducer if it's large.

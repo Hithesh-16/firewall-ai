@@ -5,6 +5,12 @@ export interface ScanFinding {
   severity: string;
   category: "secret" | "pii";
   maskedValue: string;
+  /** Source file path when the finding came from a file scan. */
+  file?: string;
+  /** 1-based line number in `file`. */
+  line?: number;
+  /** 1-based column on `line`. */
+  column?: number;
 }
 
 export interface ScanResult {

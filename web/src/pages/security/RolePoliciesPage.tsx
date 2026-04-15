@@ -8,6 +8,10 @@ import {
   CodeBracketIcon,
   AdjustmentsHorizontalIcon,
   ExclamationTriangleIcon,
+  FolderIcon,
+  PlusIcon,
+  XMarkIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../api/client";
 import { useAppDispatch } from "../../store/hooks";
@@ -124,6 +128,7 @@ const RULE_LABELS: Record<keyof PartialPolicyRules, string> = {
 export function RolePoliciesPage() {
   const dispatch = useAppDispatch();
   const [roles, setRoles] = useState<RoleRow[]>([]);
+  const [globalPolicy, setGlobalPolicy] = useState<PartialPolicy | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<RoleName | null>(null);
@@ -132,14 +137,14 @@ export function RolePoliciesPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const resp = await apiClient.get<{ roles: RoleRow[] }>(
-        "/api/policies/roles",
-      );
-      setRoles(resp.roles);
+      const [rolesRes, policyRes] = await Promise.allSettled([
+        apiClient.get<{ roles: RoleRow[] }>("/api/policies/roles"),
+        apiClient.get<PartialPolicy>("/api/policy"),
+      ]);
+      if (rolesRes.status === "fulfilled") setRoles(rolesRes.value.roles);
+      if (policyRes.status === "fulfilled") setGlobalPolicy(policyRes.value);
     } catch (err) {
-      setLoadError(
-        err instanceof Error ? err.message : "Failed to load role policies",
-      );
+      setLoadError(err instanceof Error ? err.message : "Failed to load role policies");
     } finally {
       setLoading(false);
     }
@@ -179,13 +184,11 @@ export function RolePoliciesPage() {
   return (
     <div className="mx-auto max-w-5xl p-6">
       <div className="mb-6">
-        <h1 className="text-foreground text-2xl font-semibold">
-          Role Policies
-        </h1>
+        <h1 className="text-foreground text-2xl font-semibold">Role Policies</h1>
         <p className="text-description mt-1 text-sm">
           Override the org baseline policy per-role. Role overrides can{" "}
-          <strong>only tighten</strong> the baseline — use the Policy Editor
-          to relax rules organization-wide.
+          <strong>only tighten</strong> the baseline — use the Policy Editor to relax rules
+          organization-wide.
         </p>
       </div>
 
@@ -196,46 +199,186 @@ export function RolePoliciesPage() {
           <LoadingSpinner />
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-4">
           {roles.map((row) => {
             const meta = ROLE_META[row.role];
             const Icon = meta.icon;
+            const p = row.policy ?? {};
+            const gRules = (globalPolicy as Record<string, unknown> | null)?.rules as
+              | Record<string, boolean>
+              | undefined;
+            const gFileScope = (globalPolicy as Record<string, unknown> | null)?.file_scope as
+              | { blocklist?: string[] }
+              | undefined;
+            const gBlockedPaths = (globalPolicy as Record<string, unknown> | null)
+              ?.blocked_paths as string[] | undefined;
+
+            // Merge rules for display
+            const mergedRules = { ...(gRules ?? {}), ...(p.rules ?? {}) };
+            const activeRuleCount = Object.values(mergedRules).filter(Boolean).length;
+
+            // Merge file restrictions
+            const allBlocked = new Set<string>();
+            for (const x of gFileScope?.blocklist ?? []) allBlocked.add(x);
+            for (const x of gBlockedPaths ?? []) allBlocked.add(x);
+            for (const x of p.blocked_paths ?? []) allBlocked.add(x);
+            for (const x of p.file_scope?.blocklist ?? []) allBlocked.add(x);
+
+            // Effective threshold
+            const gThreshold = (
+              (globalPolicy as Record<string, unknown> | null)?.prompt_injection as
+                | { threshold?: number }
+                | undefined
+            )?.threshold;
+            const rThreshold = p.prompt_injection?.threshold;
+            const effThreshold =
+              rThreshold !== undefined && gThreshold !== undefined
+                ? Math.min(rThreshold, gThreshold)
+                : (rThreshold ?? gThreshold ?? 60);
+
             return (
-              <button
+              <div
                 key={row.role}
-                type="button"
-                onClick={() => setSelectedRole(row.role)}
-                className="border-border bg-editor hover:border-border-focus flex flex-col gap-2 rounded-xl border p-5 text-left transition-colors"
+                className="border-border bg-editor rounded-xl border transition-colors"
               >
-                <div className="flex items-start justify-between">
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 pt-5 pb-3">
                   <div className="flex items-center gap-3">
                     <Icon className={cn("h-6 w-6", meta.color)} />
                     <div>
-                      <h3 className="text-foreground text-base font-semibold">
-                        {meta.label}
-                      </h3>
-                      <p className="text-description mt-0.5 text-xs">
-                        {meta.description}
-                      </p>
+                      <h3 className="text-foreground text-base font-semibold">{meta.label}</h3>
+                      <p className="text-description mt-0.5 text-xs">{meta.description}</p>
                     </div>
                   </div>
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                      row.hasOverride
-                        ? "bg-primary/10 text-primary border-primary/30 border"
-                        : "bg-secondary text-description",
-                    )}
-                  >
-                    {row.hasOverride ? "Override" : "Default"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        row.hasOverride
+                          ? "bg-primary/10 text-primary border-primary/30 border"
+                          : "bg-secondary text-description",
+                      )}
+                    >
+                      {row.hasOverride ? "Override" : "Default"}
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => setSelectedRole(row.role)}>
+                      Edit
+                    </Button>
+                  </div>
                 </div>
+
+                {/* Policy summary grid */}
+                <div className="border-border grid grid-cols-1 gap-px border-t sm:grid-cols-3">
+                  {/* Active Rules */}
+                  <div className="px-5 py-3">
+                    <p className="text-description mb-1.5 text-[10px] font-semibold uppercase tracking-wider">
+                      Active Rules
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(mergedRules)
+                        .filter(([, v]) => v)
+                        .slice(0, 6)
+                        .map(([key]) => {
+                          const isRole = key in (p.rules ?? {});
+                          return (
+                            <span
+                              key={key}
+                              className={cn(
+                                "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                                isRole
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-secondary text-description",
+                              )}
+                            >
+                              {key.replace(/^(block_|redact_)/, "").replace(/_/g, " ")}
+                            </span>
+                          );
+                        })}
+                      {activeRuleCount > 6 && (
+                        <span className="text-description-muted text-[10px]">
+                          +{activeRuleCount - 6} more
+                        </span>
+                      )}
+                      {activeRuleCount === 0 && (
+                        <span className="text-description-muted text-[10px]">
+                          No rules configured
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Thresholds */}
+                  <div className="border-border px-5 py-3 sm:border-l">
+                    <p className="text-description mb-1.5 text-[10px] font-semibold uppercase tracking-wider">
+                      Thresholds
+                    </p>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-description">Injection</span>
+                        <span className="text-foreground font-semibold">{effThreshold}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-description">Severity</span>
+                        <span className="text-foreground font-semibold">
+                          {p.severity_threshold ??
+                            ((globalPolicy as Record<string, unknown> | null)
+                              ?.severity_threshold as string) ??
+                            "medium"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-description">Response scan</span>
+                        <span className="text-foreground font-semibold">
+                          {p.response_scanning?.enabled === true
+                            ? "ON"
+                            : (
+                                  (globalPolicy as Record<string, unknown> | null)
+                                    ?.response_scanning as { enabled?: boolean } | undefined
+                                )?.enabled
+                              ? "ON (global)"
+                              : "OFF"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* File Restrictions */}
+                  <div className="border-border px-5 py-3 sm:border-l">
+                    <p className="text-description mb-1.5 text-[10px] font-semibold uppercase tracking-wider">
+                      File Restrictions
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {(p.blocked_paths ?? []).slice(0, 4).map((bp) => (
+                        <span
+                          key={bp}
+                          className="bg-error/10 text-error rounded px-1.5 py-0.5 font-mono text-[10px]"
+                        >
+                          {bp}
+                        </span>
+                      ))}
+                      {(p.blocked_paths ?? []).length > 4 && (
+                        <span className="text-description-muted text-[10px]">
+                          +{(p.blocked_paths ?? []).length - 4} more
+                        </span>
+                      )}
+                      {(p.blocked_paths ?? []).length === 0 && (
+                        <span className="text-description-muted text-[10px]">
+                          Inherits global ({allBlocked.size} patterns)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Last updated footer */}
                 {row.updatedAt && (
-                  <p className="text-description-muted mt-1 text-xs">
-                    Updated {new Date(row.updatedAt).toLocaleString()}
-                  </p>
+                  <div className="border-border border-t px-5 py-2">
+                    <p className="text-description-muted text-[10px]">
+                      Updated {new Date(row.updatedAt).toLocaleString()}
+                    </p>
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -268,12 +411,19 @@ function RolePolicyEditor({
 }) {
   const meta = ROLE_META[row.role];
 
+  // Load the global baseline so the Effective tab can show inherited values.
+  const [globalPolicy, setGlobalPolicy] = useState<PartialPolicy | null>(null);
+  useEffect(() => {
+    apiClient
+      .get<PartialPolicy>("/api/policy")
+      .then(setGlobalPolicy)
+      .catch(() => setGlobalPolicy(null));
+  }, []);
+
   // Two edit modes sharing one buffer.
-  const [activeTab, setActiveTab] = useState<"form" | "json">("form");
+  const [activeTab, setActiveTab] = useState<"form" | "json" | "effective">("form");
   const [policy, setPolicy] = useState<PartialPolicy>(row.policy ?? {});
-  const [jsonText, setJsonText] = useState<string>(
-    JSON.stringify(row.policy ?? {}, null, 2),
-  );
+  const [jsonText, setJsonText] = useState<string>(JSON.stringify(row.policy ?? {}, null, 2));
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -314,9 +464,7 @@ function RolePolicyEditor({
       await onSaved();
       onClose();
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Failed to save policy",
-      );
+      setSaveError(err instanceof Error ? err.message : "Failed to save policy");
     } finally {
       setSaving(false);
     }
@@ -330,9 +478,7 @@ function RolePolicyEditor({
       await onDeleted();
       onClose();
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Failed to remove override",
-      );
+      setSaveError(err instanceof Error ? err.message : "Failed to remove override");
     } finally {
       setSaving(false);
       setConfirmDelete(false);
@@ -343,23 +489,15 @@ function RolePolicyEditor({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
-        <Card
-          className="pointer-events-auto w-full max-w-3xl"
-          padding={false}
-        >
+        <Card className="pointer-events-auto w-full max-w-3xl" padding={false}>
           {/* Header */}
           <div className="border-border flex items-center justify-between border-b px-6 py-4">
             <div className="flex items-center gap-3">
               <Icon className={cn("h-6 w-6", meta.color)} />
               <div>
-                <h2 className="text-foreground text-lg font-semibold">
-                  {meta.label} policy
-                </h2>
+                <h2 className="text-foreground text-lg font-semibold">{meta.label} policy</h2>
                 <p className="text-description text-xs">{meta.description}</p>
               </div>
             </div>
@@ -373,9 +511,10 @@ function RolePolicyEditor({
             tabs={[
               { id: "form", label: "Form" },
               { id: "json", label: "JSON" },
+              { id: "effective", label: "Effective Policy" },
             ]}
             activeTab={activeTab}
-            onChange={(id) => setActiveTab(id as "form" | "json")}
+            onChange={(id) => setActiveTab(id as "form" | "json" | "effective")}
             className="px-6"
           />
 
@@ -383,11 +522,13 @@ function RolePolicyEditor({
           <div className="px-6 py-5">
             {activeTab === "form" ? (
               <FormEditor policy={policy} onChange={applyPolicyUpdate} />
+            ) : activeTab === "json" ? (
+              <JsonEditor value={jsonText} error={jsonError} onChange={handleJsonChange} />
             ) : (
-              <JsonEditor
-                value={jsonText}
-                error={jsonError}
-                onChange={handleJsonChange}
+              <EffectivePolicyView
+                globalPolicy={globalPolicy}
+                roleOverride={policy}
+                roleName={row.role}
               />
             )}
           </div>
@@ -398,22 +539,14 @@ function RolePolicyEditor({
           <div className="border-border flex items-center justify-between gap-2 border-t px-6 py-4">
             <div>
               {row.hasOverride && (
-                <Button
-                  variant="danger"
-                  onClick={() => setConfirmDelete(true)}
-                  disabled={saving}
-                >
+                <Button variant="danger" onClick={() => setConfirmDelete(true)} disabled={saving}>
                   <TrashIcon className="mr-1.5 h-4 w-4" />
                   Remove override
                 </Button>
               )}
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={saving}
-              >
+              <Button variant="outline" onClick={onClose} disabled={saving}>
                 Cancel
               </Button>
               <Button
@@ -501,50 +634,42 @@ function FormEditor({
       {/* Strictness tip */}
       <div className="border-primary/30 bg-primary/5 text-description rounded-lg border px-3 py-2 text-xs">
         <ExclamationTriangleIcon className="text-primary mr-1 inline h-3.5 w-3.5" />
-        Only set the fields you want to tighten. Leave a field blank to
-        inherit from the org baseline.
+        Only set the fields you want to tighten. Leave a field blank to inherit from the org
+        baseline.
       </div>
 
       {/* Rules */}
       <section>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">
-          Rules
-        </h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">Rules</h3>
         <p className="text-description mb-3 text-xs">
-          Each checkbox is tri-state: inherit (blank), force-on (✓),
-          force-off is ignored because overrides only tighten.
+          Each checkbox is tri-state: inherit (blank), force-on (✓), force-off is ignored because
+          overrides only tighten.
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {(Object.keys(RULE_LABELS) as (keyof PartialPolicyRules)[]).map(
-            (key) => {
-              const value = policy.rules?.[key];
-              const checked = value === true;
-              return (
-                <label
-                  key={key}
-                  className="border-border hover:bg-list-hover flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) =>
-                      setRule(key, e.target.checked ? true : undefined)
-                    }
-                    className="accent-primary h-4 w-4"
-                  />
-                  <span className="text-foreground">{RULE_LABELS[key]}</span>
-                </label>
-              );
-            },
-          )}
+          {(Object.keys(RULE_LABELS) as (keyof PartialPolicyRules)[]).map((key) => {
+            const value = policy.rules?.[key];
+            const checked = value === true;
+            return (
+              <label
+                key={key}
+                className="border-border hover:bg-list-hover flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => setRule(key, e.target.checked ? true : undefined)}
+                  className="accent-primary h-4 w-4"
+                />
+                <span className="text-foreground">{RULE_LABELS[key]}</span>
+              </label>
+            );
+          })}
         </div>
       </section>
 
       {/* Prompt injection threshold */}
       <section>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">
-          Prompt injection threshold
-        </h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">Prompt injection threshold</h3>
         <p className="text-description mb-3 text-xs">
           Lower = stricter. Leave unset to inherit. Range 0–100.
         </p>
@@ -554,9 +679,7 @@ function FormEditor({
             min={0}
             max={100}
             value={injectionThreshold ?? 60}
-            onChange={(e) =>
-              setInjectionThreshold(Number(e.target.value))
-            }
+            onChange={(e) => setInjectionThreshold(Number(e.target.value))}
             className="accent-primary flex-1"
             disabled={injectionThreshold === undefined}
           />
@@ -579,54 +702,62 @@ function FormEditor({
 
       {/* Response scanning */}
       <section>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">
-          Response scanning
-        </h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">Response scanning</h3>
         <label className="border-border flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm">
           <input
             type="checkbox"
             checked={policy.response_scanning?.enabled === true}
-            onChange={(e) =>
-              setResponseScanning(e.target.checked ? true : undefined)
-            }
+            onChange={(e) => setResponseScanning(e.target.checked ? true : undefined)}
             className="accent-primary h-4 w-4"
           />
-          <span className="text-foreground">
-            Force-enable scanning of model responses
-          </span>
+          <span className="text-foreground">Force-enable scanning of model responses</span>
         </label>
       </section>
 
       {/* Severity threshold */}
       <section>
-        <h3 className="text-foreground mb-2 text-sm font-semibold">
-          Severity threshold
-        </h3>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">Severity threshold</h3>
         <div className="flex gap-2">
           {(["medium", "high", "critical"] as const).map((s) => (
             <Button
               key={s}
-              variant={
-                policy.severity_threshold === s ? "primary" : "outline"
-              }
+              variant={policy.severity_threshold === s ? "primary" : "outline"}
               size="sm"
-              onClick={() =>
-                setSeverity(
-                  policy.severity_threshold === s ? undefined : s,
-                )
-              }
+              onClick={() => setSeverity(policy.severity_threshold === s ? undefined : s)}
             >
               {s}
             </Button>
           ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSeverity(undefined)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => setSeverity(undefined)}>
             Inherit
           </Button>
         </div>
+      </section>
+
+      {/* File restrictions (blocked_paths) */}
+      <section>
+        <h3 className="text-foreground mb-2 flex items-center gap-2 text-sm font-semibold">
+          <FolderIcon className="h-4 w-4" />
+          File &amp; Folder Restrictions
+        </h3>
+        <p className="text-description mb-3 text-xs">
+          Glob patterns for files/folders this role cannot send to AI. Use{" "}
+          <code className="bg-input rounded px-1">**/folder/**</code> for any folder,{" "}
+          <code className="bg-input rounded px-1">*.ext</code> for file types. These are merged with
+          the global policy&apos;s blocklist (visible in the Effective Policy tab).
+        </p>
+        <BlockedPathsEditor
+          paths={policy.blocked_paths ?? []}
+          onChange={(paths) => {
+            const next: PartialPolicy = { ...policy };
+            if (paths.length === 0) {
+              delete next.blocked_paths;
+            } else {
+              next.blocked_paths = paths;
+            }
+            onChange(next);
+          }}
+        />
       </section>
     </div>
   );
@@ -667,6 +798,222 @@ function JsonEditor({
           Save will call PUT /api/policies/role/{"{"}role{"}"}.
         </p>
       )}
+    </div>
+  );
+}
+
+// ─── Blocked paths inline editor ────────────────────────────────────
+
+function BlockedPathsEditor({
+  paths,
+  onChange,
+}: {
+  paths: string[];
+  onChange: (paths: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function add() {
+    const trimmed = draft.trim();
+    if (!trimmed || paths.includes(trimmed)) return;
+    onChange([...paths, trimmed]);
+    setDraft("");
+  }
+
+  function remove(idx: number) {
+    onChange(paths.filter((_, i) => i !== idx));
+  }
+
+  return (
+    <div className="space-y-2">
+      {paths.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {paths.map((p, i) => (
+            <span
+              key={i}
+              className="bg-error/10 text-error inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium"
+            >
+              <code>{p}</code>
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="hover:text-foreground ml-0.5"
+                aria-label={`Remove ${p}`}
+              >
+                <XMarkIcon className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="e.g. **/payments/** or .env or *.pem"
+          className="bg-input text-foreground border-border focus:border-border-focus placeholder:text-input-placeholder flex-1 rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1"
+        />
+        <Button size="sm" variant="outline" onClick={add} disabled={!draft.trim()}>
+          <PlusIcon className="mr-1 h-3.5 w-3.5" />
+          Add
+        </Button>
+      </div>
+      {paths.length === 0 && (
+        <p className="text-description-muted text-xs">
+          No role-specific file restrictions. The global policy&apos;s file_scope.blocklist still
+          applies.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Effective policy view (read-only merged view) ──────────────────
+
+function EffectivePolicyView({
+  globalPolicy,
+  roleOverride,
+  roleName,
+}: {
+  globalPolicy: PartialPolicy | null;
+  roleOverride: PartialPolicy;
+  roleName: string;
+}) {
+  if (!globalPolicy) {
+    return <p className="text-description py-8 text-center text-sm">Loading global policy...</p>;
+  }
+
+  const gFileScope = (globalPolicy as Record<string, unknown>).file_scope as
+    | { blocklist?: string[]; allowlist?: string[] }
+    | undefined;
+  const gBlockedPaths = (globalPolicy as Record<string, unknown>).blocked_paths as
+    | string[]
+    | undefined;
+
+  const rBlockedPaths = roleOverride.blocked_paths ?? [];
+  const rFileScope = roleOverride.file_scope ?? {};
+
+  // Merge blocklists (union)
+  const allBlocked = new Set<string>();
+  for (const p of gFileScope?.blocklist ?? []) allBlocked.add(p);
+  for (const p of gBlockedPaths ?? []) allBlocked.add(p);
+  for (const p of rBlockedPaths) allBlocked.add(p);
+  for (const p of rFileScope.blocklist ?? []) allBlocked.add(p);
+
+  // Merge rules (OR = strictest)
+  const gRules = (globalPolicy as Record<string, unknown>).rules as
+    | Record<string, boolean>
+    | undefined;
+  const rRules = roleOverride.rules ?? {};
+  const mergedRules: Record<string, boolean> = { ...(gRules ?? {}), ...rRules };
+
+  // Merge thresholds (MIN)
+  const gThreshold = (globalPolicy as Record<string, unknown>).prompt_injection as
+    | { threshold?: number }
+    | undefined;
+  const rThreshold = roleOverride.prompt_injection?.threshold;
+  const effectiveThreshold =
+    rThreshold !== undefined && gThreshold?.threshold !== undefined
+      ? Math.min(rThreshold, gThreshold.threshold)
+      : (rThreshold ?? gThreshold?.threshold ?? 60);
+
+  return (
+    <div className="space-y-5">
+      <div className="border-info/30 bg-info/5 text-description rounded-lg border px-3 py-2 text-xs">
+        <EyeIcon className="text-info mr-1 inline h-3.5 w-3.5" />
+        This is the <strong>effective policy</strong> for the <strong>{roleName}</strong> role after
+        merging the global baseline + role override. Read-only — edit via the Form or JSON tabs.
+      </div>
+
+      {/* Merged rules */}
+      <section>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">Effective Rules</h3>
+        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+          {Object.entries(mergedRules).map(([key, val]) => {
+            const isFromRole = key in rRules;
+            return (
+              <div key={key} className="flex items-center gap-2 rounded px-2 py-1 text-xs">
+                <span
+                  className={cn(
+                    "h-2 w-2 shrink-0 rounded-full",
+                    val ? "bg-success" : "bg-secondary",
+                  )}
+                />
+                <span className="text-foreground">{key.replace(/_/g, " ")}</span>
+                {isFromRole && (
+                  <span className="bg-primary/10 text-primary rounded px-1 text-[9px] font-bold uppercase">
+                    role
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Prompt injection */}
+      <section>
+        <h3 className="text-foreground mb-2 text-sm font-semibold">Prompt Injection Threshold</h3>
+        <p className="text-foreground text-sm">
+          <strong>{effectiveThreshold}</strong>
+          <span className="text-description ml-2 text-xs">
+            (global: {gThreshold?.threshold ?? "60"}
+            {rThreshold !== undefined ? `, role: ${rThreshold}` : ""} — min wins)
+          </span>
+        </p>
+      </section>
+
+      {/* Effective file restrictions */}
+      <section>
+        <h3 className="text-foreground mb-2 flex items-center gap-2 text-sm font-semibold">
+          <FolderIcon className="h-4 w-4" />
+          Effective File Restrictions
+          <span className="bg-secondary text-description rounded-full px-2 py-0.5 text-[10px] font-normal">
+            {allBlocked.size} patterns
+          </span>
+        </h3>
+        <div className="space-y-1">
+          {Array.from(allBlocked)
+            .sort()
+            .map((pattern) => {
+              const fromRole =
+                rBlockedPaths.includes(pattern) || (rFileScope.blocklist ?? []).includes(pattern);
+              const fromGlobal =
+                (gFileScope?.blocklist ?? []).includes(pattern) ||
+                (gBlockedPaths ?? []).includes(pattern);
+              return (
+                <div
+                  key={pattern}
+                  className="border-border flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs"
+                >
+                  <code className="text-foreground flex-1 font-mono">{pattern}</code>
+                  {fromGlobal && (
+                    <span className="bg-secondary text-description shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase">
+                      global
+                    </span>
+                  )}
+                  {fromRole && (
+                    <span className="bg-primary/10 text-primary shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase">
+                      role
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+        {allBlocked.size === 0 && (
+          <p className="text-description-muted py-4 text-center text-xs">
+            No file restrictions configured.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

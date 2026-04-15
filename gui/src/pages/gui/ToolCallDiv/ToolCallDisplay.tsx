@@ -2,6 +2,7 @@ import { Tool, ToolCallState } from "core";
 import { useContext, useMemo } from "react";
 import { openContextItem } from "../../../components/mainInput/belowMainInput/ContextItemsPeek";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
+import { ScanReportInline, SCAN_REPORT_ITEM_NAME } from "./ScanReportInline";
 import { ToolCallStatusMessage } from "./ToolCallStatusMessage";
 import { toolCallStateToContextItems } from "./utils";
 import { ToolTruncateHistoryIcon } from "./ToolTruncateHistoryIcon";
@@ -24,7 +25,14 @@ export function ToolCallDisplay({
   const ideMessenger = useContext(IdeMessengerContext);
   const shownContextItems = useMemo(() => {
     const contextItems = toolCallStateToContextItems(toolCallState);
-    return contextItems.filter((item) => !item.hidden);
+    // Exclude the AI Firewall scan report from the clickable list —
+    // it renders as an always-visible inline banner via
+    // <ScanReportInline/>. Without this filter, opening an
+    // edit/find-and-replace tool result would route the click into
+    // the report item instead of the actual file content.
+    return contextItems.filter(
+      (item) => !item.hidden && item.name !== SCAN_REPORT_ITEM_NAME,
+    );
   }, [toolCallState]);
 
   const isClickable = shownContextItems.length > 0;
@@ -58,6 +66,7 @@ export function ToolCallDisplay({
         </div>
       </div>
       <div>{children}</div>
+      <ScanReportInline toolCallState={toolCallState} />
     </div>
   );
 }

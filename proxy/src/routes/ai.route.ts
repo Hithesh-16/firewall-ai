@@ -14,6 +14,10 @@ import {
   resolveGatewayRouteForUser,
 } from "../gateway/gatewayRouter";
 import { recordUsage } from "../gateway/usageService";
+import {
+  callUpstreamWithRetry,
+  mapUpstreamError,
+} from "../gateway/upstreamCall";
 import { countMessageTokens } from "../gateway/tokenCounter";
 import { checkContextWindow } from "../gateway/contextWindow";
 import { estimateCost } from "../gateway/costEstimator";
@@ -348,14 +352,14 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
             );
             if (wantsStream) {
               logStreamRequest();
-              const resp = await axios.post(
-                gatewayRoute.providerUrl,
-                requestPayload,
-                {
-                  headers,
-                  responseType: "stream",
-                  timeout: 0,
-                },
+              const resp = await callUpstreamWithRetry(
+                () =>
+                  axios.post(gatewayRoute.providerUrl, requestPayload, {
+                    headers,
+                    responseType: "stream",
+                    timeout: 0,
+                  }),
+                { provider: gatewayRoute.provider.name, logger: request.log },
               );
               reply.raw.writeHead(resp.status, resp.headers as any);
               if (streamResponseConfig?.enabled) {
@@ -367,10 +371,13 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
               }
               return reply;
             } else {
-              const resp = await axios.post(
-                gatewayRoute.providerUrl,
-                requestPayload,
-                { headers, timeout: 120_000 },
+              const resp = await callUpstreamWithRetry(
+                () =>
+                  axios.post(gatewayRoute.providerUrl, requestPayload, {
+                    headers,
+                    timeout: 120_000,
+                  }),
+                { provider: gatewayRoute.provider.name, logger: request.log },
               );
               rawResponseData = resp.data as Record<string, unknown>;
               normalizedData = normalizeOllamaResponse(
@@ -386,14 +393,14 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
             headers["anthropic-version"] = "2023-06-01";
             if (wantsStream) {
               logStreamRequest();
-              const resp = await axios.post(
-                gatewayRoute.providerUrl,
-                requestPayload,
-                {
-                  headers,
-                  responseType: "stream",
-                  timeout: 0,
-                },
+              const resp = await callUpstreamWithRetry(
+                () =>
+                  axios.post(gatewayRoute.providerUrl, requestPayload, {
+                    headers,
+                    responseType: "stream",
+                    timeout: 0,
+                  }),
+                { provider: gatewayRoute.provider.name, logger: request.log },
               );
               reply.raw.writeHead(resp.status, resp.headers as any);
               if (streamResponseConfig?.enabled) {
@@ -405,10 +412,12 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
               }
               return reply;
             } else {
-              const resp = await axios.post(
-                gatewayRoute.providerUrl,
-                requestPayload,
-                { headers },
+              const resp = await callUpstreamWithRetry(
+                () =>
+                  axios.post(gatewayRoute.providerUrl, requestPayload, {
+                    headers,
+                  }),
+                { provider: gatewayRoute.provider.name, logger: request.log },
               );
               rawResponseData = resp.data as Record<string, unknown>;
               normalizedData = normalizeAnthropicResponse(
@@ -420,11 +429,15 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
             const url = `${gatewayRoute.providerUrl}?key=${gatewayRoute.decryptedKey}`;
             if (wantsStream) {
               logStreamRequest();
-              const resp = await axios.post(url, requestPayload, {
-                headers,
-                responseType: "stream",
-                timeout: 0,
-              });
+              const resp = await callUpstreamWithRetry(
+                () =>
+                  axios.post(url, requestPayload, {
+                    headers,
+                    responseType: "stream",
+                    timeout: 0,
+                  }),
+                { provider: gatewayRoute.provider.name, logger: request.log },
+              );
               reply.raw.writeHead(resp.status, resp.headers as any);
               if (streamResponseConfig?.enabled) {
                 const scanTransform =
@@ -435,7 +448,10 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
               }
               return reply;
             } else {
-              const resp = await axios.post(url, requestPayload, { headers });
+              const resp = await callUpstreamWithRetry(
+                () => axios.post(url, requestPayload, { headers }),
+                { provider: gatewayRoute.provider.name, logger: request.log },
+              );
               rawResponseData = resp.data as Record<string, unknown>;
               normalizedData = normalizeGeminiResponse(
                 rawResponseData,
@@ -449,10 +465,14 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
             headers["Authorization"] = `Bearer ${gatewayRoute.decryptedKey}`;
             if (wantsStream) {
               logStreamRequest();
-              const resp = await axios.post(
-                gatewayRoute.providerUrl,
-                requestPayload,
-                { headers, responseType: "stream", timeout: 0 },
+              const resp = await callUpstreamWithRetry(
+                () =>
+                  axios.post(gatewayRoute.providerUrl, requestPayload, {
+                    headers,
+                    responseType: "stream",
+                    timeout: 0,
+                  }),
+                { provider: gatewayRoute.provider.name, logger: request.log },
               );
               reply.raw.writeHead(resp.status, resp.headers as any);
               if (streamResponseConfig?.enabled) {
@@ -464,10 +484,12 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
               }
               return reply;
             } else {
-              const resp = await axios.post(
-                gatewayRoute.providerUrl,
-                requestPayload,
-                { headers },
+              const resp = await callUpstreamWithRetry(
+                () =>
+                  axios.post(gatewayRoute.providerUrl, requestPayload, {
+                    headers,
+                  }),
+                { provider: gatewayRoute.provider.name, logger: request.log },
               );
               rawResponseData = resp.data as Record<string, unknown>;
               normalizedData = rawResponseData;
@@ -595,9 +617,17 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
             },
           };
         } catch (error) {
-          const message = axios.isAxiosError(error)
-            ? (error.response?.data ?? error.message)
-            : "Unknown provider error";
+          const mapped = mapUpstreamError(error, gatewayRoute.provider.name);
+
+          request.log.error(
+            {
+              provider: mapped.provider,
+              code: mapped.code,
+              upstreamStatus: mapped.upstreamStatus,
+              upstreamMessage: mapped.upstreamMessage,
+            },
+            "upstream provider call failed after retries",
+          );
 
           logRequest({
             timestamp: Date.now(),
@@ -611,7 +641,7 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
             filesBlocked: 0,
             riskScore: decision.riskScore,
             action: shouldRedact ? "REDACT" : "ALLOW",
-            reasons: [`Provider error: ${JSON.stringify(message)}`],
+            reasons: [`Provider error: ${mapped.code}: ${mapped.message}`],
             responseTimeMs: Date.now() - startedAt,
             userId: authUserId,
             teamId: resolvedTeamId,
@@ -625,10 +655,19 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
             gatewayRoute.model.modelName,
           );
 
-          return reply.status(502).send({
-            error: "Upstream provider request failed",
-            provider: gatewayRoute.provider.name,
-            details: message,
+          reply.header(
+            "X-AF-Upstream-Status",
+            String(mapped.upstreamStatus ?? ""),
+          );
+          reply.header("X-AF-Upstream-Code", mapped.code);
+          return reply.status(mapped.status).send({
+            error: {
+              code: mapped.code,
+              message: mapped.message,
+              provider: mapped.provider,
+              retryable: mapped.retryable,
+              upstream_status: mapped.upstreamStatus,
+            },
           });
         }
       }

@@ -1,4 +1,5 @@
 import { Box, Text } from "ink";
+import * as path from "node:path";
 import React, { memo } from "react";
 
 import { ToolCallTitle } from "src/tools/ToolCallTitle.js";
@@ -8,6 +9,87 @@ import { MarkdownRenderer } from "../MarkdownRenderer.js";
 import { ToolResultSummary } from "../ToolResultSummary.js";
 
 /**
+ * Some providers (Groq Llama, certain Gemini variants) emit tool
+ * calls as inline XML-ish text — `<ToolName>{"file_path":"..."}</function>`
+ * — instead of as native tool_calls. The CLI never converted those
+ * back to a proper tool card, so users saw the raw markup. This
+ * regex peels the wrapper off and replaces it with a clean
+ * `**ToolName**(./path)` line so MarkdownRenderer can show it as
+ * bold-name + arg.
+ *
+ * Pattern:  <Word>{...optional JSON...}</function|word>
+ */
+const INLINE_TOOL_CALL_RE = /<(\w+)>\s*(\{[^<>]*\})?\s*<\/(?:function|\w+)>/g;
+
+/**
+ * Wrap a label in an OSC 8 hyperlink so iTerm2 / kitty / modern
+ * Terminal.app / Windows Terminal render it as a clickable link.
+ * Old terminals strip the escapes and show the raw label, so this
+ * is safe to emit unconditionally.
+ *
+ *   ESC ] 8 ; ; URL ESC \ <label> ESC ] 8 ; ; ESC \
+ */
+function makeOsc8Link(label: string, url: string): string {
+  const ESC = "\u001b";
+  const ST = `${ESC}\\`;
+  return `${ESC}]8;;${url}${ST}${label}${ESC}]8;;${ST}`;
+}
+
+/**
+ * Heuristic: looks like a workspace-relative or absolute path.
+ * Matches `./foo`, `../foo`, `/abs/foo`, `foo/bar.ext`, `foo.ext`.
+ */
+function looksLikePath(value: string): boolean {
+  if (!value || value.length > 1024) return false;
+  if (value.startsWith("./") || value.startsWith("../")) return true;
+  if (value.startsWith("/") || /^[A-Za-z]:[\\/]/.test(value)) return true;
+  // Bare filename with extension or any path separator
+  return /[\\/]/.test(value) || /\.[A-Za-z0-9]{1,8}$/.test(value);
+}
+
+/**
+ * Resolve to an absolute file:// URL using process.cwd() for relative
+ * paths so terminals can open it. Returns the original label when it
+ * doesn't look like a real path.
+ */
+function pathLink(value: string): string {
+  if (!looksLikePath(value)) return value;
+  try {
+    const abs = path.isAbsolute(value)
+      ? value
+      : path.resolve(process.cwd(), value);
+    return makeOsc8Link(value, `file://${abs}`);
+  } catch {
+    return value;
+  }
+}
+
+function cleanInlineToolCalls(text: string): string {
+  return text.replace(INLINE_TOOL_CALL_RE, (_match, toolName, jsonBlob) => {
+    if (!jsonBlob) return `**${toolName}**`;
+    let firstArg = "";
+    try {
+      const parsed = JSON.parse(jsonBlob);
+      // Prefer keys that look like a path; fall back to first value.
+      const pathKey = Object.keys(parsed).find((k) =>
+        k.toLowerCase().includes("path"),
+      );
+      const value = pathKey ? parsed[pathKey] : Object.values(parsed)[0];
+      firstArg =
+        typeof value === "string"
+          ? pathLink(value)
+          : value !== undefined
+            ? JSON.stringify(value)
+            : "";
+    } catch {
+      // Malformed JSON — keep the raw blob trimmed
+      firstArg = jsonBlob.replace(/[{}"]/g, "").trim();
+    }
+    return firstArg ? `**${toolName}**(${firstArg})` : `**${toolName}**`;
+  });
+}
+
+/**
  * Formats message content for display, converting message parts array back to
  * user-friendly format with placeholders like [Image #1], [Pasted Text #1], etc.
  */
@@ -15,7 +97,7 @@ function formatMessageContentForDisplay(
   content: import("../../../../../core/index.js").MessageContent,
 ): string {
   if (typeof content === "string") {
-    return content;
+    return cleanInlineToolCalls(content);
   }
 
   if (!Array.isArray(content)) {
@@ -38,7 +120,7 @@ function formatMessageContentForDisplay(
     }
   }
 
-  return displayText;
+  return cleanInlineToolCalls(displayText);
 }
 
 interface MemoizedMessageProps {

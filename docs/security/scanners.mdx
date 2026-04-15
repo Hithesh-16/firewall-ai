@@ -261,16 +261,24 @@ Every file read in the CLI and core agent tools passes through the proxy's `/api
 2. Static check: `throwIfFileIsSecurityConcern()` rejects known-dangerous paths (`.env`, `.pem`, `.ssh/`)
 3. Proxy scan: `scanFileViaProxy()` calls `POST /api/scan/file` with the file path
 4. Proxy runs full scanner pipeline (secrets, PII, entropy, injection) + policy evaluation
-5. Based on the decision:
-   - **BLOCK** → `AIFirewallError` thrown, file is **never read**
-   - **REDACT** → proxy's sanitized content returned (secrets replaced with `[REDACTED_TYPE]`)
-   - **ALLOW** → file read proceeds normally
-6. **Fail-open** — if the proxy is unreachable (not running), file reads proceed as before
+5. Proxy resolves every finding to a 1-based `(line, column)` via `findingLocator.ts` and pre-masks each value (raw secrets never cross the wire)
+6. Based on the decision:
+   - **BLOCK** → `AIFirewallError` thrown with the markdown findings block attached, file is **never read**
+   - **REDACT** → proxy's sanitized content returned (secrets replaced with `[REDACTED_TYPE]`) **plus** a second `ContextItem` named "AI Firewall" carrying the per-finding report
+   - **ALLOW** → file read proceeds normally; if findings are present (e.g., low-severity entropy hits) the report `ContextItem` is still appended
+7. **Fail-open** — if the proxy is unreachable (not running), file reads proceed as before
 
 **Files enforcing this:**
-- `core/util/fileScanProxy.ts` — shared utility (5s timeout, fail-open)
-- `core/tools/implementations/readFile.ts` — core agent readFile tool
-- `extensions/cli/src/tools/readFile.ts` — CLI readFile tool
+- `proxy/src/scanner/findingLocator.ts` — char offset → `(line, column)` + type-aware masking
+- `proxy/src/scanner/fileScanService.ts` — runs pipeline, attaches `line`/`column`/`masked` to each secret/pii entry
+- `core/util/fileScanProxy.ts` — shared client utility (5s timeout, fail-open) — flattens `secrets[]`+`pii[]` into a single `findings[]`
+- `core/util/formatScanFindings.ts` — markdown formatter (header + bullet list, monospace `file:line:col` chips)
+- `core/tools/implementations/readFile.ts`, `readFileRange.ts`, `readCurrentlyOpenFile.ts` — append the report `ContextItem` after the file content
+- `extensions/cli/src/tools/readFile.ts` — prepends the markdown report to the returned string so the Ink TUI renders it inline
+
+<Info>
+The old VS Code toast (`AI Firewall: Sensitive data REDACTED ... HIGH_ENTROPY, HIGH_ENTROPY ...`) has been removed — it lacked file/line context because chat-time scans see a blob of text without provenance. Findings are now surfaced **at the moment of the file read** as part of the tool result card. The status-bar still flashes (warning yellow for REDACT, error red for BLOCK) and approval prompts are still modal, since those are interactive.
+</Info>
 
 <Info>
 The proxy caches scan results by SHA-256 content hash, so repeated reads of the same file are fast.

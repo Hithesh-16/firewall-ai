@@ -5,6 +5,7 @@ import {
   openContextItem,
 } from "../../../components/mainInput/belowMainInput/ContextItemsPeek";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
+import { ScanReportInline, SCAN_REPORT_ITEM_NAME } from "./ScanReportInline";
 import { ToggleWithIcon } from "./ToggleWithIcon";
 import { ToolCallStatusMessage } from "./ToolCallStatusMessage";
 import { ToolTruncateHistoryIcon } from "./ToolTruncateHistoryIcon";
@@ -26,7 +27,15 @@ export function SimpleToolCallUI({
   const ideMessenger = useContext(IdeMessengerContext);
   const shownContextItems = useMemo(() => {
     const contextItems = toolCallStateToContextItems(toolCallState);
-    return contextItems.filter((item) => !item.hidden);
+    // Exclude the AI Firewall scan report — it renders as a permanent
+    // inline banner via <ScanReportInline/> below, so it shouldn't
+    // count toward the toggle/single-item logic above. Without this
+    // filter, adding the scan card to a single-output tool result
+    // (e.g. read_file) flipped the UI from "click to open file" to
+    // "click to expand dropdown", hiding the scan info entirely.
+    return contextItems.filter(
+      (item) => !item.hidden && item.name !== SCAN_REPORT_ITEM_NAME,
+    );
   }, [toolCallState]);
 
   const [open, setOpen] = useState(false);
@@ -85,6 +94,8 @@ export function SimpleToolCallUI({
           )}
         </div>
       )}
+
+      <ScanReportInline toolCallState={toolCallState} />
     </div>
   );
 }

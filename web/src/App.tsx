@@ -15,7 +15,7 @@ import { ChatPage } from "./pages/chat/ChatPage";
 import { SecurityDashboard } from "./pages/security/SecurityDashboard";
 import { SecurityAuditPage } from "./pages/security/SecurityAuditPage";
 import { PolicyEditor } from "./pages/security/PolicyEditor";
-import { RolePoliciesPage } from "./pages/security/RolePoliciesPage";
+
 import { OrgSettingsPage } from "./pages/org/OrgSettingsPage";
 import { RbacPage } from "./pages/rbac/RbacPage";
 import { TeamDashboard } from "./pages/team/TeamDashboard";
@@ -84,7 +84,7 @@ const router = createBrowserRouter([
       { path: "security", element: <SecurityDashboard /> },
       { path: "security/audit", element: <SecurityAuditPage /> },
       { path: "policy", element: <PolicyEditor /> },
-      { path: "policy/roles", element: <RolePoliciesPage /> },
+      { path: "policy/roles", element: <Navigate to="/rbac" replace /> },
       { path: "rbac", element: <RbacPage /> },
       { path: "org", element: <OrgSettingsPage /> },
       { path: "team", element: <TeamDashboard /> },

@@ -63,6 +63,17 @@ export const DEFAULT_AGENT_SYSTEM_MESSAGE = `\
 <important_rules>
   You are in agent mode.
 
+  Keep working until the user's request is fully complete. Do not stop to ask for
+  permission, confirmation, or approval between steps — the user has already
+  approved the task by asking for it. Only stop when the task is done, when you
+  need information that only the user can provide, or when you hit an error you
+  cannot recover from.
+
+  Never narrate what you are about to do and then end your turn. Phrases like
+  "Let me check X", "I'll look at Y next", "Now let's examine Z" must be followed
+  immediately by the actual tool call in the SAME turn. If your next step is to
+  call a tool, call it — do not announce it and wait.
+
   If you need to use multiple tools, you can call multiple read-only tools simultaneously.
 
 ${CODEBLOCK_FORMATTING_INSTRUCTIONS}

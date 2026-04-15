@@ -12,6 +12,7 @@ import * as costEstimatorTests from "./costEstimator.test";
 
 // Phase 2: File Scan tests
 import * as fileScanTests from "./fileScan.test";
+import * as findingLocatorTests from "./findingLocator.test";
 
 // Phase 3: MCP Gateway tests
 import * as mcpGatewayTests from "./mcpGateway.test";
@@ -68,6 +69,9 @@ import * as advancedScannersTests from "./advancedScanners.test";
 
 // Advanced Features tests
 import * as advancedFeaturesTests from "./advancedFeatures.test";
+
+// Plugin system tests (manifest validation + MCP bridge)
+import * as pluginsTests from "./plugins.test";
 
 function makePolicy(): PolicyConfig {
   return {
@@ -455,6 +459,36 @@ async function run() {
     ["fileScan:fileNotFound", fileScanTests.testScanFileNotFound],
     ["fileScan:fileTooLarge", fileScanTests.testScanFileTooLarge],
     ["fileScan:fileBlockedByScope", fileScanTests.testScanFileBlockedByScope],
+    // Finding locator (line/col + masking)
+    [
+      "findingLocator:startOfFile",
+      findingLocatorTests.testLocatePositionStartOfFile,
+    ],
+    [
+      "findingLocator:middleOfLine",
+      findingLocatorTests.testLocatePositionMiddleOfLine,
+    ],
+    [
+      "findingLocator:startOfLine",
+      findingLocatorTests.testLocatePositionStartOfLine,
+    ],
+    ["findingLocator:crlf", findingLocatorTests.testLocatePositionCrlf],
+    ["findingLocator:bareCr", findingLocatorTests.testLocatePositionBareCr],
+    [
+      "findingLocator:endOfFile",
+      findingLocatorTests.testLocatePositionEndOfFile,
+    ],
+    [
+      "findingLocator:emptyFile",
+      findingLocatorTests.testLocatePositionEmptyFile,
+    ],
+    ["findingLocator:maskAwsKey", findingLocatorTests.testMaskValueAwsKey],
+    ["findingLocator:maskEmail", findingLocatorTests.testMaskValueEmail],
+    ["findingLocator:maskPhone", findingLocatorTests.testMaskValuePhone],
+    [
+      "findingLocator:maskShortSecret",
+      findingLocatorTests.testMaskValueShortSecret,
+    ],
     // File scan cache
     ["fileScanCache:missReturnsNull", fileScanTests.testCacheMissReturnsNull],
     ["fileScanCache:writeAndRead", fileScanTests.testCacheWriteAndRead],
@@ -1939,6 +1973,44 @@ async function run() {
     [
       "shadowAi:heuristicDetection",
       advancedFeaturesTests.testShadowAiHeuristicDetection,
+    ],
+
+    // ── Plugin system + MCP bridge ───────────────────────────
+    [
+      "plugins:validateMcpStdio",
+      pluginsTests.testValidateManifestAcceptsMcpStdio,
+    ],
+    [
+      "plugins:validateMcpHttp",
+      pluginsTests.testValidateManifestAcceptsMcpHttp,
+    ],
+    [
+      "plugins:rejectMcpArray",
+      pluginsTests.testValidateManifestRejectsMcpArray,
+    ],
+    [
+      "plugins:rejectStdioNoCommand",
+      pluginsTests.testValidateManifestRejectsStdioMissingCommand,
+    ],
+    [
+      "plugins:rejectRemoteNoUrl",
+      pluginsTests.testValidateManifestRejectsRemoteMissingUrl,
+    ],
+    [
+      "plugins:rejectUnknownTransport",
+      pluginsTests.testValidateManifestRejectsUnknownTransport,
+    ],
+    [
+      "plugins:bundledFilesystemBridge",
+      pluginsTests.testBundledFilesystemPluginWritesMcpFile,
+    ],
+    [
+      "plugins:disableRemovesMcpFile",
+      pluginsTests.testDisablePluginRemovesMcpFile,
+    ],
+    [
+      "plugins:clearWipesMcpFiles",
+      pluginsTests.testClearPluginsWipesAllBridgeFiles,
     ],
   ];
 

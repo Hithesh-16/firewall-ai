@@ -116,9 +116,46 @@ export async function refreshFileScope(
 }
 
 /**
+ * Convert a path-prefix pattern (the format used in `blocked_paths`
+ * and the Role Policies UI) into a picomatch-compatible glob.
+ *
+ * The `blocked_paths` field stores strings like `/payments/`,
+ * `/auth/`, `/.env` — intended as "any file under this directory"
+ * or "this exact filename". But picomatch needs `**​/payments/**`
+ * to match `src/payments/handler.ts` because `isFileRestricted`
+ * strips the leading `/` before matching (line 165).
+ *
+ * Transformation rules:
+ *   `/payments/`    → `**​/payments/**`    (directory anywhere)
+ *   `/.env`         → `**​/.env`           (file anywhere)
+ *   `.env`          → `**​/.env`           (file anywhere, no leading /)
+ *   `package.json`  → `**​/package.json`   (file anywhere, no glob chars)
+ *   `**​/node_modules/**` → unchanged     (already a glob)
+ *   `*.pem`         → unchanged          (already a glob)
+ */
+function normalizePattern(raw: string): string {
+  // Already a glob — has *, ?, {, or starts with **/
+  if (/[*?{]/.test(raw)) return raw;
+  // Strip leading slash (the match target has no leading /)
+  let p = raw.replace(/^\/+/, "");
+  if (!p) return raw;
+  // Trailing slash → directory pattern
+  if (p.endsWith("/")) {
+    return `**/${p}**`;
+  }
+  // No glob chars, no trailing slash → file pattern
+  return `**/${p}`;
+}
+
+/**
  * Build a unified FileScope from the PolicyConfig's two overlapping
  * restriction fields. De-duplicates patterns so picomatch isn't asked
  * to check the same glob twice.
+ *
+ * `file_scope.blocklist` patterns are assumed to already be valid
+ * picomatch globs (the global policy.json uses `**​/node_modules/**`
+ * etc.). `blocked_paths` patterns are path-prefix format and get
+ * normalized via `normalizePattern()`.
  */
 function mergeScope(
   fileScope: FileScope | undefined,
@@ -135,7 +172,9 @@ function mergeScope(
     for (const p of fileScope.allowlist) if (p) allowlist.add(p);
   }
   if (Array.isArray(blockedPaths)) {
-    for (const p of blockedPaths) if (p) blocklist.add(p);
+    for (const p of blockedPaths) {
+      if (p) blocklist.add(normalizePattern(p));
+    }
   }
   return {
     mode,

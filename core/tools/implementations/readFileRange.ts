@@ -4,9 +4,17 @@ import { getUriPathBasename } from "../../util/uri";
 import { ToolImpl } from ".";
 import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
-import { scanFileViaProxy } from "../../util/fileScanProxy";
+import {
+  scanFileViaProxy,
+  type FileScanFinding,
+} from "../../util/fileScanProxy";
+import {
+  formatScanFindingsMarkdown,
+  formatScanFindingsSummary,
+} from "../../util/formatScanFindings";
 import { getNumberArg, getStringArg } from "../parseArgs";
 import { throwIfFileExceedsHalfOfContext } from "./readFileLimit";
+import type { ContextItem } from "../../index";
 
 // Use Int.MAX_VALUE from Java/Kotlin (2^31 - 1) instead of JavaScript's Number.MAX_SAFE_INTEGER
 // to ensure compatibility with IntelliJ's Kotlin Position type which uses Int for character field
@@ -58,10 +66,27 @@ export const readFileRangeImpl: ToolImpl = async (args, extras) => {
     resolvedPath.displayPath,
     extras.fetch as typeof fetch,
   );
+
+  // Only surface findings that fall inside the requested line range —
+  // the user only sees lines startLine..endLine, so referencing line
+  // 200 in a 1..50 read would just confuse them.
+  const visibleFindings: FileScanFinding[] = (
+    scanDecision.findings ?? []
+  ).filter((f) => f.line >= startLine && f.line <= endLine);
+
   if (scanDecision.action === "BLOCK") {
+    const detail =
+      visibleFindings.length > 0
+        ? `\n\n${formatScanFindingsMarkdown(
+            resolvedPath.displayPath,
+            "BLOCK",
+            scanDecision.riskScore,
+            visibleFindings,
+          )}`
+        : "";
     throw new ContinueError(
       ContinueErrorReason.FileIsSecurityConcern,
-      `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+      `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})${detail}`,
     );
   }
 
@@ -85,7 +110,7 @@ export const readFileRangeImpl: ToolImpl = async (args, extras) => {
 
   const rangeDescription = `${resolvedPath.displayPath} (lines ${startLine}-${endLine})`;
 
-  return [
+  const items: ContextItem[] = [
     {
       name: getUriPathBasename(resolvedPath.uri),
       description: rangeDescription,
@@ -96,4 +121,21 @@ export const readFileRangeImpl: ToolImpl = async (args, extras) => {
       },
     },
   ];
+  if (scanDecision.action !== "ALLOW" || visibleFindings.length > 0) {
+    items.push({
+      name: "AI Firewall",
+      description: formatScanFindingsSummary(
+        scanDecision.action,
+        visibleFindings,
+      ),
+      content: formatScanFindingsMarkdown(
+        resolvedPath.displayPath,
+        scanDecision.action,
+        scanDecision.riskScore,
+        visibleFindings,
+      ),
+      icon: "shield",
+    });
+  }
+  return items;
 };

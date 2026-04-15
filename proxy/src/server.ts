@@ -1,8 +1,10 @@
 import cors from "@fastify/cors";
-import Fastify from "fastify";
+import Fastify, { type FastifyBaseLogger } from "fastify";
 import { env } from "./config";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
+import pino from "pino";
 import fastifyStatic from "@fastify/static";
 import { registerAiRoute } from "./routes/ai.route";
 import { registerAuthRoutes } from "./routes/auth.route";
@@ -59,6 +61,65 @@ import { startWebhookPoller } from "./services/webhookQueue";
 import { startScheduledReports } from "./export/scheduledReports";
 import { logConfigSecurityWarnings } from "./middleware/configSecurityCheck";
 
+// Single-file log sink: every level (trace..fatal) lands in ~/.ai-firewall/logs/proxy.log
+// Console keeps whatever LOG_LEVEL the user (or ProxyManager) sets, but the file is the
+// authoritative debug record — never filtered, never throttled.
+const LOG_DIR =
+  process.env.AI_FIREWALL_LOG_DIR ??
+  path.join(os.homedir(), ".ai-firewall", "logs");
+fs.mkdirSync(LOG_DIR, { recursive: true });
+export const LOG_FILE = path.join(LOG_DIR, "proxy.log");
+
+const consoleLevel = (process.env.LOG_LEVEL ?? "info") as pino.Level;
+
+const fileStream = pino.destination({
+  dest: LOG_FILE,
+  sync: true,
+  mkdir: true,
+  append: true,
+});
+
+const rootLogger = pino(
+  {
+    level: "trace",
+    // NEVER log request bodies — they contain the secrets we're scanning for
+    serializers: {
+      req: (req: { method: string; url: string }) => ({
+        method: req.method,
+        url: req.url,
+      }),
+    },
+    base: { pid: process.pid, hostname: os.hostname() },
+    timestamp: pino.stdTimeFunctions.isoTime,
+  },
+  pino.multistream([
+    { level: "trace", stream: fileStream },
+    { level: consoleLevel, stream: process.stdout },
+  ]),
+);
+
+// Flush the file sink on shutdown so nothing is lost if the proxy crashes/exits.
+const flushAndExit = (signal: NodeJS.Signals | "exit") => {
+  try {
+    fileStream.flushSync();
+  } catch {
+    // already closed — nothing we can do
+  }
+  if (signal !== "exit") {
+    process.exit(0);
+  }
+};
+process.on("SIGINT", () => flushAndExit("SIGINT"));
+process.on("SIGTERM", () => flushAndExit("SIGTERM"));
+process.on("exit", () => flushAndExit("exit"));
+process.on("uncaughtException", (err) => {
+  rootLogger.fatal({ err }, "uncaughtException");
+  flushAndExit("SIGTERM");
+});
+process.on("unhandledRejection", (reason) => {
+  rootLogger.fatal({ reason }, "unhandledRejection");
+});
+
 async function bootstrap(): Promise<void> {
   const app = Fastify({
     // Fastify's default `maxParamLength` is 100, which truncates the
@@ -66,21 +127,13 @@ async function bootstrap(): Promise<void> {
     // to 404. 1024 gives plenty of headroom for tokens, handoff nonces,
     // and future long path params.
     maxParamLength: 1024,
-    logger: {
-      level: process.env.LOG_LEVEL ?? "info",
-      transport:
-        process.env.NODE_ENV === "development"
-          ? { target: "pino-pretty" }
-          : undefined,
-      // NEVER log request bodies — they contain the secrets we're scanning for
-      serializers: {
-        req: (req: { method: string; url: string }) => ({
-          method: req.method,
-          url: req.url,
-        }),
-      },
-    },
+    loggerInstance: rootLogger as unknown as FastifyBaseLogger,
   });
+
+  app.log.info(
+    { logFile: LOG_FILE, consoleLevel },
+    "logger initialised — full trace log written to file",
+  );
 
   // Lenient JSON body parser: treats an empty body as `{}` instead of
   // throwing FST_ERR_CTP_EMPTY_JSON_BODY. Matches the behaviour of

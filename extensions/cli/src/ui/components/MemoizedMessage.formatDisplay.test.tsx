@@ -142,4 +142,52 @@ describe("MemoizedMessage formatMessageContentForDisplay", () => {
 
     expect(lastFrame()).toContain('{"someObject":"data"}');
   });
+
+  it("rewrites inline <Tool>{...}</function> markup into a clean call", () => {
+    // Some providers emit harmony/XML-style tool calls inside the
+    // assistant text instead of as native tool_calls. Make sure the
+    // raw markup never reaches the user — it should become
+    // **Tool**(./path) and the path becomes a clickable file:// link
+    // (OSC 8 escapes are around the visible label, so the label is
+    // still in the rendered output).
+    const content =
+      'I will read the file. <Read>{"file_path": "./.env.example"}</function>';
+    const historyItem = createTestHistoryItem(content);
+
+    const { lastFrame } = render(
+      <MemoizedMessage item={historyItem} index={1} />,
+    );
+
+    const output = lastFrame() ?? "";
+    expect(output).not.toContain("</function>");
+    expect(output).not.toContain('{"file_path"');
+    expect(output).toContain("./.env.example");
+    // The bold tool name comes through (Ink renders **X** with ANSI
+    // bold sequences, so we just check the tool name is present).
+    expect(output).toContain("Read");
+  });
+
+  it("rewrites tool markup with no JSON args", () => {
+    const content = "Calling <ListFiles></function> now";
+    const historyItem = createTestHistoryItem(content);
+
+    const { lastFrame } = render(
+      <MemoizedMessage item={historyItem} index={1} />,
+    );
+
+    const output = lastFrame() ?? "";
+    expect(output).not.toContain("</function>");
+    expect(output).toContain("ListFiles");
+  });
+
+  it("leaves non-tool-markup text untouched", () => {
+    const content = "Plain message <not a tool call> with angle brackets";
+    const historyItem = createTestHistoryItem(content);
+
+    const { lastFrame } = render(
+      <MemoizedMessage item={historyItem} index={1} />,
+    );
+
+    expect(lastFrame()).toContain("Plain message");
+  });
 });

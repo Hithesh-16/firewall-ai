@@ -75,12 +75,47 @@ export function getAiFirewallGlobalPath(): string {
   return continuePath;
 }
 
-export function getSessionsFolderPath(): string {
-  const sessionsPath = path.join(getAiFirewallGlobalPath(), "sessions");
-  if (!fs.existsSync(sessionsPath)) {
-    fs.mkdirSync(sessionsPath);
+/**
+ * Resolve the current user's stable directory key from ~/.ai-firewall/auth.json.
+ *
+ * Sessions are scoped per-user so that switching accounts inside the IDE/CLI
+ * never surfaces another user's chat history. We re-read the file on every
+ * call (no caching) so the moment auth.json is rewritten by a sign-in or
+ * sign-out, subsequent session reads/writes land in the right folder.
+ *
+ * Falls back to "_anonymous" when the file is missing, unreadable, or has no
+ * user.id — that bucket is the legacy unauthenticated home and is also what
+ * gets used when the proxy can't tell who is talking to it.
+ */
+function getCurrentUserKey(): string {
+  try {
+    const authPath = path.join(getAiFirewallGlobalPath(), "auth.json");
+    if (!fs.existsSync(authPath)) {
+      return "_anonymous";
+    }
+    const parsed = JSON.parse(fs.readFileSync(authPath, "utf8")) as {
+      user?: { id?: number | string; email?: string };
+    };
+    const id = parsed.user?.id;
+    if (id !== undefined && id !== null && String(id).length > 0) {
+      return `user_${String(id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+    }
+    return "_anonymous";
+  } catch {
+    return "_anonymous";
   }
-  return sessionsPath;
+}
+
+export function getSessionsFolderPath(): string {
+  const rootSessionsPath = path.join(getAiFirewallGlobalPath(), "sessions");
+  if (!fs.existsSync(rootSessionsPath)) {
+    fs.mkdirSync(rootSessionsPath);
+  }
+  const userScopedPath = path.join(rootSessionsPath, getCurrentUserKey());
+  if (!fs.existsSync(userScopedPath)) {
+    fs.mkdirSync(userScopedPath);
+  }
+  return userScopedPath;
 }
 
 export function getIndexFolderPath(): string {

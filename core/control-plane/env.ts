@@ -44,6 +44,20 @@ const LOCAL_ENV: ControlPlaneEnv = {
   APP_URL: "http://localhost:3000/",
 };
 
+// AI Firewall does not use Continue Hub / WorkOS auth — every install talks to
+// the local proxy on :8080. Returning this when the caller passes "none" makes
+// `isHubEnv()` return false, so `getControlPlaneSessionInfo()` reports
+// AUTH_TYPE: "on-prem" and the WorkOsAuthProvider stops trying to refresh
+// against /auth/refresh. Without this branch the function fell through to
+// PRODUCTION_HUB_ENV and the stale WorkOS profile (userId/teamId/userName)
+// from a prior Continue Hub login leaked into the chat panel.
+const NONE_ENV: ControlPlaneEnv = {
+  AUTH_TYPE: AuthType.OnPrem,
+  DEFAULT_CONTROL_PLANE_PROXY_URL: "http://localhost:8080/",
+  CONTROL_PLANE_URL: "http://localhost:8080/",
+  APP_URL: "http://localhost:8080/",
+};
+
 export async function enableHubContinueDev() {
   return true;
 }
@@ -58,6 +72,14 @@ export async function getControlPlaneEnv(
 export function getControlPlaneEnvSync(
   ideTestEnvironment: IdeSettings["continueTestEnvironment"],
 ): ControlPlaneEnv {
+  // Caller explicitly opted out of any Continue Hub / WorkOS flow.
+  // Must be checked FIRST — before MDM/local/staging overrides — so the
+  // WorkOsAuthProvider can reliably get a non-hub env regardless of which
+  // dotfiles happen to be on disk.
+  if (ideTestEnvironment === "none") {
+    return NONE_ENV;
+  }
+
   // MDM override
   const licenseKeyData = getLicenseKeyData();
   if (licenseKeyData?.unsignedData?.apiUrl) {

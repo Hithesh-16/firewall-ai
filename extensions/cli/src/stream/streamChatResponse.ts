@@ -1,6 +1,7 @@
 import { ModelConfig } from "@ai-firewall/config-yaml";
 import { BaseLlmApi } from "@ai-firewall/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
+import { firewallPreflightScan } from "core/llm/firewallScan.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import * as dotenv from "dotenv";
 import type {
@@ -251,10 +252,68 @@ export async function processStreamingResponse(
   }
 
   // Create OpenAI format history with validated system message
-  const openaiChatHistory = convertFromUnifiedHistoryWithSystemMessage(
+  let openaiChatHistory = convertFromUnifiedHistoryWithSystemMessage(
     chatHistory,
     systemMessage,
   ) as ChatCompletionMessageParam[];
+
+  // AI Firewall pre-flight scan — the CLI's streaming path talks
+  // directly to providers via openai-adapters and never goes through
+  // core/llm/index.ts, so without this hook the chat-time scanner
+  // never sees user messages and secrets/PII flow straight to the
+  // provider untouched. Mirrors the call in core/llm/index.ts.
+  try {
+    const scanBody = JSON.stringify({
+      messages: openaiChatHistory,
+      model: model.model,
+    });
+    const scan = await firewallPreflightScan(scanBody, model.model);
+    if (scan.blocked) {
+      throw new Error(scan.blockMessage ?? "Blocked by AI Firewall");
+    }
+    if (scan.finalBody !== scanBody) {
+      try {
+        const parsed = JSON.parse(scan.finalBody) as {
+          messages?: Array<{ role: string; content: string }>;
+        };
+        if (Array.isArray(parsed.messages)) {
+          // Substitute sanitized content back into the OpenAI message
+          // array. The proxy only ever returns string content; we
+          // leave multimodal (array-content) messages untouched so we
+          // don't accidentally drop image parts on the way back.
+          openaiChatHistory = openaiChatHistory.map((msg, i) => {
+            const sanitized = parsed.messages?.[i];
+            if (
+              sanitized &&
+              typeof sanitized.content === "string" &&
+              typeof (msg as { content?: unknown }).content === "string"
+            ) {
+              return {
+                ...msg,
+                content: sanitized.content,
+              } as ChatCompletionMessageParam;
+            }
+            return msg;
+          });
+        }
+      } catch {
+        // If parse fails, fall through with the original messages.
+      }
+    }
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message.includes("Blocked by AI Firewall")
+    ) {
+      throw err;
+    }
+    // Fail-open on any other scanner error so a flaky proxy never
+    // strands the user mid-conversation.
+    logger.debug("firewallPreflightScan failed (fail-open)", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   const requestStartTime = Date.now();
 
   const streamFactory = async (retryAbortSignal: AbortSignal) => {

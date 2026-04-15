@@ -293,7 +293,8 @@ export class ControlPlaneClient {
   }
 
   public async getCreditStatus(): Promise<CreditStatus | null> {
-    if (!(await this.isSignedIn())) {
+    const sessionInfo = await this.sessionInfoPromise;
+    if (!sessionInfo || isOnPremSession(sessionInfo)) {
       return null;
     }
 

@@ -22,17 +22,23 @@ export function AccountDropdown() {
   const { session, logout, login } = useAuth();
   const ideMessenger = useContext(IdeMessengerContext);
 
-  if (isOnPremSession(session)) {
-    return null;
-  }
-
-  if (!session) {
+  // AI Firewall runs in on-prem mode (see WorkOsAuthProvider.ts), so
+  // useAuth() will report an on-prem session instead of a real hub
+  // session. Treat that as "not signed in" and route Log in through
+  // the aiFirewall.login command (same flow AuthStatusBar uses).
+  if (!session || isOnPremSession(session)) {
     return (
       <ToolTip content="Log in" className="text-xs md:!hidden">
         <Button
           variant="ghost"
           className="text-description flex w-full flex-row items-center gap-2 px-2 py-1.5"
-          onClick={() => login(false)}
+          onClick={() => {
+            if (isOnPremSession(session)) {
+              ideMessenger.post("openUrl", "command:aiFirewall.login");
+            } else {
+              login(false);
+            }
+          }}
         >
           <UserCircleIconOutline className="xs:h-4 xs:w-4 h-3 w-3 flex-shrink-0" />
           <span className="text-description hidden text-xs md:block">
@@ -82,7 +88,10 @@ export function AccountDropdown() {
 
               <ListboxOption
                 onClick={() =>
-                  ideMessenger.post("openUrl", "https://ai-firewall.dev/settings")
+                  ideMessenger.post(
+                    "openUrl",
+                    "https://ai-firewall.dev/settings",
+                  )
                 }
                 value="manage-account"
               >

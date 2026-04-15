@@ -8,6 +8,7 @@ import {
 } from "../../";
 import { isSecurityConcern } from "../../indexing/ignore";
 import { walkDirs } from "../../indexing/walkDir";
+import { scanFileForContext } from "../../util/scanFileForContext";
 import {
   getShortestUniqueRelativeUriPaths,
   getUriDescription,
@@ -43,24 +44,32 @@ class FileContextProvider extends BaseContextProvider {
       ];
     }
 
-    const content = await extras.ide.readFile(fileUri);
+    const rawContent = await extras.ide.readFile(fileUri);
 
     const { relativePathOrBasename, last2Parts, baseName } = getUriDescription(
       fileUri,
       await extras.ide.getWorkspaceDirs(),
     );
 
-    return [
+    const scan = await scanFileForContext(
+      fileUri,
+      rawContent,
+      extras.fetch as typeof fetch,
+    );
+
+    const items: ContextItem[] = [
       {
         name: baseName,
         description: last2Parts,
-        content: `\`\`\`${relativePathOrBasename}\n${content}\n\`\`\``,
+        content: `\`\`\`${relativePathOrBasename}\n${scan.content}\n\`\`\``,
         uri: {
           type: "file",
           value: fileUri,
         },
       },
     ];
+    if (scan.reportItem) items.push(scan.reportItem);
+    return items;
   }
 
   async loadSubmenuItems(

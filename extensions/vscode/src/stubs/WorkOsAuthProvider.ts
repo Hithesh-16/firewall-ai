@@ -34,7 +34,15 @@ import { UriEventHandler } from "./uriHandler";
 
 const AUTH_NAME = "AI Firewall";
 
-const controlPlaneEnv = getControlPlaneEnvSync(true ? "production" : "none");
+// AI Firewall does not use the legacy Continue Hub / WorkOS auth.
+// Passing "none" makes isHubEnv() return false, so
+// getControlPlaneSessionInfo() returns { AUTH_TYPE: "on-prem" }
+// instead of trying to refresh WorkOS tokens against
+// /auth/refresh (which doesn't exist on the proxy). Without this
+// fix, the stale WorkOS profile data (userId, teamId, userName
+// from a prior Continue Hub login) leaks into the config handler
+// and gets rendered as raw JSON in the chat panel.
+const controlPlaneEnv = getControlPlaneEnvSync("none");
 
 const SESSIONS_SECRET_KEY = `${controlPlaneEnv.AUTH_TYPE}.sessions`;
 
@@ -106,17 +114,57 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
 
     this.secretStorage = new SecretStorage(context);
 
-    // Immediately refresh any existing sessions
     this.attemptEmitter = new NodeEventEmitter();
     WorkOsAuthProvider.hasAttemptedRefresh = new Promise((resolve) => {
       this.attemptEmitter.on("attempted", resolve);
     });
-    void this.refreshSessions();
 
-    // Set up a regular interval to refresh tokens
-    this._refreshInterval = setInterval(() => {
+    // AI Firewall always runs in on-prem mode (see env.ts NONE_ENV).
+    // The legacy Continue Hub refresh path POSTs to /auth/refresh on
+    // the proxy, which doesn't exist — every retry produces an error
+    // event that fans out to webview/config listeners and ends up
+    // rendered in the chat panel after system sleep/wake (when the
+    // suspended interval catches up and fires a burst of failures).
+    //
+    // Skip the refresh entirely when on-prem and aggressively wipe
+    // any stale sessions from a previous Continue Hub install so the
+    // next refresh attempt finds nothing to refresh.
+    if (controlPlaneEnv.AUTH_TYPE === AuthType.OnPrem) {
+      void this._purgeStaleSessions();
+      this.attemptEmitter.emit("attempted");
+    } else {
       void this.refreshSessions();
-    }, WorkOsAuthProvider.REFRESH_INTERVAL_MS);
+      this._refreshInterval = setInterval(() => {
+        void this.refreshSessions();
+      }, WorkOsAuthProvider.REFRESH_INTERVAL_MS);
+    }
+  }
+
+  /**
+   * One-shot cleanup: delete the encrypted sessions file written by
+   * older builds that ran against Continue Hub. Best-effort — if the
+   * file is locked or missing we just move on. Called once from the
+   * constructor when on-prem.
+   */
+  private async _purgeStaleSessions(): Promise<void> {
+    try {
+      await this.secretStorage.delete(SESSIONS_SECRET_KEY);
+    } catch {
+      // ignore — stale file will be re-purged on the next activation
+    }
+    // Also delete the OLD key from before the env switch (when
+    // AUTH_TYPE was "ai-firewall" not "on-prem"), so users upgrading
+    // from a Continue-Hub build don't keep replaying the old profile.
+    try {
+      await this.secretStorage.delete("ai-firewall.sessions");
+    } catch {
+      // ignore
+    }
+    try {
+      await this.secretStorage.delete("ai-firewall-staging.sessions");
+    } catch {
+      // ignore
+    }
   }
 
   private decodeJwt(jwt: string): Record<string, any> | null {
@@ -164,6 +212,15 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
   public async getSessions(
     scopes?: string[],
   ): Promise<ContinueAuthenticationSession[]> {
+    // On-prem builds never have a real WorkOS session — anything in
+    // SecretStorage under SESSIONS_SECRET_KEY is left over from a
+    // previous Continue Hub install. Returning [] here makes the
+    // refresh loop a no-op even if a caller forces it to run, which
+    // is what was previously fanning out errors into the webview
+    // after system sleep/wake.
+    if (controlPlaneEnv.AUTH_TYPE === AuthType.OnPrem) {
+      return [];
+    }
     // await this.hasAttemptedRefresh;
     try {
       const data = await this.secretStorage.get(SESSIONS_SECRET_KEY);

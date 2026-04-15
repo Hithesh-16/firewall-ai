@@ -449,12 +449,18 @@ export type FileScanResult = {
     severity: string;
     position: number;
     length: number;
+    line?: number;
+    column?: number;
+    masked?: string;
   }>;
   pii: Array<{
     type: string;
     severity: string;
     position: number;
     length: number;
+    line?: number;
+    column?: number;
+    masked?: string;
   }>;
   redactedContent?: string;
   cached: boolean;

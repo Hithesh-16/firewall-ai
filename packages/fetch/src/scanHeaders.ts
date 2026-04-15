@@ -5,6 +5,12 @@ export interface ScanFinding {
   severity: string; // "critical" | "high" | "medium"
   category: "secret" | "pii";
   maskedValue: string; // e.g. "AKIA************7E"
+  /** Source file path when the finding came from a file scan. */
+  file?: string;
+  /** 1-based line number in `file`. */
+  line?: number;
+  /** 1-based column on `line`. */
+  column?: number;
 }
 
 export interface FirewallScanResult {
@@ -123,18 +129,37 @@ export function extractScanHeaders(
   return result;
 }
 
-/** Parse the compact X-AF-Findings JSON header into ScanFinding[] */
+/**
+ * Parse the compact X-AF-Findings JSON header into ScanFinding[].
+ *
+ * Compact format: `{t: type, s: severity, c: category, v: maskedValue,
+ * f?: file, l?: line, col?: column}`. The `f`/`l`/`col` keys are
+ * optional so older proxies stay compatible.
+ */
 function parseFindingsHeader(header: string | null): ScanFinding[] {
   if (!header) return [];
   try {
     const parsed = JSON.parse(header);
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((f: { t: string; s: string; c: string; v: string }) => ({
-      type: f.t,
-      severity: f.s,
-      category: f.c as "secret" | "pii",
-      maskedValue: f.v,
-    }));
+    return parsed.map(
+      (f: {
+        t: string;
+        s: string;
+        c: string;
+        v: string;
+        f?: string;
+        l?: number;
+        col?: number;
+      }) => ({
+        type: f.t,
+        severity: f.s,
+        category: f.c as "secret" | "pii",
+        maskedValue: f.v,
+        file: f.f,
+        line: f.l,
+        column: f.col,
+      }),
+    );
   } catch {
     return [];
   }
@@ -160,7 +185,22 @@ export function extractFirewallMeta(
     piiCount: meta.pii_found ?? 0,
     entropyCount: meta.entropy_found ?? 0,
     redactedTypes: [],
-    findings: Array.isArray(meta.findings) ? meta.findings : [],
+    // Normalise findings — accept both the long-form (file/line/column)
+    // and the legacy compact form so JSON-body callers don't have to
+    // know which encoding is in use.
+    findings: Array.isArray(meta.findings)
+      ? meta.findings.map(
+          (f: any): ScanFinding => ({
+            type: f.type ?? f.t ?? "UNKNOWN",
+            severity: f.severity ?? f.s ?? "medium",
+            category: (f.category ?? f.c ?? "secret") as "secret" | "pii",
+            maskedValue: f.maskedValue ?? f.v ?? "",
+            file: f.file ?? f.f,
+            line: f.line ?? f.l,
+            column: f.column ?? f.col,
+          }),
+        )
+      : [],
     tokensUsed: meta.tokens_used,
     cost: meta.cost_estimate,
   };

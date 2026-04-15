@@ -312,8 +312,15 @@ export function updateStatusBarAfterScan(meta: {
     statusBarItem.backgroundColor = undefined;
   }
 
-  // Show VS Code toast notification for BLOCK and REDACT
-  showScanNotification(meta);
+  // BLOCK and REDACT details are now rendered inline in the chat
+  // (see ScanResultBanner above the input + the per-tool-result
+  // "AI Firewall" context item). The status-bar color flash plus
+  // the in-chat surfaces replace the old toast, which only showed
+  // category counts with no file/line context. Approval requests are
+  // still interactive and need the modal-style prompt.
+  if (meta.action === "REQUIRE_APPROVAL") {
+    showApprovalPrompt(meta);
+  }
 
   // Reset after 5 seconds
   scanFlashTimeout = setTimeout(() => {
@@ -325,75 +332,32 @@ export function updateStatusBarAfterScan(meta: {
 }
 
 /**
- * Show a VS Code toast notification (bottom-right) for BLOCK/REDACT actions.
- * ALLOW is silent — only alert the user when something was caught.
+ * Approval prompts are still surfaced as a modal-style notification
+ * because they are blocking and need an explicit user decision. BLOCK
+ * and REDACT used to share this code path but their details are now
+ * rendered inline in the chat (see core/util/formatScanFindings.ts),
+ * which carries file/line/column context the toast could never show.
  */
-function showScanNotification(meta: {
+function showApprovalPrompt(meta: {
   action: string;
-  secretsCount?: number;
-  piiCount?: number;
   riskScore?: number;
-  redactedTypes?: string[];
 }): void {
-  if (meta.action === "ALLOW") return; // Silent for clean requests
-
-  const findings: string[] = [];
-  if (meta.secretsCount && meta.secretsCount > 0) {
-    findings.push(
-      `${meta.secretsCount} secret${meta.secretsCount > 1 ? "s" : ""}`,
-    );
-  }
-  if (meta.piiCount && meta.piiCount > 0) {
-    findings.push(`${meta.piiCount} PII item${meta.piiCount > 1 ? "s" : ""}`);
-  }
-  if (meta.redactedTypes && meta.redactedTypes.length > 0) {
-    findings.push(meta.redactedTypes.join(", "));
-  }
-
+  if (meta.action !== "REQUIRE_APPROVAL") return;
   const riskStr =
     meta.riskScore !== undefined ? ` (Risk: ${meta.riskScore}/100)` : "";
-  const detailStr = findings.length > 0 ? `: ${findings.join(" · ")}` : "";
-
-  if (meta.action === "BLOCK") {
-    vscode.window
-      .showErrorMessage(
-        `AI Firewall: Request BLOCKED${riskStr}${detailStr}`,
-        "View Details",
-        "Open Policy",
-      )
-      .then((selection) => {
-        if (selection === "View Details") {
-          vscode.commands.executeCommand("aiFirewall.viewLogs");
-        } else if (selection === "Open Policy") {
-          vscode.commands.executeCommand("aiFirewall.openPolicy");
-        }
-      });
-  } else if (meta.action === "REDACT") {
-    vscode.window
-      .showWarningMessage(
-        `AI Firewall: Sensitive data REDACTED${riskStr}${detailStr}`,
-        "View Details",
-      )
-      .then((selection) => {
-        if (selection === "View Details") {
-          vscode.commands.executeCommand("aiFirewall.viewLogs");
-        }
-      });
-  } else if (meta.action === "REQUIRE_APPROVAL") {
-    vscode.window
-      .showInformationMessage(
-        `AI Firewall: Action requires approval${riskStr}`,
-        "Approve",
-        "Deny",
-      )
-      .then((selection) => {
-        if (selection === "Approve") {
-          vscode.commands.executeCommand("aiFirewall.approveAction");
-        } else if (selection === "Deny") {
-          vscode.commands.executeCommand("aiFirewall.denyAction");
-        }
-      });
-  }
+  vscode.window
+    .showInformationMessage(
+      `AI Firewall: Action requires approval${riskStr}`,
+      "Approve",
+      "Deny",
+    )
+    .then((selection) => {
+      if (selection === "Approve") {
+        vscode.commands.executeCommand("aiFirewall.approveAction");
+      } else if (selection === "Deny") {
+        vscode.commands.executeCommand("aiFirewall.denyAction");
+      }
+    });
 }
 
 /**

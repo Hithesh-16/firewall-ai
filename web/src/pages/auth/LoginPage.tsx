@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { cn } from "../../utils/cn";
-import { useAppDispatch } from "../../store/hooks";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { setCredentials, setLoading } from "../../store/slices/authSlice";
 import { fetchUserPermissions } from "../../store/slices/permissionsSlice";
 import { apiClient } from "../../api/client";
-import { setToken } from "../../utils/storage";
+import { getToken, setToken } from "../../utils/storage";
 import { ROUTES } from "../../utils/routes";
-import type { AuthResponse } from "../../api/types";
+import type { AuthResponse, User } from "../../api/types";
 import { config } from "../../config/env";
 import AnimatedBackdrop from "../../components/brand/AnimatedBackdrop";
 import BrandShield from "../../components/brand/BrandShield";
@@ -131,6 +131,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
+  const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
 
   const [tab, setTab] = useState<AuthTab>(
     location.pathname === ROUTES.REGISTER ? "register" : "login",
@@ -138,9 +139,42 @@ export function LoginPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoadingLocal] = useState(false);
   const [ssoProviders, setSsoProviders] = useState<string[]>([]);
+
+  // ── Auth guard: redirect to dashboard if already signed in ──
+  // Check both Redux state (in-memory) and localStorage token (page
+  // refresh). If token exists but Redux is empty, validate via
+  // /api/auth/me and rehydrate — so a user who navigates directly
+  // to /login while already signed in gets bounced immediately.
+  useEffect(() => {
+    // Skip the guard when LoginPage is opened from an extension
+    // sign-in flow (?from=extension) — the user MUST complete sign-in
+    // on this page so the token bounces back to VS Code / CLI.
+    const params = new URLSearchParams(location.search);
+    if (params.get("from") === "extension") return;
+
+    if (isAuthenticated) {
+      navigate(ROUTES.CHAT, { replace: true });
+      return;
+    }
+    const token = getToken();
+    if (token) {
+      apiClient
+        .get<{ user: User }>("/api/auth/me")
+        .then((res) => {
+          dispatch(setCredentials({ user: res.user, token }));
+          dispatch(fetchUserPermissions());
+          navigate(ROUTES.CHAT, { replace: true });
+        })
+        .catch(() => {
+          // Token invalid/expired — stay on login page
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   // Fetch available SSO providers on mount
   useEffect(() => {
@@ -152,8 +186,6 @@ export function LoginPage() {
         }
       })
       .catch((err: unknown) => {
-        // Surface failure in the dev console so CORS/proxy misconfig isn't
-        // silent. End-users still see only email/password.
         console.warn(
           "[LoginPage] Failed to load SSO config from proxy:",
           err instanceof Error ? err.message : err,
@@ -206,32 +238,21 @@ export function LoginPage() {
       const extInfo = decodeExtPayload(extRaw);
       if (extInfo) {
         if (extInfo.return === "vscode" && extInfo.callback) {
-          const stateQs = extInfo.state
-            ? `&state=${encodeURIComponent(extInfo.state)}`
-            : "";
-          const target = `${extInfo.callback}?token=${encodeURIComponent(
-            token,
-          )}${stateQs}`;
+          const stateQs = extInfo.state ? `&state=${encodeURIComponent(extInfo.state)}` : "";
+          const target = `${extInfo.callback}?token=${encodeURIComponent(token)}${stateQs}`;
           window.location.replace(target);
           return;
         }
-        if (
-          (extInfo.return === "cli" || extInfo.return === "jetbrains") &&
-          extInfo.port
-        ) {
+        if ((extInfo.return === "cli" || extInfo.return === "jetbrains") && extInfo.port) {
           // CRITICAL: the loopback server in @ai-firewall/shared-auth
           // strictly validates `state` against the nonce the CLI
           // generated when it opened the browser. Without it, the
           // server 400s and the CLI sits at "Opening browser..."
           // forever because the token delivery never completes.
-          const stateQs = extInfo.state
-            ? `&state=${encodeURIComponent(extInfo.state)}`
-            : "";
+          const stateQs = extInfo.state ? `&state=${encodeURIComponent(extInfo.state)}` : "";
           try {
             await fetch(
-              `http://127.0.0.1:${extInfo.port}/?token=${encodeURIComponent(
-                token,
-              )}${stateQs}`,
+              `http://127.0.0.1:${extInfo.port}/?token=${encodeURIComponent(token)}${stateQs}`,
               { mode: "no-cors" },
             );
           } catch {
@@ -466,19 +487,34 @@ export function LoginPage() {
               <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-200">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={
-                  tab === "register" ? "Create a password (8+ characters)" : "Enter your password"
-                }
-                required
-                minLength={tab === "register" ? 8 : undefined}
-                autoComplete={tab === "register" ? "new-password" : "current-password"}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={
+                    tab === "register" ? "Create a password (8+ characters)" : "Enter your password"
+                  }
+                  required
+                  minLength={tab === "register" ? 8 : undefined}
+                  autoComplete={tab === "register" ? "new-password" : "current-password"}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 pr-11 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition-colors hover:text-slate-200"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeSlashIcon className="h-5 w-5" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <button

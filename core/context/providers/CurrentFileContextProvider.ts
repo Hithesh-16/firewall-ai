@@ -4,6 +4,7 @@ import {
   ContextProviderDescription,
   ContextProviderExtras,
 } from "../../";
+import { scanFileForContext } from "../../util/scanFileForContext";
 import { getUriDescription } from "../../util/uri";
 
 class CurrentFileContextProvider extends BaseContextProvider {
@@ -39,10 +40,21 @@ class CurrentFileContextProvider extends BaseContextProvider {
       name = "Active file: " + baseName;
     }
 
-    return [
+    // Route through the AI Firewall scan so REDACT and BLOCK decisions
+    // are honored when files are pulled in via the @currentFile mention,
+    // not just via the readFile tool. The scan also produces an inline
+    // report ContextItem (file:line:col + masked values) that the chat
+    // renders next to the file content.
+    const scan = await scanFileForContext(
+      currentFile.path,
+      currentFile.contents,
+      extras.fetch as typeof fetch,
+    );
+
+    const items: ContextItem[] = [
       {
         description: last2Parts,
-        content: `${prefix}\n\n\`\`\`${relativePathOrBasename}\n${currentFile.contents}\n\`\`\``,
+        content: `${prefix}\n\n\`\`\`${relativePathOrBasename}\n${scan.content}\n\`\`\``,
         name,
         uri: {
           type: "file",
@@ -50,6 +62,8 @@ class CurrentFileContextProvider extends BaseContextProvider {
         },
       },
     ];
+    if (scan.reportItem) items.push(scan.reportItem);
+    return items;
   }
 }
 

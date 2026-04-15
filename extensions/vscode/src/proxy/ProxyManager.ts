@@ -1,4 +1,5 @@
 import { ChildProcess, spawn } from "child_process";
+import os from "os";
 import path from "path";
 import * as vscode from "vscode";
 
@@ -6,6 +7,7 @@ const DEFAULT_PORT = 8080;
 const HEALTH_CHECK_INTERVAL_MS = 30_000;
 const STARTUP_TIMEOUT_MS = 10_000;
 const HEALTH_POLL_MS = 300;
+const LOG_FILE = path.join(os.homedir(), ".ai-firewall", "logs", "proxy.log");
 
 export class ProxyManager {
   private process: ChildProcess | null = null;
@@ -44,7 +46,14 @@ export class ProxyManager {
       vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
     const candidates = [
       // Development: repo root (extension is in extensions/vscode/)
-      path.resolve(this.extensionPath, "..", "..", "proxy", "dist", "server.js"),
+      path.resolve(
+        this.extensionPath,
+        "..",
+        "..",
+        "proxy",
+        "dist",
+        "server.js",
+      ),
       // Packaged: proxy bundled inside extension
       path.resolve(this.extensionPath, "proxy", "dist", "server.js"),
       // Alternative: out/ directory
@@ -127,37 +136,37 @@ export class ProxyManager {
     }
 
     try {
+      const consoleLogLevel = vscode.workspace
+        .getConfiguration("aiFirewall")
+        .get<string>("proxyLogLevel", "info");
+
       this.process = spawn("node", [serverPath], {
         env: {
           ...process.env,
           PORT: String(this.port),
           NODE_ENV: "production",
-          LOG_LEVEL: "warn",
+          LOG_LEVEL: consoleLogLevel,
         },
         stdio: ["ignore", "pipe", "pipe"],
         detached: false,
       });
 
-      // Only log important proxy output — skip verbose/noisy messages
-      const isNoise = (msg: string) =>
-        msg.includes('"reqId"') ||
-        msg.includes('"responseTime"') ||
-        msg.includes("[perf] profiling") ||
-        msg.includes("cpuprofile") ||
-        msg.includes("START_NATIVE_LOG") ||
-        msg.includes("END_NATIVE_LOG") ||
-        msg.includes("EntryNotFound (FileSystemError)") ||
-        /^[\s\x00-\x1f\x80-\xff]*$/.test(msg); // binary/garbled data
+      this.outputChannel.appendLine(
+        `[ProxyManager] Full trace log -> ${LOG_FILE}`,
+      );
+      this.outputChannel.appendLine(
+        `[ProxyManager] Console level: ${consoleLogLevel} (override via aiFirewall.proxyLogLevel)`,
+      );
 
       this.process.stdout?.on("data", (data: Buffer) => {
         const msg = data.toString().trim();
-        if (!msg || isNoise(msg)) return;
+        if (!msg) return;
         this.outputChannel.appendLine(`[proxy] ${msg}`);
       });
 
       this.process.stderr?.on("data", (data: Buffer) => {
         const msg = data.toString().trim();
-        if (!msg || isNoise(msg)) return;
+        if (!msg) return;
         this.outputChannel.appendLine(`[proxy:err] ${msg}`);
       });
 
@@ -253,9 +262,7 @@ export class ProxyManager {
       const wasHealthy = this.healthy;
       await this.checkHealth();
       if (wasHealthy && !this.healthy) {
-        this.outputChannel.appendLine(
-          "[ProxyManager] Proxy became unhealthy",
-        );
+        this.outputChannel.appendLine("[ProxyManager] Proxy became unhealthy");
       } else if (!wasHealthy && this.healthy) {
         this.outputChannel.appendLine("[ProxyManager] Proxy recovered");
       }

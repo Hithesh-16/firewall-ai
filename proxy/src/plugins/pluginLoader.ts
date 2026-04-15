@@ -15,11 +15,13 @@
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {
   type PluginManifest,
   type LoadedPlugin,
   type PluginListEntry,
+  type PluginMcpServerDef,
   validateManifest,
 } from "./pluginTypes";
 import {
@@ -33,7 +35,96 @@ import { env } from "../config";
 
 const loadedPlugins = new Map<string, LoadedPlugin>();
 
+// ── Plugin → core MCP config bridge ────────────────────────────
+//
+// Core reads MCP server configs from ~/.ai-firewall/mcpServers/*.json
+// (see core/context/mcp/json/loadJsonMcpConfigs.ts). We write a file
+// per enabled plugin so core picks up the plugin's declared MCP
+// servers on its next config refresh. File naming is prefixed with
+// `plugin-` so plugin-owned files are distinguishable from hand-
+// authored ones and can be cleaned up safely on unload.
+
+const PLUGIN_MCP_FILE_PREFIX = "plugin-";
+
+function mcpConfigDir(): string {
+  return path.join(os.homedir(), ".ai-firewall", "mcpServers");
+}
+
+function mcpConfigPathFor(pluginName: string): string {
+  const safe = pluginName.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return path.join(mcpConfigDir(), `${PLUGIN_MCP_FILE_PREFIX}${safe}.json`);
+}
+
+function writePluginMcpConfig(
+  pluginName: string,
+  mcpServers: Record<string, PluginMcpServerDef>,
+): void {
+  try {
+    const dir = mcpConfigDir();
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    // Claude-Desktop-compatible shape that core's loader accepts.
+    const payload = { mcpServers };
+    fs.writeFileSync(
+      mcpConfigPathFor(pluginName),
+      JSON.stringify(payload, null, 2),
+      "utf8",
+    );
+  } catch {
+    // Fail-open: a write error shouldn't crash plugin discovery.
+    // Core will simply not see the servers this plugin declared.
+  }
+}
+
+function removePluginMcpConfig(pluginName: string): void {
+  try {
+    const p = mcpConfigPathFor(pluginName);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  } catch {
+    // ignore
+  }
+}
+
+function removeAllPluginMcpConfigs(): void {
+  try {
+    const dir = mcpConfigDir();
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir)) {
+      if (entry.startsWith(PLUGIN_MCP_FILE_PREFIX) && entry.endsWith(".json")) {
+        try {
+          fs.unlinkSync(path.join(dir, entry));
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
 // ── Discovery & Loading ────────────────────────────────────────
+
+/**
+ * Resolve the `bundled/` directory. In dev (`ts-node`) `__dirname`
+ * points to `src/plugins/`, so `bundled` is a sibling. In a prod
+ * build `__dirname` is `dist/plugins/` — `plugin.json` files are
+ * not copied by `tsc`, so we fall back to the source tree's
+ * `src/plugins/bundled/` path. The proxy always ships alongside
+ * its source in this monorepo, so that path is available at
+ * runtime.
+ */
+function resolveBundledPluginsDir(): string | null {
+  const candidates = [
+    path.resolve(__dirname, "bundled"),
+    path.resolve(__dirname, "..", "..", "src", "plugins", "bundled"),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  return null;
+}
 
 /**
  * Discover and load all plugins from bundled + data directories.
@@ -41,11 +132,17 @@ const loadedPlugins = new Map<string, LoadedPlugin>();
  */
 export function loadAllPlugins(): number {
   loadedPlugins.clear();
+  // Wipe stale plugin-owned MCP config files from a previous run.
+  // Each enabled plugin rewrites its file below; orphans (from a
+  // plugin that was removed between restarts) get cleaned up.
+  removeAllPluginMcpConfigs();
   let loaded = 0;
 
   // 1. Bundled plugins
-  const bundledDir = path.resolve(__dirname, "bundled");
-  loaded += loadPluginsFromDirectory(bundledDir);
+  const bundledDir = resolveBundledPluginsDir();
+  if (bundledDir) {
+    loaded += loadPluginsFromDirectory(bundledDir);
+  }
 
   // 2. User plugins
   const dataDir = path.dirname(path.resolve(process.cwd(), env.DB_PATH));
@@ -123,6 +220,16 @@ function loadPlugin(
       }
     }
 
+    // Publish MCP servers to core's MCP config directory so the
+    // existing MCPManagerSingleton picks them up on next refresh.
+    if (
+      enabled &&
+      manifest.mcpServers &&
+      Object.keys(manifest.mcpServers).length > 0
+    ) {
+      writePluginMcpConfig(manifest.name, manifest.mcpServers);
+    }
+
     return {
       manifest,
       dirPath,
@@ -156,6 +263,12 @@ export function enablePlugin(name: string): boolean {
   const plugin = loadedPlugins.get(name);
   if (!plugin) return false;
   loadedPlugins.set(name, { ...plugin, enabled: true });
+  if (
+    plugin.manifest.mcpServers &&
+    Object.keys(plugin.manifest.mcpServers).length > 0
+  ) {
+    writePluginMcpConfig(plugin.manifest.name, plugin.manifest.mcpServers);
+  }
   return true;
 }
 
@@ -163,6 +276,9 @@ export function disablePlugin(name: string): boolean {
   const plugin = loadedPlugins.get(name);
   if (!plugin) return false;
   loadedPlugins.set(name, { ...plugin, enabled: false });
+  if (plugin.manifest.mcpServers) {
+    removePluginMcpConfig(plugin.manifest.name);
+  }
   return true;
 }
 
@@ -183,4 +299,5 @@ export function listPlugins(): PluginListEntry[] {
 
 export function clearPlugins(): void {
   loadedPlugins.clear();
+  removeAllPluginMcpConfigs();
 }

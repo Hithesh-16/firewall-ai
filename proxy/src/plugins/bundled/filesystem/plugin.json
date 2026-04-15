@@ -1,0 +1,14 @@
+{
+  "name": "filesystem",
+  "version": "1.0.0",
+  "description": "Filesystem MCP server. Lets the agent read, write, and search workspace files — every tool call routes through the AI Firewall MCP Security Gateway.",
+  "author": "AI Firewall",
+  "enabled": true,
+  "mcpServers": {
+    "firewall-filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    }
+  }
+}

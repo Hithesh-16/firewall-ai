@@ -4,7 +4,12 @@ import { ToolImpl } from ".";
 import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 import { scanFileViaProxy } from "../../util/fileScanProxy";
+import {
+  formatScanFindingsMarkdown,
+  formatScanFindingsSummary,
+} from "../../util/formatScanFindings";
 import { throwIfFileExceedsHalfOfContext } from "./readFileLimit";
+import type { ContextItem } from "../../index";
 
 export const readCurrentlyOpenFileImpl: ToolImpl = async (_, extras) => {
   const result = await extras.ide.getCurrentFile();
@@ -21,10 +26,21 @@ export const readCurrentlyOpenFileImpl: ToolImpl = async (_, extras) => {
       result.path,
       extras.fetch as typeof fetch,
     );
+    const findings = scanDecision.findings ?? [];
+
     if (scanDecision.action === "BLOCK") {
+      const detail =
+        findings.length > 0
+          ? `\n\n${formatScanFindingsMarkdown(
+              result.path,
+              "BLOCK",
+              scanDecision.riskScore,
+              findings,
+            )}`
+          : "";
       throw new ContinueError(
         ContinueErrorReason.FileIsSecurityConcern,
-        `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+        `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})${detail}`,
       );
     }
 
@@ -39,7 +55,7 @@ export const readCurrentlyOpenFileImpl: ToolImpl = async (_, extras) => {
       await extras.ide.getWorkspaceDirs(),
     );
 
-    return [
+    const items: ContextItem[] = [
       {
         name: `Current file: ${baseName}`,
         description: last2Parts,
@@ -50,6 +66,20 @@ export const readCurrentlyOpenFileImpl: ToolImpl = async (_, extras) => {
         },
       },
     ];
+    if (scanDecision.action !== "ALLOW" || findings.length > 0) {
+      items.push({
+        name: "AI Firewall",
+        description: formatScanFindingsSummary(scanDecision.action, findings),
+        content: formatScanFindingsMarkdown(
+          result.path,
+          scanDecision.action,
+          scanDecision.riskScore,
+          findings,
+        ),
+        icon: "shield",
+      });
+    }
+    return items;
   } else {
     return [
       {

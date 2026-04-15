@@ -268,6 +268,7 @@ export class VsCodeExtension {
         await runAssistantSync(state.token);
       }
     });
+    let lastAuthBroadcastKey: string | null = null;
     this.aiFirewallAuth.onDidChangeAuth(async (state) => {
       const { refreshFileScope, clearFileScope } =
         await import("../security/fileRestrictionChecker");
@@ -291,6 +292,18 @@ export class VsCodeExtension {
       // postMessage; if the webview hasn't booted yet the message
       // is dropped, but the webview also polls `aiFirewall/getAuthState`
       // on mount to cover that race.
+      //
+      // Skip the broadcast when nothing observable changed. Without
+      // this guard, file-watcher coalescing or duplicate fires after
+      // system sleep produced bursts of identical messages that
+      // accumulated in the webview's postMessage queue and replayed
+      // on wake, garbling the chat panel.
+      const key = state.signedIn
+        ? `in:${state.user?.id ?? ""}:${state.user?.email ?? ""}`
+        : "out";
+      if (key === lastAuthBroadcastKey) return;
+      lastAuthBroadcastKey = key;
+
       try {
         this.sidebar.webviewProtocol.send("aiFirewall/authState", {
           signedIn: state.signedIn,
@@ -317,9 +330,34 @@ export class VsCodeExtension {
       },
       10 * 60 * 1000,
     );
+
+    // Policy refresh every 5 minutes so role-level file restrictions
+    // and blocked_paths take effect without reloading VS Code when
+    // an admin updates them in the web dashboard.
+    const policySyncTimer = setInterval(
+      async () => {
+        const s = this.aiFirewallAuth.getState();
+        if (s.signedIn && s.token) {
+          try {
+            const { refreshFileScope } =
+              await import("../security/fileRestrictionChecker");
+            await refreshFileScope(
+              this.proxyManager.proxyUrl ?? undefined,
+              s.token,
+            );
+            refreshRestrictedFileDecorations();
+          } catch {
+            // Non-fatal — stale policy is better than no policy
+          }
+        }
+      },
+      5 * 60 * 1000,
+    );
+
     context.subscriptions.push({
       dispose: () => {
         clearInterval(assistantSyncTimer);
+        clearInterval(policySyncTimer);
         this.aiFirewallAuth.dispose();
       },
     });

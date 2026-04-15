@@ -22,6 +22,7 @@ import { scanPromptInjection } from "./promptInjectionScanner";
 import { evaluatePolicy } from "../policy/policyEngine";
 import { redact } from "../redactor/redactor";
 import { checkFileScope } from "../scope/fileScope";
+import { buildLineStarts, locatePosition, maskValue } from "./findingLocator";
 import type { FileScanResult, PolicyConfig, PolicyAction } from "../types";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -34,7 +35,11 @@ export interface ScanFileOptions {
 export interface ScanFileError {
   filePath: string;
   error: string;
-  code: "FILE_NOT_FOUND" | "FILE_TOO_LARGE" | "FILE_BLOCKED" | "FILE_READ_ERROR";
+  code:
+    | "FILE_NOT_FOUND"
+    | "FILE_TOO_LARGE"
+    | "FILE_BLOCKED"
+    | "FILE_READ_ERROR";
 }
 
 // ── Core Scan Function ─────────────────────────────────────────────────────
@@ -50,7 +55,7 @@ export interface ScanFileError {
 export function scanFileContent(
   filePath: string,
   policy: PolicyConfig,
-  options: ScanFileOptions = {}
+  options: ScanFileOptions = {},
 ): FileScanResult | ScanFileError {
   const startTime = Date.now();
   const absolutePath = path.resolve(filePath);
@@ -144,7 +149,9 @@ export function scanFileContent(
     if (piResult.isInjection) {
       decision.action = "BLOCK";
       decision.riskScore = Math.max(decision.riskScore, piResult.score);
-      decision.reasons.push(`Prompt injection detected (score: ${piResult.score})`);
+      decision.reasons.push(
+        `Prompt injection detected (score: ${piResult.score})`,
+      );
     }
   }
 
@@ -162,6 +169,10 @@ export function scanFileContent(
     redactedContent = redact(content, redactionInput);
   }
 
+  // Compute (line, column) for every finding from a single line-start
+  // table. Mask raw values so they never cross the wire.
+  const lineStarts = buildLineStarts(content);
+
   return {
     filePath,
     fileHash,
@@ -172,18 +183,30 @@ export function scanFileContent(
     secretsFound: secretResult.secrets.length,
     piiFound: piiResult.pii.length,
     entropyFound: entropyMatches.length,
-    secrets: secretResult.secrets.map((s) => ({
-      type: s.type,
-      severity: s.severity,
-      position: s.position,
-      length: s.length,
-    })),
-    pii: piiResult.pii.map((p) => ({
-      type: p.type,
-      severity: p.severity,
-      position: p.position,
-      length: p.length,
-    })),
+    secrets: secretResult.secrets.map((s) => {
+      const loc = locatePosition(lineStarts, s.position);
+      return {
+        type: s.type,
+        severity: s.severity,
+        position: s.position,
+        length: s.length,
+        line: loc.line,
+        column: loc.column,
+        masked: maskValue(s.value, s.type),
+      };
+    }),
+    pii: piiResult.pii.map((p) => {
+      const loc = locatePosition(lineStarts, p.position);
+      return {
+        type: p.type,
+        severity: p.severity,
+        position: p.position,
+        length: p.length,
+        line: loc.line,
+        column: loc.column,
+        masked: maskValue(p.value, p.type),
+      };
+    }),
     redactedContent,
     cached: false,
     scanDurationMs: Date.now() - startTime,
@@ -193,7 +216,7 @@ export function scanFileContent(
 // ── Type Guard ─────────────────────────────────────────────────────────────
 
 export function isScanError(
-  result: FileScanResult | ScanFileError
+  result: FileScanResult | ScanFileError,
 ): result is ScanFileError {
   return "error" in result && "code" in result;
 }

@@ -254,13 +254,18 @@ const TUIChat: React.FC<TUIChatProps> = ({
       setScanResult(result);
       setShowScanBanner(true);
 
-      // Auto-dismiss ALLOW results after 3 seconds
-      if (result.action === "ALLOW") {
-        scanDismissTimer.current = setTimeout(() => {
-          setShowScanBanner(false);
-          scanDismissTimer.current = null;
-        }, 3000);
-      }
+      // Auto-dismiss after a short window so the banner doesn't sit
+      // sticky above the input forever. ALLOW dismisses faster (3s)
+      // since there's nothing actionable; REDACT/BLOCK get a longer
+      // 5-second window so the user has time to read the findings.
+      // Either way, the banner is transient — the inline scan report
+      // ContextItem on the tool result remains in the chat history
+      // for permanent reference.
+      const dismissAfterMs = result.action === "ALLOW" ? 3000 : 5000;
+      scanDismissTimer.current = setTimeout(() => {
+        setShowScanBanner(false);
+        scanDismissTimer.current = null;
+      }, dismissAfterMs);
     });
 
     return () => {

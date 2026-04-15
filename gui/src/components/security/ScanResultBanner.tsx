@@ -84,6 +84,11 @@ export function ScanResultBanner() {
     });
   }
 
+  const baseName = (filePath: string): string => {
+    const idx = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+    return idx >= 0 ? filePath.slice(idx + 1) : filePath;
+  };
+
   return (
     <div
       className={`mx-2 mb-1.5 rounded-lg border ${cfg.border} ${cfg.bg} animate-in fade-in slide-in-from-bottom-1 duration-200`}
@@ -141,27 +146,46 @@ export function ScanResultBanner() {
 
       {/* Expandable findings — compact list */}
       {expanded && hasFindings && (
-        <div className="border-border/20 mx-3 mb-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t pt-1.5">
-          {lastScan.findings.slice(0, 6).map((f, i) => (
-            <span key={i} className="flex items-center gap-1 text-[10px]">
+        <div className="border-border/20 mx-3 mb-2 flex flex-col gap-y-1 border-t pt-1.5">
+          {lastScan.findings.slice(0, 8).map((f, i) => {
+            const fileChip =
+              f.file && f.line
+                ? `${baseName(f.file)}:${f.line}${f.column ? ":" + f.column : ""}`
+                : null;
+            return (
               <span
-                className={`rounded px-1 font-mono font-medium ${
-                  f.severity === "critical" || f.severity === "high"
-                    ? "bg-error/10 text-error"
-                    : "bg-warning/10 text-warning"
-                }`}
+                key={i}
+                className="flex flex-wrap items-center gap-1 text-[10px]"
               >
-                {f.severity.slice(0, 4).toUpperCase()}
+                <span
+                  className={`rounded px-1 font-mono font-medium ${
+                    f.severity === "critical" || f.severity === "high"
+                      ? "bg-error/10 text-error"
+                      : "bg-warning/10 text-warning"
+                  }`}
+                >
+                  {f.severity.slice(0, 4).toUpperCase()}
+                </span>
+                <span className="text-description">{f.type}</span>
+                {fileChip && (
+                  <code
+                    className="bg-input text-description rounded px-1 font-mono"
+                    title={f.file}
+                  >
+                    {fileChip}
+                  </code>
+                )}
+                {f.maskedValue && (
+                  <code className="text-error font-mono font-semibold">
+                    {f.maskedValue}
+                  </code>
+                )}
               </span>
-              <span className="text-description">{f.type}</span>
-              <code className="text-error font-mono font-semibold">
-                {f.maskedValue}
-              </code>
-            </span>
-          ))}
-          {lastScan.findings.length > 6 && (
+            );
+          })}
+          {lastScan.findings.length > 8 && (
             <span className="text-description-muted text-[10px]">
-              +{lastScan.findings.length - 6} more
+              +{lastScan.findings.length - 8} more
             </span>
           )}
         </div>

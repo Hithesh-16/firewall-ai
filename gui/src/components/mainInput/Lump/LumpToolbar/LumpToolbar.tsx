@@ -17,7 +17,6 @@ import { BlockSettingsTopToolbar } from "./BlockSettingsTopToolbar";
 import { EditOutcomeToolbar } from "./EditOutcomeToolbar";
 import { EditToolbar } from "./EditToolbar";
 import { IsApplyingToolbar } from "./IsApplyingToolbar";
-import { PendingApplyStatesToolbar } from "./PendingApplyStatesToolbar";
 import { PendingToolCallToolbar } from "./PendingToolCallToolbar";
 import { StreamingToolbar } from "./StreamingToolbar";
 import { TtsActiveToolbar } from "./TtsActiveToolbar";
@@ -60,9 +59,6 @@ export function LumpToolbar() {
   );
   const applyStates = useAppSelector(
     (state) => state.session.codeBlockApplyStates.states,
-  );
-  const pendingApplyStates = applyStates.filter(
-    (state) => state.status === "done",
   );
   const isApplying = applyStates.some((state) => state.status === "streaming");
   const editor = useMainEditor();
@@ -202,11 +198,13 @@ export function LumpToolbar() {
     return <PendingToolCallToolbar />;
   }
 
-  if (pendingApplyStates.length > 0) {
-    return (
-      <PendingApplyStatesToolbar pendingApplyStates={pendingApplyStates} />
-    );
-  }
+  // The per-file diff Accept/Reject row used to render here via
+  // <PendingApplyStatesToolbar/>, but it duplicated the in-card
+  // ApplyActions popover that already sits on every tool-call card
+  // (FindAndReplace.tsx, etc.). Showing both was confusing because
+  // each row claimed authority over the same diff. The in-card
+  // popover is contextual to the file/diff it represents, so we
+  // keep that and drop the global row.
 
   return <BlockSettingsTopToolbar />;
 }

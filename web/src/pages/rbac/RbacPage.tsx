@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ShieldCheckIcon,
   PlusIcon,
@@ -126,9 +120,7 @@ export function RbacPage() {
         setSelectedRoleId(rolesResp.roles[0].id);
       }
     } catch (err) {
-      setLoadError(
-        err instanceof Error ? err.message : "Failed to load roles",
-      );
+      setLoadError(err instanceof Error ? err.message : "Failed to load roles");
     } finally {
       setLoading(false);
     }
@@ -157,8 +149,8 @@ export function RbacPage() {
         <div>
           <h1 className="text-2xl font-semibold">Roles & Permissions</h1>
           <p className="text-description mt-1 text-sm">
-            Control what every member of your organisation can see and do.
-            System roles are read-only; create custom roles to fit your team.
+            Control what every member of your organisation can see and do. System roles are
+            read-only; create custom roles to fit your team.
           </p>
         </div>
         <PermissionGate module={MODULES.ROLES} action={ACTIONS.CREATE}>
@@ -264,9 +256,7 @@ function RoleGroup({
         {label}
       </div>
       {roles.length === 0 && emptyMessage && (
-        <p className="text-description-muted px-4 py-3 text-xs">
-          {emptyMessage}
-        </p>
+        <p className="text-description-muted px-4 py-3 text-xs">{emptyMessage}</p>
       )}
       <ul>
         {roles.map((r) => {
@@ -343,10 +333,7 @@ function RoleEditor({
 
   const dirty = useMemo(() => {
     const a = JSON.stringify(
-      Array.from(initialMatrix.entries()).map(([k, v]) => [
-        k,
-        Array.from(v).sort(),
-      ]),
+      Array.from(initialMatrix.entries()).map(([k, v]) => [k, Array.from(v).sort()]),
     );
     const b = JSON.stringify(
       Array.from(matrix.entries()).map(([k, v]) => [k, Array.from(v).sort()]),
@@ -376,9 +363,7 @@ function RoleEditor({
       );
       onSaved();
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Failed to save role",
-      );
+      setSaveError(err instanceof Error ? err.message : "Failed to save role");
     } finally {
       setSaving(false);
     }
@@ -388,9 +373,7 @@ function RoleEditor({
     setSaving(true);
     setSaveError(null);
     try {
-      const countResp = await apiClient.get<{ count: number }>(
-        `/api/roles/${role.id}/users-count`,
-      );
+      const countResp = await apiClient.get<{ count: number }>(`/api/roles/${role.id}/users-count`);
       if (countResp.count > 0) {
         setUserCount(countResp.count);
         setSaveError(
@@ -409,9 +392,7 @@ function RoleEditor({
       );
       onDeleted();
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Failed to delete role",
-      );
+      setSaveError(err instanceof Error ? err.message : "Failed to delete role");
     } finally {
       setSaving(false);
       setConfirmDelete(false);
@@ -436,9 +417,7 @@ function RoleEditor({
               <Badge variant="success">Custom</Badge>
             )}
           </div>
-          {role.description && (
-            <p className="text-description mt-1 text-sm">{role.description}</p>
-          )}
+          {role.description && <p className="text-description mt-1 text-sm">{role.description}</p>}
         </div>
         {!isSystem && (
           <PermissionGate module={MODULES.ROLES} action={ACTIONS.DELETE}>
@@ -464,11 +443,7 @@ function RoleEditor({
 
       <div className="px-6 py-5">
         {tab === "permissions" && (
-          <PermissionsMatrix
-            matrix={matrix}
-            onChange={setMatrix}
-            readOnly={isSystem}
-          />
+          <PermissionsMatrix matrix={matrix} onChange={setMatrix} readOnly={isSystem} />
         )}
         {tab === "policy" && <PolicyTab roleName={role.name} />}
         {tab === "users" && <UsersTab role={role} users={users} />}
@@ -542,9 +517,7 @@ function PermissionsMatrix({
         resource: mod,
         label: meta.label,
         category: meta.category,
-        supported: meta.supported.filter(
-          (a) => a !== ACTIONS.FULL_ACCESS,
-        ) as UniformAction[],
+        supported: meta.supported.filter((a) => a !== ACTIONS.FULL_ACCESS) as UniformAction[],
       };
       const existing = groups.get(meta.category) ?? [];
       existing.push(row);
@@ -553,21 +526,11 @@ function PermissionsMatrix({
     return groups;
   }, []);
 
-  const allRows = useMemo(
-    () => Array.from(categories.values()).flat(),
-    [categories],
-  );
+  const allRows = useMemo(() => Array.from(categories.values()).flat(), [categories]);
 
-  const summary = useMemo(() => buildSummary(allRows, matrix), [
-    allRows,
-    matrix,
-  ]);
+  const summary = useMemo(() => buildSummary(allRows, matrix), [allRows, matrix]);
 
-  function toggle(
-    row: PermissionRow,
-    action: UniformAction | "full_access",
-    checked: boolean,
-  ) {
+  function toggle(row: PermissionRow, action: UniformAction | "full_access", checked: boolean) {
     if (readOnly) return;
     const current = matrix.get(row.resource) ?? new Set<UniformAction>();
     const next = togglePermission(current, action, checked);
@@ -603,8 +566,7 @@ function PermissionsMatrix({
               </thead>
               <tbody>
                 {rows.map((row) => {
-                  const actions =
-                    matrix.get(row.resource) ?? new Set<UniformAction>();
+                  const actions = matrix.get(row.resource) ?? new Set<UniformAction>();
                   const full = isFullAccess(actions);
                   return (
                     <tr
@@ -619,22 +581,15 @@ function PermissionsMatrix({
                       </td>
                       {MATRIX_ACTIONS.map((a) => {
                         const isFullCol = a === ACTIONS.FULL_ACCESS;
-                        const supported =
-                          isFullCol ||
-                          row.supported.includes(a as UniformAction);
+                        const supported = isFullCol || row.supported.includes(a as UniformAction);
                         if (!supported) {
                           return (
-                            <td
-                              key={a}
-                              className="text-description-muted px-2 py-2 text-center"
-                            >
+                            <td key={a} className="text-description-muted px-2 py-2 text-center">
                               —
                             </td>
                           );
                         }
-                        const checked = isFullCol
-                          ? full
-                          : actions.has(a as UniformAction);
+                        const checked = isFullCol ? full : actions.has(a as UniformAction);
                         const viewForced =
                           a === ACTIONS.VIEW &&
                           ["create", "edit", "delete", "export"].some((d) =>
@@ -645,12 +600,8 @@ function PermissionsMatrix({
                             <input
                               type="checkbox"
                               checked={checked}
-                              disabled={
-                                readOnly || (a === ACTIONS.VIEW && viewForced)
-                              }
-                              onChange={(e) =>
-                                toggle(row, a, e.target.checked)
-                              }
+                              disabled={readOnly || (a === ACTIONS.VIEW && viewForced)}
+                              onChange={(e) => toggle(row, a, e.target.checked)}
                               className="accent-primary h-4 w-4"
                               aria-label={`${row.label} ${a}`}
                               title={
@@ -681,21 +632,14 @@ function PermissionsMatrix({
 
 // ─── Users tab ──────────────────────────────────────────────────────
 
-function UsersTab({
-  role,
-  users,
-}: {
-  role: Role;
-  users: UserWithRole[];
-}) {
+function UsersTab({ role, users }: { role: Role; users: UserWithRole[] }) {
   const assigned = users.filter((u) => u.role.id === role.id);
 
   if (assigned.length === 0) {
     return (
       <div className="py-10 text-center">
         <p className="text-description text-sm">
-          No users are currently assigned the{" "}
-          <strong>{role.displayName}</strong> role.
+          No users are currently assigned the <strong>{role.displayName}</strong> role.
         </p>
       </div>
     );
@@ -719,13 +663,8 @@ function UsersTab({
         </thead>
         <tbody>
           {assigned.map((u) => (
-            <tr
-              key={u.id}
-              className="border-border even:bg-table-oddRow/30 border-b last:border-0"
-            >
-              <td className="text-foreground px-4 py-2 font-medium">
-                {u.name}
-              </td>
+            <tr key={u.id} className="border-border even:bg-table-oddRow/30 border-b last:border-0">
+              <td className="text-foreground px-4 py-2 font-medium">{u.name}</td>
               <td className="text-description px-4 py-2">{u.email}</td>
               <td className="text-description-muted px-4 py-2 text-xs">
                 {new Date(u.createdAt).toLocaleDateString()}
@@ -783,19 +722,22 @@ function PolicyTab({ roleName }: { roleName: string }) {
 
       setHasOverride(resp.hasOverride);
 
-      if (resp.hasOverride && resp.policy) {
+      const policyIsEmpty = !resp.policy || Object.keys(resp.policy).length === 0;
+
+      if (resp.hasOverride && !policyIsEmpty) {
         // Populate the editor with the stored policy — plain JSON,
         // no comments. Safe to JSON.stringify directly.
         setJsonText(JSON.stringify(resp.policy, null, 2));
         setIsTemplate(false);
       } else {
-        // Custom role with no override — fetch the commented template
-        // so the user sees every field they COULD set, with inline
-        // explanations. Falls back to `{}` on failure.
+        // No override, OR override is empty (e.g. Admin's default
+        // `{}`). Show the commented JSONC template so admins can see
+        // every available field with inline explanations. The
+        // existing stored values (if any) don't conflict because
+        // `{}` has no fields to lose — saving the template just
+        // replaces the empty override with real values.
         try {
-          const tmpl = await apiClient.get<{ template: string }>(
-            "/api/policies/role-template",
-          );
+          const tmpl = await apiClient.get<{ template: string }>("/api/policies/role-template");
           setJsonText(tmpl.template);
           setIsTemplate(true);
         } catch {
@@ -908,8 +850,8 @@ function PolicyTab({ roleName }: { roleName: string }) {
       <div className="text-description flex items-start gap-2 text-xs">
         <AdjustmentsHorizontalIcon className="h-3.5 w-3.5 shrink-0" />
         <span>
-          Policy overrides <strong>tighten</strong> the org baseline for
-          this role only. Leave a field unset to inherit.
+          Policy overrides <strong>tighten</strong> the org baseline for this role only. Leave a
+          field unset to inherit.
         </span>
       </div>
 
@@ -923,12 +865,19 @@ function PolicyTab({ roleName }: { roleName: string }) {
         <div className="border-warning/30 bg-warning/5 text-warning flex items-start gap-2 rounded-lg border px-3 py-2 text-xs">
           <CheckBadgeIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            No override yet. Below is a <strong>starter template</strong> with
-            every editable field and an explanation of what it does. Delete
-            the lines you don&apos;t need and click <strong>Save policy</strong>{" "}
-            to create the override.
+            {hasOverride
+              ? "This role uses the org baseline (no custom overrides). "
+              : "No override yet. "}
+            Below is the <strong>full policy template</strong> with every editable field and an
+            explanation of what it does. Uncomment or edit the fields you want to tighten for this
+            role, then click <strong>Save policy</strong>.
           </span>
         </div>
+      )}
+
+      {/* Quick summary of configured values */}
+      {!isTemplate && !policyIsEffectivelyEmpty(jsonText) && (
+        <PolicySummaryStrip jsonText={jsonText} />
       )}
 
       <textarea
@@ -947,24 +896,13 @@ function PolicyTab({ roleName }: { roleName: string }) {
       <div className="flex items-center justify-between">
         <div>
           {hasOverride && (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={removeOverride}
-              disabled={saving}
-            >
+            <Button variant="danger" size="sm" onClick={removeOverride} disabled={saving}>
               <TrashIcon className="mr-1 h-4 w-4" />
               Remove override
             </Button>
           )}
         </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={save}
-          loading={saving}
-          disabled={!!jsonError}
-        >
+        <Button variant="primary" size="sm" onClick={save} loading={saving} disabled={!!jsonError}>
           Save policy
         </Button>
       </div>
@@ -974,13 +912,7 @@ function PolicyTab({ roleName }: { roleName: string }) {
 
 // ─── "New role" modal ───────────────────────────────────────────────
 
-function NewRoleButton({
-  roles,
-  onCreated,
-}: {
-  roles: Role[];
-  onCreated: () => void;
-}) {
+function NewRoleButton({ roles, onCreated }: { roles: Role[]; onCreated: () => void }) {
   const dispatch = useAppDispatch();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -998,11 +930,8 @@ function NewRoleButton({
     setSaving(true);
     setError(null);
     try {
-      const source = cloneFromId
-        ? roles.find((r) => r.id === cloneFromId)
-        : null;
-      const caps =
-        source?.capabilities.map((c) => c.capabilityName) ?? ["chat:view"];
+      const source = cloneFromId ? roles.find((r) => r.id === cloneFromId) : null;
+      const caps = source?.capabilities.map((c) => c.capabilityName) ?? ["chat:view"];
 
       await apiClient.post("/api/roles", {
         name: name.trim() || displayName.trim().toLowerCase(),
@@ -1044,17 +973,12 @@ function NewRoleButton({
             onClick={() => setOpen(false)}
           />
           <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
-            <Card
-              className="pointer-events-auto w-full max-w-md"
-              padding={false}
-            >
+            <Card className="pointer-events-auto w-full max-w-md" padding={false}>
               <div className="border-border border-b px-6 py-4">
-                <h2 className="text-foreground text-base font-semibold">
-                  Create custom role
-                </h2>
+                <h2 className="text-foreground text-base font-semibold">Create custom role</h2>
                 <p className="text-description mt-0.5 text-xs">
-                  Clone from an existing role to save time. You can edit
-                  permissions right after creating it.
+                  Clone from an existing role to save time. You can edit permissions right after
+                  creating it.
                 </p>
               </div>
 
@@ -1073,18 +997,13 @@ function NewRoleButton({
                 </div>
                 <div>
                   <label className="text-description mb-1 block text-xs font-medium uppercase tracking-wider">
-                    Slug{" "}
-                    <span className="text-description-muted">(optional)</span>
+                    Slug <span className="text-description-muted">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) =>
-                      setName(
-                        e.target.value
-                          .toLowerCase()
-                          .replace(/[^a-z0-9-]/g, "-"),
-                      )
+                      setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))
                     }
                     placeholder="support-engineer"
                     className="bg-input border-input-border text-input-foreground placeholder:text-input-placeholder focus:border-border-focus focus:ring-border-focus w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-1"
@@ -1108,11 +1027,7 @@ function NewRoleButton({
                   </label>
                   <select
                     value={cloneFromId ?? ""}
-                    onChange={(e) =>
-                      setCloneFromId(
-                        e.target.value ? Number(e.target.value) : null,
-                      )
-                    }
+                    onChange={(e) => setCloneFromId(e.target.value ? Number(e.target.value) : null)}
                     className="bg-input border-input-border text-input-foreground focus:border-border-focus focus:ring-border-focus w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-1"
                   >
                     <option value="">(start empty)</option>
@@ -1128,11 +1043,7 @@ function NewRoleButton({
               </div>
 
               <div className="border-border flex items-center justify-end gap-2 border-t px-6 py-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setOpen(false)}
-                  disabled={saving}
-                >
+                <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
                   Cancel
                 </Button>
                 <Button variant="primary" onClick={create} loading={saving}>
@@ -1144,6 +1055,90 @@ function NewRoleButton({
         </>
       )}
     </>
+  );
+}
+
+// ─── Policy summary helpers ──────────────────────────────────────────
+
+function policyIsEffectivelyEmpty(jsonText: string): boolean {
+  try {
+    const stripped = stripJsonComments(jsonText || "{}").trim();
+    if (!stripped || stripped === "{}") return true;
+    const parsed = JSON.parse(stripped);
+    return typeof parsed === "object" && Object.keys(parsed).length === 0;
+  } catch {
+    return true;
+  }
+}
+
+function PolicySummaryStrip({ jsonText }: { jsonText: string }) {
+  let policy: Record<string, unknown>;
+  try {
+    policy = JSON.parse(stripJsonComments(jsonText || "{}"));
+    if (!policy || typeof policy !== "object") return null;
+  } catch {
+    return null;
+  }
+
+  const rules = policy.rules as Record<string, boolean> | undefined;
+  const activeRules = rules ? Object.entries(rules).filter(([, v]) => v === true) : [];
+  const blockedPaths = (policy.blocked_paths ?? []) as string[];
+  const fileBlocklist = ((policy.file_scope as Record<string, unknown>)?.blocklist ??
+    []) as string[];
+  const injThreshold = (policy.prompt_injection as Record<string, unknown> | undefined)
+    ?.threshold as number | undefined;
+  const severity = policy.severity_threshold as string | undefined;
+  const respScan = (policy.response_scanning as Record<string, unknown> | undefined)?.enabled as
+    | boolean
+    | undefined;
+
+  const chips: Array<{ label: string; color: string }> = [];
+
+  if (activeRules.length > 0) {
+    chips.push({
+      label: `${activeRules.length} rule${activeRules.length > 1 ? "s" : ""} active`,
+      color: "bg-success/10 text-success",
+    });
+  }
+  if (blockedPaths.length > 0 || fileBlocklist.length > 0) {
+    const total = blockedPaths.length + fileBlocklist.length;
+    chips.push({
+      label: `${total} path${total > 1 ? "s" : ""} blocked`,
+      color: "bg-error/10 text-error",
+    });
+  }
+  if (injThreshold !== undefined) {
+    chips.push({
+      label: `injection: ${injThreshold}`,
+      color: "bg-warning/10 text-warning",
+    });
+  }
+  if (severity) {
+    chips.push({
+      label: `severity: ${severity}`,
+      color: "bg-info/10 text-info",
+    });
+  }
+  if (respScan === true) {
+    chips.push({
+      label: "response scan ON",
+      color: "bg-primary/10 text-primary",
+    });
+  }
+
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {chips.map((c) => (
+        <span
+          key={c.label}
+          className={cn("rounded-md px-2 py-0.5 text-[10px] font-semibold", c.color)}
+        >
+          {c.label}
+        </span>
+      ))}
+    </div>
   );
 }
 

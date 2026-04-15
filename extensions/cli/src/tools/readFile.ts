@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { throwIfFileIsSecurityConcern } from "core/indexing/ignore.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { scanFileViaProxy } from "core/util/fileScanProxy.js";
+import { formatScanFindingsMarkdown } from "core/util/formatScanFindings.js";
 
 import { parseEnvNumber } from "../util/truncateOutput.js";
 
@@ -85,11 +86,21 @@ export const readFileTool: Tool = {
 
       // Proxy-side file scan enforcement (fail-open if proxy unreachable)
       const scanDecision = await scanFileViaProxy(realPath);
+      const findings = scanDecision.findings ?? [];
 
       if (scanDecision.action === "BLOCK") {
+        const detail =
+          findings.length > 0
+            ? `\n\n${formatScanFindingsMarkdown(
+                realPath,
+                "BLOCK",
+                scanDecision.riskScore,
+                findings,
+              )}`
+            : "";
         throw new ContinueError(
           ContinueErrorReason.FileIsSecurityConcern,
-          `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
+          `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})${detail}`,
         );
       }
 
@@ -126,6 +137,18 @@ export const readFileTool: Tool = {
       // Mark this file as read for the edit tool
       markFileAsRead(realPath);
 
+      // Prepend the scan report so the agent (and the CLI banner) sees
+      // exactly what was redacted and where, instead of relying on a
+      // separate notification.
+      if (scanDecision.action !== "ALLOW" || findings.length > 0) {
+        const report = formatScanFindingsMarkdown(
+          realPath,
+          scanDecision.action,
+          scanDecision.riskScore,
+          findings,
+        );
+        return `${report}\n\nContent of ${filepath}:\n${content}`;
+      }
       return `Content of ${filepath}:\n${content}`;
     } catch (error) {
       if (error instanceof ContinueError) {

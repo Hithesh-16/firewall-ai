@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Firewall — Architecture &amp; ERD</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root{--bg:#0f172a;--surface:#1e293b;--card:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#10b981;--accent2:#06b6d4;--danger:#ef4444;--warn:#f59e0b;--info:#3b82f6;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;}
+  a{color:var(--accent2);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .container{max-width:1400px;margin:0 auto;padding:0 24px;}
+  /* Header */
+  header{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border-bottom:1px solid var(--border);padding:32px 0;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+  header h1{font-size:28px;font-weight:800;letter-spacing:-0.5px;}
+  header h1 span{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  header p{color:var(--muted);font-size:13px;margin-top:4px;}
+  /* Nav */
+  nav{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap;}
+  nav a{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;background:var(--surface);border:1px solid var(--border);color:var(--muted);transition:all .2s;}
+  nav a:hover,nav a.active{background:var(--accent);color:#fff;border-color:var(--accent);text-decoration:none;}
+  /* Sections */
+  section{padding:48px 0;border-bottom:1px solid var(--border);}
+  section:last-child{border-bottom:none;}
+  h2{font-size:22px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+  h2 .badge{font-size:11px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:99px;font-weight:600;}
+  h3{font-size:16px;font-weight:600;margin:24px 0 10px;color:var(--accent2);}
+  .subtitle{color:var(--muted);font-size:14px;margin-bottom:24px;}
+  /* Cards */
+  .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin:16px 0;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s;}
+  .card:hover{border-color:var(--accent);}
+  .card h4{font-size:14px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px;}
+  .card p,.card li{font-size:13px;color:var(--muted);}
+  .card ul{padding-left:18px;margin-top:6px;}
+  .card ul li{margin-bottom:3px;}
+  .icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+  .icon.green{background:#059669;color:#fff;}
+  .icon.blue{background:#2563eb;color:#fff;}
+  .icon.amber{background:#d97706;color:#fff;}
+  .icon.red{background:#dc2626;color:#fff;}
+  .icon.cyan{background:#0891b2;color:#fff;}
+  .icon.purple{background:#7c3aed;color:#fff;}
+  /* Tables */
+  .table-wrap{overflow-x:auto;margin:16px 0;border-radius:12px;border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{background:var(--surface);color:var(--accent);font-weight:700;text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  td{padding:8px 14px;border-bottom:1px solid #1e293b;color:var(--muted);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:rgba(16,185,129,0.04);}
+  td code{background:var(--surface);padding:1px 6px;border-radius:4px;font-size:12px;color:var(--accent2);}
+  /* Mermaid */
+  .mermaid{background:var(--surface);border-radius:12px;padding:24px;margin:16px 0;overflow-x:auto;border:1px solid var(--border);}
+  .mermaid svg{max-width:100%;}
+  /* Stats bar */
+  .stats{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 20px;min-width:140px;flex:1;}
+  .stat .val{font-size:28px;font-weight:800;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .stat .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;}
+  /* Flow steps */
+  .flow{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0;align-items:center;}
+  .flow .step{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;position:relative;}
+  .flow .step.block{border-color:var(--danger);color:var(--danger);}
+  .flow .step.redact{border-color:var(--warn);color:var(--warn);}
+  .flow .step.allow{border-color:var(--accent);color:var(--accent);}
+  .flow .arrow{color:var(--muted);font-size:18px;}
+  /* Code */
+  pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto;font-size:12px;line-height:1.7;color:var(--muted);}
+  code{font-family:'JetBrains Mono','Fira Code',monospace;}
+  /* Pill */
+  .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;}
+  .pill.green{background:#064e3b;color:#6ee7b7;}
+  .pill.red{background:#7f1d1d;color:#fca5a5;}
+  .pill.amber{background:#78350f;color:#fcd34d;}
+  .pill.blue{background:#1e3a5f;color:#93c5fd;}
+  .pill.purple{background:#4c1d95;color:#c4b5fd;}
+  @media(max-width:768px){.card-grid{grid-template-columns:1fr;}.stats{flex-direction:column;}.dash-row{flex-direction:column;}.dash-row>*{min-width:0!important;}}
+
+  /* ── Security Dashboard Styles ───────────────────────── */
+  .dash-row{display:flex;gap:16px;margin:16px 0;flex-wrap:wrap;}
+  .dash-col{flex:1;min-width:280px;}
+
+  /* Stat cards */
+  .dash-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;align-items:center;gap:14px;transition:border-color .2s;}
+  .dash-stat:hover{border-color:var(--accent);}
+  .dash-stat .ds-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+  .dash-stat .ds-icon.success{background:rgba(16,185,129,0.15);color:#34d399;}
+  .dash-stat .ds-icon.warning{background:rgba(245,158,11,0.15);color:#fbbf24;}
+  .dash-stat .ds-icon.error{background:rgba(239,68,68,0.15);color:#f87171;}
+  .dash-stat .ds-icon.info{background:rgba(59,130,246,0.15);color:#60a5fa;}
+  .dash-stat .ds-body{flex:1;}
+  .dash-stat .ds-val{font-size:24px;font-weight:800;color:var(--text);}
+  .dash-stat .ds-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;}
+  .dash-stat .ds-delta{font-size:11px;font-weight:600;margin-left:6px;}
+  .dash-stat .ds-delta.up{color:#34d399;}
+  .dash-stat .ds-delta.down{color:#f87171;}
+
+  /* Risk gauge */
+  .gauge-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;}
+  .gauge-svg{width:160px;height:100px;}
+  .gauge-score{font-size:36px;font-weight:800;margin-top:-8px;}
+  .gauge-grade{font-size:13px;font-weight:700;color:var(--muted);margin-top:2px;}
+  .gauge-label{font-size:11px;color:var(--muted);margin-top:8px;text-transform:uppercase;letter-spacing:1px;}
+
+  /* Donut chart */
+  .donut-wrap{display:flex;align-items:center;gap:24px;padding:20px;justify-content:center;flex-wrap:wrap;}
+  .donut-svg{width:140px;height:140px;flex-shrink:0;}
+  .donut-legend{display:flex;flex-direction:column;gap:10px;}
+  .donut-legend-item{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .donut-legend-item .dl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .donut-legend-item .dl-val{font-weight:700;margin-left:auto;min-width:40px;text-align:right;}
+  .donut-legend-item .dl-pct{color:var(--muted);font-size:11px;min-width:36px;text-align:right;}
+
+  /* Activity bars */
+  .act-chart{display:flex;align-items:flex-end;gap:4px;height:100px;padding:16px 0;}
+  .act-bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;border-radius:4px 4px 0 0;overflow:hidden;min-width:14px;}
+  .act-bar .ab-seg{width:100%;transition:height .3s;}
+  .act-bar-labels{display:flex;gap:4px;margin-top:4px;}
+  .act-bar-labels span{flex:1;text-align:center;font-size:9px;color:var(--muted);min-width:14px;}
+
+  /* Detection cards */
+  .det-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;flex:1;min-width:130px;}
+  .det-card .det-val{font-size:22px;font-weight:800;}
+  .det-card .det-label{font-size:11px;color:var(--muted);margin-top:2px;}
+  .det-card.crit .det-val{color:#f87171;}
+  .det-card.warn .det-val{color:#fbbf24;}
+  .det-card.info .det-val{color:#60a5fa;}
+  .det-card.safe .det-val{color:#34d399;}
+
+  /* Secret types bar chart */
+  .stype-row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:12px;}
+  .stype-label{width:120px;text-align:right;color:var(--muted);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .stype-bar-bg{flex:1;height:18px;background:var(--bg);border-radius:4px;overflow:hidden;}
+  .stype-bar{height:100%;border-radius:4px;transition:width .5s;}
+  .stype-count{width:36px;font-weight:700;font-size:12px;}
+
+  /* Scan feed */
+  .feed-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;transition:background .15s;}
+  .feed-item:hover{background:rgba(16,185,129,0.04);}
+  .feed-item:last-child{border-bottom:none;}
+  .feed-badge{padding:3px 10px;border-radius:6px;font-weight:700;font-size:10px;letter-spacing:.5px;text-transform:uppercase;flex-shrink:0;}
+  .feed-badge.allow{background:#064e3b;color:#6ee7b7;}
+  .feed-badge.redact{background:#78350f;color:#fcd34d;}
+  .feed-badge.block{background:#7f1d1d;color:#fca5a5;}
+  .feed-meta{display:flex;gap:14px;margin-left:auto;color:var(--muted);flex-shrink:0;}
+  .feed-meta span{white-space:nowrap;}
+
+  /* Top models */
+  .model-row{display:flex;align-items:center;gap:10px;margin:8px 0;}
+  .model-rank{width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent);flex-shrink:0;}
+  .model-name{font-size:13px;font-weight:600;width:160px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .model-bar-bg{flex:1;height:12px;background:var(--bg);border-radius:3px;overflow:hidden;}
+  .model-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;}
+  .model-count{font-size:12px;font-weight:700;width:40px;text-align:right;flex-shrink:0;}
+
+  /* Panel card wrapper */
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .panel-head{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+  .panel-head h4{font-size:14px;font-weight:700;}
+  .panel-head .ph-sub{font-size:11px;color:var(--muted);}
+  .panel-body{padding:16px 20px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1><span>AI Firewall</span> — Architecture Reference</h1>
+    <p>Secure AI OS &bull; Multi-device AI runtime with built-in security firewall, token intelligence, and MCP ecosystem</p>
+    <nav>
+      <a href="#overview">Overview</a>
+      <a href="#dashboard">Security Dashboard</a>
+      <a href="#high-level">High-Level Architecture</a>
+      <a href="#request-flow">Request Flow</a>
+      <a href="#erd">ERD Diagram</a>
+      <a href="#scanner">Scanner Pipeline</a>
+      <a href="#auth">Auth Flow</a>
+      <a href="#policy">Policy Chain</a>
+      <a href="#gateway">Gateway &amp; Routing</a>
+      <a href="#mcp">MCP Gateway</a>
+      <a href="#extensions">Extensions</a>
+      <a href="#gui">GUI &amp; Web</a>
+      <a href="#providers">LLM Providers</a>
+      <a href="#tools">Core Tools</a>
+      <a href="#api">API Reference</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ────────────────────────── OVERVIEW ────────────────────────── -->
+<section id="overview">
+<div class="container">
+  <h2>Project Overview <span class="badge">v3.0</span></h2>
+  <p class="subtitle">Open-source AI code agent (built on Continue) with a built-in security proxy. Every LLM request and MCP tool call passes through a local Fastify proxy that scans for secrets, PII, and prompt injection before forwarding to any provider.</p>
+  <div class="stats">
+    <div class="stat"><div class="val">53+</div><div class="label">LLM Providers</div></div>
+    <div class="stat"><div class="val">26</div><div class="label">Core Tools</div></div>
+    <div class="stat"><div class="val">37+</div><div class="label">Context Providers</div></div>
+    <div class="stat"><div class="val">59</div><div class="label">API Routes</div></div>
+    <div class="stat"><div class="val">30+</div><div class="label">DB Tables</div></div>
+    <div class="stat"><div class="val">662</div><div class="label">Proxy Tests</div></div>
+    <div class="stat"><div class="val">13</div><div class="label">Workspace Packages</div></div>
+  </div>
+  <h3>Monorepo Structure</h3>
+  <pre><code>continue-main/
+├── proxy/              Fastify security proxy (port 8080) — scanner, policy, gateway, auth, vault
+├── packages/
+│   ├── scanner/        @ai-firewall/scanner — pure-function scanners (shared)
+│   ├── shared-auth/    Cross-IDE auth file + loopback server + web-login URL
+│   ├── config-types/   TypeScript type definitions
+│   ├── fetch/          HTTP client with proxy support
+│   ├── llm-info/       LLM metadata & pricing
+│   ├── openai-adapters/ OpenAI format converters
+│   ├── terminal-security/ Terminal sandboxing
+│   ├── config-yaml/    YAML configuration parsing
+│   ├── continue-sdk/   Continue SDK wrapper
+│   └── hub/            Hub/registry functionality
+├── core/               Agent engine — 53+ LLM providers, 26 tools, 37+ context providers
+├── gui/                React + Vite + Tailwind IDE webview
+├── web/                Standalone React web dashboard
+├── extensions/
+│   ├── vscode/         VS Code extension (production)
+│   ├── intellij/       JetBrains plugin (alpha, Kotlin/Gradle)
+│   └── cli/            Terminal agent (beta, Ink TUI)
+└── docs/               Documentation</code></pre>
+</div>
+</section>
+
+<!-- ────────────────────── SECURITY DASHBOARD ────────────────────── -->
+<section id="dashboard">
+<div class="container">
+  <h2>Security Dashboard <span class="badge">Live Metrics</span></h2>
+  <p class="subtitle">Real-time security posture visible in IDE webview and standalone web dashboard. All data from <code>GET /api/stats</code> + WebSocket push events.</p>
+
+  <!-- Row 1: Stat Cards -->
+  <div class="dash-row">
+    <div class="dash-stat"><div class="ds-icon info">&#x1F6E1;</div><div class="ds-body"><div class="ds-val">12,847 <span class="ds-delta up">+8.3%</span></div><div class="ds-label">Total Scanned</div></div></div>
+    <div class="dash-stat"><div class="ds-icon error">&#x26D4;</div><div class="ds-body"><div class="ds-val">23</div><div class="ds-label">Blocked</div></div></div>
+    <div class="dash-stat"><div class="ds-icon warning">&#x270F;</div><div class="ds-body"><div class="ds-val">156</div><div class="ds-label">Redacted</div></div></div>
+    <div class="dash-stat"><div class="ds-icon success">&#x2714;</div><div class="ds-body"><div class="ds-val">12,668</div><div class="ds-label">Allowed</div></div></div>
+  </div>
+
+  <!-- Row 2: Risk Gauge + Donut + Detection Summary -->
+  <div class="dash-row">
+    <!-- Risk Gauge -->
+    <div class="panel" style="min-width:200px;max-width:240px;">
+      <div class="panel-head"><h4>Risk Score</h4></div>
+      <div class="gauge-wrap">
+        <svg class="gauge-svg" viewBox="0 0 160 90">
+          <path d="M15,80 A65,65 0 0,1 145,80" fill="none" stroke="#1e293b" stroke-width="12" stroke-linecap="round"/>
+          <path d="M15,80 A65,65 0 0,1 145,80" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="204" stroke-dashoffset="163"/>
+          <defs><linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#34d399"/><stop offset="50%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#ef4444"/></linearGradient></defs>
+        </svg>
+        <div class="gauge-score" style="color:#34d399;">18</div>
+        <div class="gauge-grade">Grade: A</div>
+        <div class="gauge-label">Overall Risk</div>
+      </div>
+    </div>
+
+    <!-- Donut Chart: Action Distribution -->
+    <div class="panel" style="flex:1;min-width:320px;">
+      <div class="panel-head"><h4>Action Distribution</h4><span class="ph-sub">All time</span></div>
+      <div class="donut-wrap">
+        <svg class="donut-svg" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r="54" fill="none" stroke="#1e293b" stroke-width="20"/>
+          <!-- Allowed: 98.6% → 339.3 of 339.3 -->
+          <circle cx="70" cy="70" r="54" fill="none" stroke="#34d399" stroke-width="20" stroke-dasharray="339.3 339.3" stroke-dashoffset="0" transform="rotate(-90 70 70)"/>
+          <!-- Redacted: 1.2% → 4.07 -->
+          <circle cx="70" cy="70" r="54" fill="none" stroke="#fbbf24" stroke-width="20" stroke-dasharray="4.07 335.23" stroke-dashoffset="-334.56" transform="rotate(-90 70 70)"/>
+          <!-- Blocked: 0.2% → 0.68 -->
+          <circle cx="70" cy="70" r="54" fill="none" stroke="#f87171" stroke-width="20" stroke-dasharray="0.68 338.62" stroke-dashoffset="-338.63" transform="rotate(-90 70 70)"/>
+          <text x="70" y="68" text-anchor="middle" fill="#e2e8f0" font-size="20" font-weight="800">12.8K</text>
+          <text x="70" y="84" text-anchor="middle" fill="#94a3b8" font-size="10">requests</text>
+        </svg>
+        <div class="donut-legend">
+          <div class="donut-legend-item"><span class="dl-dot" style="background:#34d399;"></span>Allowed<span class="dl-val">12,668</span><span class="dl-pct">98.6%</span></div>
+          <div class="donut-legend-item"><span class="dl-dot" style="background:#fbbf24;"></span>Redacted<span class="dl-val">156</span><span class="dl-pct">1.2%</span></div>
+          <div class="donut-legend-item"><span class="dl-dot" style="background:#f87171;"></span>Blocked<span class="dl-val">23</span><span class="dl-pct">0.2%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detection Summary -->
+    <div class="panel" style="min-width:280px;">
+      <div class="panel-head"><h4>Detection Summary</h4></div>
+      <div class="panel-body">
+        <div class="dash-row" style="margin:0;gap:10px;">
+          <div class="det-card crit"><div class="det-val">47</div><div class="det-label">Secrets Found</div></div>
+          <div class="det-card warn"><div class="det-val">312</div><div class="det-label">PII Detected</div></div>
+        </div>
+        <div class="dash-row" style="margin:10px 0 0;gap:10px;">
+          <div class="det-card info"><div class="det-val">89</div><div class="det-label">Entropy Findings</div></div>
+          <div class="det-card safe"><div class="det-val">82<span style="font-size:14px;color:var(--muted);">/100</span></div><div class="det-label">Security Score</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Activity Chart + Secret Types -->
+  <div class="dash-row">
+    <!-- 14-Day Activity -->
+    <div class="panel" style="flex:2;min-width:400px;">
+      <div class="panel-head"><h4>Daily Scan Activity</h4><span class="ph-sub">Last 14 days</span></div>
+      <div class="panel-body">
+        <div class="act-chart" id="actChart"></div>
+        <div class="act-bar-labels" id="actLabels"></div>
+        <div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--muted);">
+          <span><span style="display:inline-block;width:10px;height:10px;background:#34d399;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Allowed</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#fbbf24;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Redacted</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#f87171;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Blocked</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Secret Types Breakdown -->
+    <div class="panel" style="flex:1;min-width:300px;">
+      <div class="panel-head"><h4>Secrets by Type</h4><span class="ph-sub">Top categories</span></div>
+      <div class="panel-body">
+        <div class="stype-row"><span class="stype-label">AWS Keys</span><div class="stype-bar-bg"><div class="stype-bar" style="width:85%;background:#f87171;"></div></div><span class="stype-count">17</span></div>
+        <div class="stype-row"><span class="stype-label">GitHub Tokens</span><div class="stype-bar-bg"><div class="stype-bar" style="width:60%;background:#f87171;"></div></div><span class="stype-count">12</span></div>
+        <div class="stype-row"><span class="stype-label">Private Keys</span><div class="stype-bar-bg"><div class="stype-bar" style="width:40%;background:#fbbf24;"></div></div><span class="stype-count">8</span></div>
+        <div class="stype-row"><span class="stype-label">Database URLs</span><div class="stype-bar-bg"><div class="stype-bar" style="width:25%;background:#fbbf24;"></div></div><span class="stype-count">5</span></div>
+        <div class="stype-row"><span class="stype-label">JWT Tokens</span><div class="stype-bar-bg"><div class="stype-bar" style="width:15%;background:var(--accent);"></div></div><span class="stype-count">3</span></div>
+        <div class="stype-row"><span class="stype-label">Generic API</span><div class="stype-bar-bg"><div class="stype-bar" style="width:10%;background:var(--accent);"></div></div><span class="stype-count">2</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: Top Models + Live Feed -->
+  <div class="dash-row">
+    <!-- Top Models -->
+    <div class="panel" style="flex:1;min-width:300px;">
+      <div class="panel-head"><h4>Top Models</h4><span class="ph-sub">By request count</span></div>
+      <div class="panel-body">
+        <div class="model-row"><span class="model-rank">1</span><span class="model-name">GPT-4o</span><div class="model-bar-bg"><div class="model-bar" style="width:92%;"></div></div><span class="model-count">4,821</span></div>
+        <div class="model-row"><span class="model-rank">2</span><span class="model-name">Claude 4 Sonnet</span><div class="model-bar-bg"><div class="model-bar" style="width:68%;"></div></div><span class="model-count">3,567</span></div>
+        <div class="model-row"><span class="model-rank">3</span><span class="model-name">Gemini Pro</span><div class="model-bar-bg"><div class="model-bar" style="width:41%;"></div></div><span class="model-count">2,145</span></div>
+        <div class="model-row"><span class="model-rank">4</span><span class="model-name">Llama 3.1 8B</span><div class="model-bar-bg"><div class="model-bar" style="width:25%;"></div></div><span class="model-count">1,312</span></div>
+        <div class="model-row"><span class="model-rank">5</span><span class="model-name">Deepseek V3</span><div class="model-bar-bg"><div class="model-bar" style="width:12%;"></div></div><span class="model-count">614</span></div>
+      </div>
+    </div>
+
+    <!-- Live Scan Feed -->
+    <div class="panel" style="flex:2;min-width:400px;">
+      <div class="panel-head">
+        <h4>Live Scan Feed</h4>
+        <div style="display:flex;gap:6px;">
+          <span class="pill green" style="cursor:pointer;">All</span>
+          <span class="pill red" style="cursor:pointer;opacity:.5;">Block</span>
+          <span class="pill amber" style="cursor:pointer;opacity:.5;">Redact</span>
+        </div>
+      </div>
+      <div style="max-height:260px;overflow-y:auto;">
+        <div class="feed-item"><span class="feed-badge block">BLOCK</span><span style="flex:1;">AWS access key detected in prompt</span><div class="feed-meta"><span>GPT-4o</span><span style="color:#f87171;">Risk: 92</span><span>2s ago</span></div></div>
+        <div class="feed-item"><span class="feed-badge redact">REDACT</span><span style="flex:1;">Email address redacted (user@company.com)</span><div class="feed-meta"><span>Claude 4</span><span style="color:#fbbf24;">Risk: 35</span><span>15s ago</span></div></div>
+        <div class="feed-item"><span class="feed-badge allow">ALLOW</span><span style="flex:1;">Clean code review request</span><div class="feed-meta"><span>GPT-4o</span><span style="color:#34d399;">Risk: 4</span><span>22s ago</span></div></div>
+        <div class="feed-item"><span class="feed-badge allow">ALLOW</span><span style="flex:1;">TypeScript refactoring question</span><div class="feed-meta"><span>Gemini</span><span style="color:#34d399;">Risk: 2</span><span>45s ago</span></div></div>
+        <div class="feed-item"><span class="feed-badge redact">REDACT</span><span style="flex:1;">Phone number redacted (+1-XXX-XXX-1234)</span><div class="feed-meta"><span>Claude 4</span><span style="color:#fbbf24;">Risk: 28</span><span>1m ago</span></div></div>
+        <div class="feed-item"><span class="feed-badge allow">ALLOW</span><span style="flex:1;">Bug fix explanation request</span><div class="feed-meta"><span>Llama 3.1</span><span style="color:#34d399;">Risk: 0</span><span>2m ago</span></div></div>
+        <div class="feed-item"><span class="feed-badge block">BLOCK</span><span style="flex:1;">Private RSA key in context (2048-bit)</span><div class="feed-meta"><span>GPT-4o</span><span style="color:#f87171;">Risk: 98</span><span>3m ago</span></div></div>
+        <div class="feed-item"><span class="feed-badge allow">ALLOW</span><span style="flex:1;">React component generation</span><div class="feed-meta"><span>Deepseek</span><span style="color:#34d399;">Risk: 1</span><span>5m ago</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 5: Token Intelligence + Cost Tracking -->
+  <div class="dash-row">
+    <div class="panel" style="flex:1;">
+      <div class="panel-head"><h4>Token Intelligence</h4><span class="ph-sub">Current session</span></div>
+      <div class="panel-body">
+        <div class="dash-row" style="margin:0;gap:10px;">
+          <div class="det-card info"><div class="det-val">2.4M</div><div class="det-label">Input Tokens</div></div>
+          <div class="det-card info"><div class="det-val">890K</div><div class="det-label">Output Tokens</div></div>
+          <div class="det-card safe"><div class="det-val">$4.82</div><div class="det-label">Total Cost</div></div>
+          <div class="det-card safe"><div class="det-val">$0.04</div><div class="det-label">Avg / Request</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="flex:1;">
+      <div class="panel-head"><h4>Credit Usage</h4><span class="ph-sub">By provider</span></div>
+      <div class="panel-body">
+        <div style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>OpenAI</span><span style="color:var(--muted);">$3.21 / $50.00</span></div>
+          <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:6.4%;background:var(--accent);border-radius:4px;"></div></div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>Anthropic</span><span style="color:var(--muted);">$1.47 / $25.00</span></div>
+          <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:5.9%;background:var(--accent);border-radius:4px;"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>Google Gemini</span><span style="color:var(--muted);">$0.14 / $10.00</span></div>
+          <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:1.4%;background:var(--accent);border-radius:4px;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Component Reference</h3>
+  <p class="subtitle">Every visual element above maps to a reusable component in the codebase.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Visual</th><th>IDE Component (gui/)</th><th>Web Component (web/)</th><th>Data Source</th></tr>
+    <tr><td>Stat Cards (Total/Blocked/Redacted/Allowed)</td><td><code>StatCard</code> in security/index.tsx</td><td><code>StatCard</code> in components/ui/</td><td><code>GET /api/stats</code></td></tr>
+    <tr><td>Risk Gauge (0-100, A-F grade)</td><td><code>RiskGauge</code> in security/index.tsx</td><td><code>RiskGauge</code> in components/security/</td><td><code>GET /api/risk-score</code></td></tr>
+    <tr><td>Action Distribution Donut</td><td>—</td><td><code>DonutChart</code> in components/security/</td><td><code>GET /api/stats</code></td></tr>
+    <tr><td>14-Day Activity Bars</td><td>—</td><td><code>ActivityChart</code> in components/security/</td><td><code>GET /api/stats</code> → requestsByDay</td></tr>
+    <tr><td>Secrets by Type</td><td>—</td><td><code>SecretTypesChart</code> in components/security/</td><td><code>GET /api/stats</code> → secretsByType</td></tr>
+    <tr><td>Top Models</td><td>Models bar chart in security/</td><td>Ranked list in SecurityDashboard</td><td><code>GET /api/stats</code> → topModels</td></tr>
+    <tr><td>Live Scan Feed</td><td>Session scans + logs</td><td><code>LiveScanFeed</code> in components/security/</td><td>WebSocket <code>scan_result</code> events</td></tr>
+    <tr><td>Detection Summary (Secrets/PII/Entropy)</td><td><code>MiniCard</code> grid</td><td>Detection cards in SecurityDashboard</td><td><code>GET /api/stats</code></td></tr>
+    <tr><td>Token / Cost Tracking</td><td><code>useCostTracker</code> hook</td><td><code>UsagePage</code></td><td><code>GET /api/usage/summary</code></td></tr>
+    <tr><td>Credit Usage Bars</td><td>—</td><td>Credit limits in UsagePage</td><td><code>GET /api/credits</code></td></tr>
+    <tr><td>Security Score (0-100)</td><td>Security Score card</td><td>Detection Summary card</td><td>Computed: 100 - avgRiskScore</td></tr>
+    <tr><td>Scan Result Banner (inline)</td><td><code>ScanResultBanner</code></td><td><code>ScanResultBanner</code></td><td>X-AF-* response headers</td></tr>
+    <tr><td>Shield Status (proxy health)</td><td>Perimeter status</td><td><code>ShieldStatus</code></td><td><code>GET /health</code> (30s poll)</td></tr>
+  </table>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── HIGH-LEVEL ARCHITECTURE ────────────────────── -->
+<section id="high-level">
+<div class="container">
+  <h2>High-Level Architecture</h2>
+  <p class="subtitle">How the major subsystems connect. Every AI interaction flows through the proxy's scanning pipeline.</p>
+  <div class="mermaid">
+graph TB
+    subgraph Clients["Client Layer"]
+        VSC["VS Code Extension"]
+        CLI["CLI Agent"]
+        JB["JetBrains Plugin"]
+        WEB["Web Dashboard"]
+    end
+
+    subgraph Proxy["Security Proxy (Fastify :8080)"]
+        direction TB
+        AUTH["Auth + RBAC"]
+        SCAN["Scanner Pipeline"]
+        POLICY["Policy Engine"]
+        ROUTER["Smart Router"]
+        GW["Gateway + Adapters"]
+        VAULT["Token Vault (AES-256-GCM)"]
+        DB["SQLite (WAL, 30+ tables)"]
+        WS["WebSocket Manager"]
+        TASK["Task Framework"]
+        MEM["Memory System"]
+        CMD["Command + Skill System"]
+    end
+
+    subgraph Providers["LLM Providers"]
+        OAI["OpenAI"]
+        ANT["Anthropic"]
+        GEM["Google Gemini"]
+        OLL["Ollama (Local)"]
+        MORE["50+ more..."]
+    end
+
+    subgraph Core["Core Engine"]
+        TOOLS["26 Tools"]
+        CTX["37+ Context Providers"]
+        LLM["53+ LLM Drivers"]
+        MCP_C["MCP Client (4 transports)"]
+        IDX["LanceDB Vector Index"]
+        AC["Autocomplete Engine"]
+    end
+
+    VSC -->|"localhost:8080"| AUTH
+    CLI -->|"localhost:8080"| AUTH
+    JB -->|"localhost:8080"| AUTH
+    WEB -->|"localhost:8080"| AUTH
+
+    AUTH --> SCAN
+    SCAN --> POLICY
+    POLICY -->|BLOCK| DB
+    POLICY -->|ALLOW/REDACT| ROUTER
+    ROUTER --> GW
+    GW --> VAULT
+    GW --> OAI & ANT & GEM & OLL & MORE
+
+    VSC --- Core
+    CLI --- Core
+
+    style Proxy fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#e2e8f0
+    style Clients fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#e2e8f0
+    style Providers fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#e2e8f0
+    style Core fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#e2e8f0
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── REQUEST FLOW ────────────────────── -->
+<section id="request-flow">
+<div class="container">
+  <h2>Request Lifecycle</h2>
+  <p class="subtitle">Every POST /v1/chat/completions follows this pipeline. The proxy informs via headers, never silently modifies user prompts.</p>
+  <div class="mermaid">
+sequenceDiagram
+    participant C as Client (IDE/CLI)
+    participant P as Proxy (:8080)
+    participant S as Scanner Pipeline
+    participant PE as Policy Engine
+    participant R as Smart Router
+    participant GW as Gateway
+    participant LLM as AI Provider
+
+    C->>P: POST /v1/chat/completions
+    P->>P: 1. Zod Validation
+    P->>P: 2. Unicode Normalization (ASI04)
+    P->>P: 3. Token Estimation (js-tiktoken)
+    P->>S: 4. Run Scanners
+    S->>S: Secret Scan (12 patterns)
+    S->>S: PII Scan (7 patterns)
+    S->>S: Entropy Scan (Shannon)
+    S->>S: Prompt Injection (23 categories)
+    S->>S: Context Adjustment (path-aware)
+    S->>PE: 5. Policy Evaluation
+    alt BLOCK (risk >= threshold)
+        PE-->>C: 403 + X-AF-Action: BLOCK
+    end
+    alt REDACT
+        PE->>PE: Sanitize content
+    end
+    PE->>R: 6. Route Decision
+    R->>R: Risk-based: >=70 local, >=30 cloud+redact
+    R->>R: Cost-aware (opt-in)
+    R->>GW: 7. Forward to Provider
+    GW->>GW: Decrypt API key from Vault
+    GW->>GW: Format conversion (adapter)
+    GW->>LLM: 8. Provider API Call
+    LLM-->>GW: Response
+    GW->>P: 9. Response Scanner (opt-in)
+    P->>P: 10. Audit Log (SQLite)
+    P->>P: 11. Usage Recording (tokens, cost)
+    P-->>C: Response + X-AF-* Headers
+  </div>
+
+  <h3>Response Headers (X-AF-*)</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Header</th><th>Value</th><th>When</th></tr>
+    <tr><td><code>X-AF-Action</code></td><td>ALLOW / BLOCK / REDACT</td><td>Always</td></tr>
+    <tr><td><code>X-AF-Risk-Score</code></td><td>0–100</td><td>Always</td></tr>
+    <tr><td><code>X-AF-Secrets-Count</code></td><td>number</td><td>Always</td></tr>
+    <tr><td><code>X-AF-PII-Count</code></td><td>number</td><td>Always</td></tr>
+    <tr><td><code>X-AF-Input-Tokens</code></td><td>number</td><td>Always (real tiktoken count)</td></tr>
+    <tr><td><code>X-AF-Estimated-Cost</code></td><td>number</td><td>Always (pre-request estimate)</td></tr>
+    <tr><td><code>X-AF-Context-Overflow</code></td><td>true</td><td>Only when over model context limit</td></tr>
+    <tr><td><code>X-AF-Findings</code></td><td>JSON array</td><td>When findings detected (max 20)</td></tr>
+    <tr><td><code>X-AF-Redacted-Types</code></td><td>comma-separated</td><td>When redacted</td></tr>
+  </table>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── ERD ────────────────────── -->
+<section id="erd">
+<div class="container">
+  <h2>Entity Relationship Diagram <span class="badge">30+ Tables</span></h2>
+  <p class="subtitle">SQLite via better-sqlite3 in WAL mode. Parameterized queries throughout. All API keys AES-256-GCM encrypted.</p>
+  <div class="mermaid">
+erDiagram
+    organizations ||--o{ users : "has"
+    organizations ||--o{ teams : "has"
+    organizations ||--o{ webhooks : "has"
+    organizations ||--o{ roles : "has"
+    organizations ||--o{ policies : "scoped to"
+    organizations ||--o{ fileRestrictions : "has"
+    organizations ||--o{ rateLimits : "has"
+
+    users ||--o{ apiTokens : "owns"
+    users ||--o{ usageLogs : "generates"
+    users ||--o{ logs : "audited"
+    users ||--o{ ssoSessions : "has"
+    users ||--o{ approvalRequests : "requests"
+    users ||--o{ activeSessions : "has"
+    users ||--o{ tasks : "creates"
+    users ||--o{ userOrgRoles : "assigned"
+
+    teams ||--o{ teamMembers : "has"
+
+    roles ||--o{ roleCapabilities : "grants"
+    roles ||--o{ userOrgRoles : "assigned via"
+
+    providers ||--o{ models : "offers"
+    providers ||--o{ credits : "limited by"
+    providers ||--o{ usageLogs : "tracked"
+
+    webhooks ||--o{ webhookDeliveries : "sends"
+
+    organizations {
+        int id PK
+        string name
+        string slug UK
+        string industry
+        int createdAt
+    }
+
+    users {
+        int id PK
+        string email UK
+        string name
+        string passwordHash
+        string role
+        int orgId FK
+        bool onboardingComplete
+        int createdAt
+    }
+
+    apiTokens {
+        int id PK
+        int userId FK
+        string tokenHash UK
+        string name
+        string scopes
+        int orgId FK
+        int expiresAt
+    }
+
+    providers {
+        int id PK
+        string name
+        string slug UK
+        string baseUrl
+        string apiKeyEncrypted
+        bool enabled
+    }
+
+    models {
+        int id PK
+        int providerId FK
+        string modelName
+        float inputCostPer1k
+        float outputCostPer1k
+        int maxContextTokens
+    }
+
+    logs {
+        int id PK
+        int timestamp
+        string model
+        string provider
+        string originalHash
+        int secretsFound
+        int piiFound
+        int riskScore
+        string action
+    }
+
+    usageLogs {
+        int id PK
+        int logId FK
+        int providerId FK
+        int inputTokens
+        int outputTokens
+        float cost
+        int userId FK
+    }
+
+    policies {
+        int id PK
+        string scopeType
+        int scopeId
+        string policyJson
+        int createdAt
+    }
+
+    roles {
+        int id PK
+        int orgId FK
+        string name
+        string displayName
+        bool isSystem
+    }
+
+    roleCapabilities {
+        int id PK
+        int roleId FK
+        string capabilityName
+        string scope
+        bool granted
+    }
+
+    teams {
+        int id PK
+        int orgId FK
+        string name
+        string slug
+    }
+
+    teamMembers {
+        int id PK
+        int teamId FK
+        int userId FK
+        string role
+    }
+
+    tasks {
+        int id PK
+        string type
+        string status
+        int userId FK
+        string model
+        string progressJson
+    }
+
+    mcpAudit {
+        int id PK
+        int timestamp
+        string serverName
+        string toolName
+        string direction
+        string action
+        int riskScore
+    }
+
+    approvalRequests {
+        int id PK
+        int userId FK
+        string actionType
+        string resource
+        string status
+        int resolvedAt
+    }
+
+    credits {
+        int id PK
+        int providerId FK
+        int modelId FK
+        string limitType
+        float totalLimit
+        float usedAmount
+    }
+
+    webhooks {
+        int id PK
+        int orgId FK
+        string url
+        string events
+        bool enabled
+    }
+
+    webhookDeliveries {
+        int id PK
+        int webhookId FK
+        string event
+        string status
+        int attempts
+    }
+
+    fileRestrictions {
+        int id PK
+        int orgId FK
+        int teamId FK
+        int userId FK
+        string mode
+        string patterns
+    }
+
+    ssoSessions {
+        int id PK
+        int userId FK
+        string provider
+        string externalId
+        int expiresAt
+    }
+
+    activeSessions {
+        string id PK
+        int userId FK
+        string deviceType
+        string model
+        int lastActivityAt
+    }
+
+    fileScanCache {
+        int id PK
+        string filePath
+        string fileHash
+        string action
+        int riskScore
+    }
+
+    tokenVault {
+        string tokenId PK
+        string encrypted
+        string iv
+        string tag
+        string type
+    }
+
+    rateLimits {
+        int id PK
+        int userId FK
+        int orgId FK
+        int maxReqPerMin
+        int maxTokensPerMin
+    }
+
+    userOrgRoles {
+        int id PK
+        int userId FK
+        int orgId FK
+        int roleId FK
+        int grantedBy
+    }
+
+    capabilities {
+        int id PK
+        string name UK
+        string resource
+        string action
+        string riskLevel
+    }
+
+    settings {
+        string key PK
+        string value
+    }
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── SCANNER PIPELINE ────────────────────── -->
+<section id="scanner">
+<div class="container">
+  <h2>Scanner Pipeline</h2>
+  <p class="subtitle">Order matters. Unicode normalization runs FIRST (ASI04 defense). Each scanner returns findings that feed the policy engine.</p>
+
+  <div class="flow">
+    <div class="step">Unicode Normalize</div><span class="arrow">→</span>
+    <div class="step">Secret Scan (12)</div><span class="arrow">→</span>
+    <div class="step">PII Scan (7)</div><span class="arrow">→</span>
+    <div class="step">Entropy Scan</div><span class="arrow">→</span>
+    <div class="step">Prompt Injection (23)</div><span class="arrow">→</span>
+    <div class="step">Context Adjust</div><span class="arrow">→</span>
+    <div class="step">Policy Engine</div><span class="arrow">→</span>
+    <div class="step block">BLOCK</div>
+    <div class="step redact">REDACT</div>
+    <div class="step allow">ALLOW</div>
+  </div>
+
+  <h3>Core Scanners (@ai-firewall/scanner)</h3>
+  <div class="card-grid">
+    <div class="card"><h4><span class="icon red">K</span> Secret Scanner</h4><p>12 patterns: AWS keys, GCP, Azure, private keys (PEM/RSA/EC), JWT, database URLs, GitHub tokens, generic API keys, Slack tokens, Stripe keys, SendGrid keys.</p></div>
+    <div class="card"><h4><span class="icon amber">P</span> PII Scanner</h4><p>7 patterns: Email, phone, SSN, Aadhaar, PAN, credit card numbers, IP addresses. Masked output: keys show first 4 + last 2 chars.</p></div>
+    <div class="card"><h4><span class="icon blue">E</span> Entropy Scanner</h4><p>Shannon entropy analysis. High-entropy strings (potential secrets) flagged when above threshold and adjacent to context keywords (key, token, secret, password).</p></div>
+    <div class="card"><h4><span class="icon purple">I</span> Prompt Injection Scanner</h4><p>23 categories: instruction override, role-play, delimiter injection, encoding tricks, ignore-previous, DAN jailbreak, indirect injection (10 patterns).</p></div>
+  </div>
+
+  <h3>Advanced Scanners (proxy/src/scanner/)</h3>
+  <div class="card-grid">
+    <div class="card"><h4>Multi-Turn Tracker</h4><p>Session-level escalation detection. Flags rising risk over 3+ turns, category pivots (>60% change), and repetition (same hash 3+ times). 30min TTL.</p></div>
+    <div class="card"><h4>RAG Injection Shield</h4><p>17 patterns for document/chunk scanning before RAG ingestion. Catches instruction override, delimiter injection, encoding tricks, whitespace padding.</p></div>
+    <div class="card"><h4>Intent Clustering</h4><p>SimHash fingerprinting with 3-word n-gram shingles. Detects coordinated attacks: 3+ distinct users cluster within 5min, Hamming distance &lt; 5.</p></div>
+    <div class="card"><h4>Behavior Fingerprinting</h4><p>Per-user profiling: prompt length, word count, vocabulary diversity, frequency, time-of-day. Z-score anomaly detection (>2 std devs, 10 sample min).</p></div>
+    <div class="card"><h4>Prompt Confidentiality</h4><p>22 weighted patterns detecting system prompt extraction: direct requests, role-play, translation, encoding, model inversion, training data extraction.</p></div>
+    <div class="card"><h4>Cross-Model Correlation</h4><p>Correlates attacks across GPT-4/Claude/Gemini. SimHash similarity + user ID matching. 2 models=medium, 3+=high, 3+ AND 2+ users=critical.</p></div>
+    <div class="card"><h4>Multi-Modal Scanner</h4><p>Image (11 OCR patterns), audio (10 phonetic/SSML), structured files (12 patterns: HTML hidden, CSV formula, JSON prototype, PDF JS, XML XXE).</p></div>
+    <div class="card"><h4>Grounding Engine</h4><p>Hallucination check: Jaccard overlap (40%), bigram overlap (25%), exact substring (20%), entity overlap (15%). Per-claim and overall scores.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── AUTH FLOW ────────────────────── -->
+<section id="auth">
+<div class="container">
+  <h2>Authentication &amp; Authorization</h2>
+  <p class="subtitle">Web-first sign-in with cross-IDE shared auth file at ~/.ai-firewall/auth.json. RBAC via capabilities system.</p>
+  <div class="mermaid">
+sequenceDiagram
+    participant IDE as VS Code / CLI / JetBrains
+    participant Browser as Browser
+    participant Proxy as Proxy (:8080)
+    participant Web as Web Dashboard (:5174)
+    participant Google as Google SSO
+
+    IDE->>Proxy: GET /web-login-start?return=vscode&callback=vscode://...&state=nonce
+    Proxy->>Proxy: Sign HMAC cookie (afw_ext_return)
+    Proxy-->>Browser: 302 → Web /login?from=extension&ext=payload
+    Browser->>Web: Render LoginPage
+    alt Email/Password
+        Web->>Proxy: POST /api/auth/login {email, password}
+        Proxy-->>Web: {user, token}
+    else Google SSO
+        Web->>Browser: window.open(proxy/api/auth/sso/login?provider=google)
+        Browser->>Google: OAuth redirect
+        Google-->>Proxy: GET /api/auth/sso/callback?code=...
+        Proxy->>Proxy: Exchange code, create/find user, mint token
+        Proxy->>Proxy: Read afw_ext_return cookie
+        Proxy-->>Browser: HTML with window.location.replace(vscode://...?token=...&state=...)
+    end
+    Web->>Proxy: POST /api/auth/handoff {source: "web"}
+    Proxy->>Proxy: Write ~/.ai-firewall/auth.json (chmod 600)
+    Browser-->>IDE: vscode:// URI with token + state
+    IDE->>IDE: Validate state nonce
+    IDE->>IDE: Store in SecretStorage + shared auth file
+    IDE->>IDE: onDidChangeAuth fires → refresh file scope + assistant sync
+  </div>
+
+  <h3>RBAC Model</h3>
+  <div class="card-grid">
+    <div class="card"><h4><span class="icon red">A</span> Admin</h4><p>Full access. Inherits org baseline without override. Can manage users, orgs, providers, policies.</p></div>
+    <div class="card"><h4><span class="icon amber">S</span> Security Lead</h4><p>Response scanning ON, audit logs required, prompt injection threshold 50, all requests logged.</p></div>
+    <div class="card"><h4><span class="icon green">D</span> Developer</h4><p>Day-to-day coding. Blocks credential patterns, prompt injection threshold 40, all requests logged.</p></div>
+    <div class="card"><h4><span class="icon blue">U</span> Auditor</h4><p>Maximum paranoia. All blocks + all redactions + response scanning. Severity threshold: medium (strictest).</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── POLICY CHAIN ────────────────────── -->
+<section id="policy">
+<div class="container">
+  <h2>Policy Resolution Chain</h2>
+  <p class="subtitle">Strictest wins at every level. Each level can only ADD restrictions, never relax a parent-level block.</p>
+  <div class="mermaid">
+graph LR
+    G["1. Global<br/>policy.json"] --> O["2. Org Override<br/>(DB: scope_type=org)"]
+    O --> R["3. Role Override<br/>(DB: role_policies)"]
+    R --> T["4. Team Override<br/>(DB: scope_type=team)"]
+    T --> P["5. Project Override<br/>(.aifirewall.json)"]
+    P --> EFF["Effective<br/>Policy"]
+
+    style G fill:#064e3b,stroke:#10b981,color:#fff
+    style O fill:#1e3a5f,stroke:#3b82f6,color:#fff
+    style R fill:#4c1d95,stroke:#8b5cf6,color:#fff
+    style T fill:#78350f,stroke:#f59e0b,color:#fff
+    style P fill:#7f1d1d,stroke:#ef4444,color:#fff
+    style EFF fill:#0f172a,stroke:#10b981,stroke-width:3px,color:#10b981
+  </div>
+  <h3>Merge Semantics</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Field Type</th><th>Merge Rule</th><th>Example</th></tr>
+    <tr><td>Boolean rules</td><td><code>OR</code> — if ANY level says true, result is true</td><td>block_aws_keys: org=false + role=true → true</td></tr>
+    <tr><td>Severity threshold</td><td><code>MIN</code> — use strictest (lowest) threshold</td><td>org=high + role=medium → medium</td></tr>
+    <tr><td>Blocklists</td><td><code>UNION</code> — combine all patterns</td><td>org=[*.env] + role=[*.pem] → [*.env, *.pem]</td></tr>
+    <tr><td>Allowlists</td><td><code>INTERSECTION</code> — must be in ALL allowlists</td><td>org=[*.ts] + team=[src/*.ts] → [src/*.ts]</td></tr>
+    <tr><td>Prompt injection threshold</td><td><code>MIN</code> — lower = stricter</td><td>org=60 + role=40 → 40</td></tr>
+  </table>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── GATEWAY ────────────────────── -->
+<section id="gateway">
+<div class="container">
+  <h2>Gateway &amp; Smart Routing</h2>
+  <p class="subtitle">Provider adapters normalize formats. Smart router picks the right provider based on risk and cost.</p>
+  <div class="card-grid">
+    <div class="card"><h4><span class="icon green">O</span> OpenAI Adapter</h4><p>Passthrough — native OpenAI format. GPT-4o, GPT-4, o1, o3. Encoding: o200k_base / cl100k_base.</p></div>
+    <div class="card"><h4><span class="icon purple">A</span> Anthropic Adapter</h4><p>OpenAI messages → Anthropic format (system prompt extraction, content blocks). Claude 3/4 family.</p></div>
+    <div class="card"><h4><span class="icon blue">G</span> Gemini Adapter</h4><p>OpenAI → Gemini format (parts-based content). Gemini Pro/Ultra. Via REST API.</p></div>
+    <div class="card"><h4><span class="icon cyan">L</span> Ollama Adapter</h4><p>OpenAI → Ollama REST. Local models: Llama 3, Mistral, CodeLlama. Full offline capability.</p></div>
+  </div>
+  <h3>Routing Rules</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Condition</th><th>Action</th><th>Rationale</th></tr>
+    <tr><td><code>STRICT_LOCAL</code> env override</td><td>Always route to local Ollama</td><td>Air-gapped / compliance environments</td></tr>
+    <tr><td><code>risk_score &gt;= 70</code></td><td>Route to local LLM</td><td>High risk — sensitive content stays on-premise</td></tr>
+    <tr><td><code>risk_score &gt;= 30</code></td><td>Cloud + redaction</td><td>Medium risk — sanitize before sending</td></tr>
+    <tr><td><code>risk_score &lt; 30</code></td><td>Cloud direct</td><td>Low risk — pass through</td></tr>
+    <tr><td><code>estimated_cost &gt; maxCostPerRequest</code></td><td>Route to local (opt-in)</td><td>Cost guard — prevent expensive requests</td></tr>
+  </table>
+  </div>
+  <h3>Token Intelligence</h3>
+  <div class="card-grid">
+    <div class="card"><h4>Token Counter</h4><p>js-tiktoken (WASM BPE). Resolves encoding per model: o200k_base for GPT-4o/o1/o3, cl100k_base for GPT-4/Claude/Gemini/Llama. 4 tokens overhead per message. Fallback: ~4 chars/token.</p></div>
+    <div class="card"><h4>Cost Estimator</h4><p>Input tokens (actual) × model pricing. Output estimate: max(256, 25% of input). Returns inputCost, outputCost, totalCost, method. 6 decimal precision.</p></div>
+    <div class="card"><h4>Context Window</h4><p>Advisory only — NEVER truncates. Reserves 4096 tokens for output. Returns fits/overageTokens/utilizationPercent. Sets X-AF-Context-Overflow header.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── MCP GATEWAY ────────────────────── -->
+<section id="mcp">
+<div class="container">
+  <h2>MCP Security Gateway</h2>
+  <p class="subtitle">Every MCP tool call is scanned. No competitor scans MCP tool I/O.</p>
+  <div class="mermaid">
+sequenceDiagram
+    participant Agent as Agent/Tool
+    participant GW as MCP Gateway
+    participant Scan as Scanner Pipeline
+    participant Audit as Audit Logger
+    participant MCP as MCP Server
+
+    Agent->>GW: POST /v1/mcp/tools/call {server, tool, args}
+    GW->>GW: Serialize args to text
+    GW->>Scan: Scan INPUTS
+    alt BLOCK
+        Scan-->>Agent: 403 + X-AF-MCP-Action: BLOCK
+        Scan->>Audit: Log (direction: input, action: BLOCK)
+    end
+    alt REDACT
+        Scan->>GW: sanitizedArguments
+    end
+    GW->>MCP: Forward call
+    MCP-->>GW: Result
+    GW->>Scan: Scan OUTPUTS
+    GW->>Audit: Log (tool, direction, action, risk, timing)
+    GW-->>Agent: Result + X-AF-MCP-* headers
+  </div>
+  <h3>MCP Client Transports (core/)</h3>
+  <div class="card-grid">
+    <div class="card"><h4>StdioClientTransport</h4><p>Subprocess stdin/stdout. Used for local MCP servers spawned by the IDE.</p></div>
+    <div class="card"><h4>WebSocketClientTransport</h4><p>Persistent ws:// connection. Used for long-running remote MCP servers.</p></div>
+    <div class="card"><h4>SSEClientTransport</h4><p>HTTP Server-Sent Events. Used for one-way streaming from server to client.</p></div>
+    <div class="card"><h4>StreamableHTTPClientTransport</h4><p>Bidirectional HTTP streaming. Most versatile transport for cloud MCP servers.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── EXTENSIONS ────────────────────── -->
+<section id="extensions">
+<div class="container">
+  <h2>Extension Architecture</h2>
+  <p class="subtitle">VS Code (production), CLI (beta), JetBrains (alpha). All share the Core engine and connect to the same proxy.</p>
+  <div class="mermaid">
+graph TB
+    subgraph VSCode["VS Code Extension"]
+        VExt["VsCodeExtension.ts<br/>(entry point)"]
+        Auth["AiFirewallAuthService"]
+        WOS["WorkOsAuthProvider (stub)"]
+        Sidebar["ContinueGUIWebviewViewProvider"]
+        Messenger["VsCodeMessenger"]
+        ProxyMgr["ProxyManager<br/>(spawn/monitor proxy)"]
+        FileScope["FileRestrictionChecker"]
+    end
+
+    subgraph CoreEngine["Core Engine"]
+        ConfigH["ConfigHandler"]
+        CoreC["Core (main)"]
+        ToolReg["Tool Registry (26)"]
+        CtxReg["Context Providers (37+)"]
+        LLMReg["LLM Drivers (53+)"]
+        MCPConn["MCP Connection"]
+        LanceDB["LanceDB Vector Index"]
+    end
+
+    VExt --> Auth
+    VExt --> WOS
+    VExt --> Sidebar
+    VExt --> ProxyMgr
+    VExt --> FileScope
+    Messenger --> Sidebar
+    VExt --> CoreC
+    CoreC --> ConfigH
+    CoreC --> ToolReg
+    CoreC --> CtxReg
+    CoreC --> LLMReg
+    CoreC --> MCPConn
+    CoreC --> LanceDB
+
+    style VSCode fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#e2e8f0
+    style CoreEngine fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#e2e8f0
+  </div>
+
+  <h3>Services Initialized on Activation</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Service</th><th>Purpose</th></tr>
+    <tr><td><code>AiFirewallAuthService</code></td><td>Web-first auth, shared file watcher, SecretStorage</td></tr>
+    <tr><td><code>WorkOsAuthProvider</code></td><td>Stub for VS Code Accounts menu integration</td></tr>
+    <tr><td><code>ProxyManager</code></td><td>Spawns/monitors the Fastify proxy child process</td></tr>
+    <tr><td><code>FileRestrictionChecker</code></td><td>Client-side file scope enforcement via /api/me/policy</td></tr>
+    <tr><td><code>Core</code></td><td>Agent engine: 53+ providers, 26 tools, 37+ context providers</td></tr>
+    <tr><td><code>VsCodeMessenger</code></td><td>IPC bridge between extension host, webview, and core</td></tr>
+    <tr><td><code>ContinueGUIWebviewViewProvider</code></td><td>React webview host (sidebar + fullscreen)</td></tr>
+    <tr><td><code>VerticalDiffManager</code></td><td>Inline code diff display in editor</td></tr>
+    <tr><td><code>ContinueCompletionProvider</code></td><td>Tab completion (autocomplete engine)</td></tr>
+  </table>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── GUI ────────────────────── -->
+<section id="gui">
+<div class="container">
+  <h2>GUI &amp; Web Dashboard</h2>
+  <p class="subtitle">IDE webview (gui/) uses React + Vite + Tailwind with Redux Toolkit. Standalone web dashboard (web/) adds admin pages.</p>
+  <h3>IDE Webview Routes (gui/src/App.tsx)</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Path</th><th>Component</th><th>Environment</th></tr>
+    <tr><td><code>/</code></td><td>Chat</td><td>All</td></tr>
+    <tr><td><code>/login</code></td><td>LoginPage (sign-in gate)</td><td>All</td></tr>
+    <tr><td><code>/history</code></td><td>History</td><td>All</td></tr>
+    <tr><td><code>/stats</code></td><td>Stats Dashboard</td><td>All</td></tr>
+    <tr><td><code>/config</code></td><td>Config Editor</td><td>All</td></tr>
+    <tr><td><code>/security</code></td><td>Security Dashboard</td><td>All</td></tr>
+    <tr><td><code>/first-look</code></td><td>First Look Setup</td><td>All</td></tr>
+    <tr><td><code>/onboarding</code></td><td>Onboarding Wizard</td><td>All</td></tr>
+  </table>
+  </div>
+  <h3>Web Dashboard Routes (web/src/App.tsx)</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Path</th><th>Component</th><th>Auth</th></tr>
+    <tr><td><code>/</code></td><td>Landing Page</td><td>Public</td></tr>
+    <tr><td><code>/login</code>, <code>/register</code></td><td>Auth (email + SSO)</td><td>Public</td></tr>
+    <tr><td><code>/dashboard</code></td><td>Chat</td><td>Required</td></tr>
+    <tr><td><code>/security</code></td><td>Security Dashboard</td><td>Required</td></tr>
+    <tr><td><code>/policy</code></td><td>Global Policy Editor</td><td>policy:write</td></tr>
+    <tr><td><code>/policy/roles</code></td><td>Role Policies</td><td>policy:write</td></tr>
+    <tr><td><code>/rbac</code></td><td>RBAC Management</td><td>admin</td></tr>
+    <tr><td><code>/org</code></td><td>Organization Settings</td><td>admin</td></tr>
+    <tr><td><code>/agents</code></td><td>Multi-Agent Manager</td><td>Required</td></tr>
+    <tr><td><code>/usage</code></td><td>Usage Analytics</td><td>Required</td></tr>
+    <tr><td><code>/providers/add</code></td><td>Add LLM Provider</td><td>Required</td></tr>
+    <tr><td><code>/privacy</code></td><td>Privacy Settings</td><td>Required</td></tr>
+  </table>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── PROVIDERS ────────────────────── -->
+<section id="providers">
+<div class="container">
+  <h2>LLM Providers <span class="badge">53+</span></h2>
+  <p class="subtitle">Core supports 53+ LLM providers out of the box. All go through the proxy's scanning pipeline.</p>
+  <div class="card-grid">
+    <div class="card"><h4>Major Closed-Source</h4>
+      <ul><li>OpenAI (GPT-4o, o1, o3)</li><li>Anthropic (Claude 4.x)</li><li>Google Gemini</li><li>Mistral</li><li>xAI (Grok)</li><li>Deepseek</li></ul>
+    </div>
+    <div class="card"><h4>Local / Open-Source</h4>
+      <ul><li>Ollama</li><li>LlamaCpp</li><li>LlamaStack</li><li>LMStudio</li><li>Llamafile</li><li>VLLM</li><li>Docker</li></ul>
+    </div>
+    <div class="card"><h4>Cloud Platforms</h4>
+      <ul><li>AWS Bedrock / SageMaker</li><li>Azure OpenAI</li><li>Google Vertex AI</li><li>IBM WatsonX</li><li>Cloudflare Workers AI</li><li>HuggingFace (TEI, TGI)</li></ul>
+    </div>
+    <div class="card"><h4>Inference Services</h4>
+      <ul><li>Groq</li><li>Together</li><li>Fireworks</li><li>Replicate</li><li>Cohere</li><li>DeepInfra</li><li>OpenRouter</li><li>SambaNova / Cerebras / Nvidia</li></ul>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── TOOLS ────────────────────── -->
+<section id="tools">
+<div class="container">
+  <h2>Core Tools <span class="badge">26</span></h2>
+  <p class="subtitle">Built-in agent tools available to all extensions. Each passes through the 3-level permission chain.</p>
+  <div class="card-grid">
+    <div class="card"><h4>File Operations</h4>
+      <ul><li><code>readFile</code> — Read full file contents</li><li><code>readFileRange</code> — Read specific line ranges</li><li><code>createNewFile</code> — Create file with content</li><li><code>viewSubdirectory</code> — List directory contents</li><li><code>viewDiff</code> — Git diff viewer</li><li><code>viewRepoMap</code> — Repository structure map</li></ul>
+    </div>
+    <div class="card"><h4>Search &amp; Analysis</h4>
+      <ul><li><code>grepSearch</code> — Ripgrep pattern search</li><li><code>globSearch</code> — Glob file matching</li><li><code>codebaseTool</code> — Vector codebase search</li><li><code>searchWeb</code> — Web search integration</li><li><code>fetchUrlContent</code> — Fetch URL content</li></ul>
+    </div>
+    <div class="card"><h4>Execution &amp; Automation</h4>
+      <ul><li><code>runTerminalCommand</code> — Shell command execution</li><li><code>browserCapture</code> — Screenshot capture</li><li><code>browserInteract</code> — Browser automation</li><li><code>notebookEditTool</code> — Jupyter cell editing</li></ul>
+    </div>
+    <div class="card"><h4>AI &amp; Planning</h4>
+      <ul><li><code>planTool</code> — Execution planning</li><li><code>spawnAgent</code> — Sub-agent spawning</li><li><code>skillTool</code> — Custom skill invocation</li><li><code>memory</code> — Persistent memory</li><li><code>worktree</code> — Git worktree isolation</li><li><code>securityReview</code> — Security audit</li></ul>
+    </div>
+  </div>
+
+  <h3>Context Providers <span class="badge">37+</span></h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Trigger</th><th>Provider</th><th>Description</th></tr>
+    <tr><td><code>@file</code></td><td>File</td><td>Search and include files from workspace</td></tr>
+    <tr><td><code>@currentFile</code></td><td>Current File</td><td>Active editor file</td></tr>
+    <tr><td><code>@diff</code></td><td>Git Diff</td><td>Staged/unstaged changes</td></tr>
+    <tr><td><code>@codebase</code></td><td>Codebase</td><td>Vector search via LanceDB</td></tr>
+    <tr><td><code>@web</code></td><td>Web</td><td>Fetch and include web content</td></tr>
+    <tr><td><code>@docs</code></td><td>Documentation</td><td>Local + web documentation</td></tr>
+    <tr><td><code>@terminal</code></td><td>Terminal</td><td>Recent terminal output</td></tr>
+    <tr><td><code>@commit</code></td><td>Git Commits</td><td>Git history search</td></tr>
+    <tr><td><code>@mcp</code></td><td>MCP Server</td><td>MCP tool results (scanned)</td></tr>
+    <tr><td><code>@postgres</code></td><td>PostgreSQL</td><td>Query results from database</td></tr>
+    <tr><td><code>@gitHub</code></td><td>GitHub</td><td>Issues and PRs</td></tr>
+    <tr><td><code>@jira</code></td><td>Jira</td><td>Jira tickets</td></tr>
+    <tr><td><code>@memory</code></td><td>Memory</td><td>Persistent notes store</td></tr>
+    <tr><td><code>@clipboard</code></td><td>Clipboard</td><td>Current clipboard content</td></tr>
+    <tr><td><code>@problems</code></td><td>Diagnostics</td><td>IDE problems/errors</td></tr>
+  </table>
+  </div>
+</div>
+</section>
+
+<!-- ────────────────────── API REFERENCE ────────────────────── -->
+<section id="api">
+<div class="container">
+  <h2>API Reference <span class="badge">59 Routes</span></h2>
+  <p class="subtitle">All endpoints on the Fastify proxy at localhost:8080. Auth via Bearer token (afw_ prefix).</p>
+
+  <h3>Core Proxy</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/v1/chat/completions</code></td><td>OpenAI-compatible proxy with full scanning pipeline</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/health</code></td><td>Health check</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/estimate</code></td><td>Pre-flight: token count, cost estimate, context window check</td></tr>
+  </table></div>
+
+  <h3>Authentication &amp; Users</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/auth/register</code></td><td>User registration (auto-creates org)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/auth/login</code></td><td>Email/password login</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/auth/logout</code></td><td>Revoke current session token</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/auth/logout/all</code></td><td>Revoke all user tokens</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/auth/me</code></td><td>Current user profile</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/auth/handoff</code></td><td>Write shared auth file (local only)</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/auth/sso/login</code></td><td>SSO redirect (Google, GitHub, Microsoft)</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/auth/sso/callback</code></td><td>SSO OAuth callback</td></tr>
+  </table></div>
+
+  <h3>User-Scoped Bootstrap (/api/me/)</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/me/policy</code></td><td>Effective policy for authenticated user (org+role merged)</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/me/assistant</code></td><td>Default assistant YAML + injected provider keys</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/me/models</code></td><td>Available models with grant metadata</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/me/providers</code></td><td>Personal provider configurations</td></tr>
+  </table></div>
+
+  <h3>Scanning</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/scan/file</code></td><td>Scan single file (content-addressed cache)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/scan/batch</code></td><td>Scan multiple files (max 50)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/scan/rules</code></td><td>Scan rule files (.cursorrules, CLAUDE.md)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/scan/rag/document</code></td><td>Scan RAG document for hidden injections</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/scan/multi-turn</code></td><td>Record turn and get session risk</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/scan/multimodal/image</code></td><td>Scan OCR text from image</td></tr>
+  </table></div>
+
+  <h3>MCP Security Gateway</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/v1/mcp/tools/call</code></td><td>Scan tool I/O, forward to MCP server</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/v1/mcp/scan</code></td><td>Standalone text scan for MCP context</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/v1/mcp/audit</code></td><td>Query MCP audit log</td></tr>
+  </table></div>
+
+  <h3>Policy &amp; RBAC</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/policy</code></td><td>Read global policy</td></tr>
+    <tr><td><span class="pill amber">PUT</span></td><td><code>/api/policy</code></td><td>Update global policy</td></tr>
+    <tr><td><span class="pill amber">PUT</span></td><td><code>/api/policies/role/:roleName</code></td><td>Upsert role-specific policy (org-scoped)</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/policies/roles</code></td><td>List all role policies for org</td></tr>
+  </table></div>
+
+  <h3>Agent &amp; Task Framework</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/agents/spawn</code></td><td>Spawn sub-agent (with optional worktree)</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/tasks</code></td><td>List tasks (filter by status, type)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/tasks</code></td><td>Create task (7 types, state machine)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/commands/execute</code></td><td>Execute slash command</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/skills/invoke</code></td><td>Invoke a skill by name</td></tr>
+  </table></div>
+
+  <h3>Approvals &amp; Sessions</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/approvals/pending</code></td><td>Pending approval requests</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/approvals/:id/resolve</code></td><td>Allow/Deny (once or always)</td></tr>
+    <tr><td><span class="pill blue">GET</span></td><td><code>/api/sessions/active</code></td><td>Active sessions across devices</td></tr>
+  </table></div>
+
+  <h3>Advanced Security</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/grounding/check</code></td><td>Hallucination grounding against sources</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/intelligence/signatures</code></td><td>Publish privacy-preserving threat signature</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/compliance/map</code></td><td>Map event to regulations (GDPR, HIPAA, etc.)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/redteam/probes</code></td><td>Generate adversarial probes (62 templates)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/network/analyze</code></td><td>Shadow AI detection (32 known endpoints)</td></tr>
+    <tr><td><span class="pill green">POST</span></td><td><code>/api/ml/detect</code></td><td>Embedding-based injection detection</td></tr>
+  </table></div>
+</div>
+</section>
+
+<footer style="padding:40px 0;text-align:center;color:var(--muted);font-size:12px;border-top:1px solid var(--border);">
+  <div class="container">
+    AI Firewall Architecture Reference &bull; Generated April 2026 &bull; v3.0 Secure AI OS
+  </div>
+</footer>
+
+<script>
+// Generate the 14-day activity chart with sample data
+(function() {
+  var days = ['Mar 30','31','Apr 1','2','3','4','5','6','7','8','9','10','11','12'];
+  var data = [
+    {a:820,r:12,b:2},{a:910,r:8,b:1},{a:780,r:15,b:3},{a:950,r:11,b:0},
+    {a:1100,r:18,b:4},{a:870,r:9,b:1},{a:640,r:6,b:0},{a:920,r:14,b:2},
+    {a:1050,r:20,b:3},{a:980,r:13,b:1},{a:1120,r:16,b:5},{a:890,r:10,b:2},
+    {a:1030,r:12,b:1},{a:750,r:8,b:1}
+  ];
+  var maxVal = 0;
+  data.forEach(function(d){ var t = d.a+d.r+d.b; if(t>maxVal) maxVal=t; });
+  var chart = document.getElementById('actChart');
+  var labels = document.getElementById('actLabels');
+  if(!chart||!labels) return;
+  data.forEach(function(d, i) {
+    var total = d.a + d.r + d.b;
+    var h = Math.round((total / maxVal) * 90);
+    var ha = Math.round((d.a / total) * h);
+    var hr = Math.round((d.r / total) * h);
+    var hb = h - ha - hr;
+    var bar = document.createElement('div');
+    bar.className = 'act-bar';
+    bar.title = days[i] + ': ' + d.a + ' allowed, ' + d.r + ' redacted, ' + d.b + ' blocked';
+    bar.innerHTML = '<div class="ab-seg" style="height:'+hb+'px;background:#f87171;"></div>' +
+                    '<div class="ab-seg" style="height:'+hr+'px;background:#fbbf24;"></div>' +
+                    '<div class="ab-seg" style="height:'+ha+'px;background:#34d399;"></div>';
+    chart.appendChild(bar);
+    var lbl = document.createElement('span');
+    lbl.textContent = days[i];
+    labels.appendChild(lbl);
+  });
+})();
+</script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'dark',
+  themeVariables: {
+    primaryColor: '#1e293b',
+    primaryBorderColor: '#10b981',
+    primaryTextColor: '#e2e8f0',
+    lineColor: '#475569',
+    secondaryColor: '#334155',
+    tertiaryColor: '#0f172a',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontSize: '13px',
+  },
+  flowchart: { curve: 'basis', padding: 20 },
+  sequence: { mirrorActors: false, bottomMarginAdj: 1 },
+  er: { layoutDirection: 'TB', fontSize: 12 }
+});
+</script>
+</body>
+</html>

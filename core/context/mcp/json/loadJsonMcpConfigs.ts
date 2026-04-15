@@ -11,6 +11,7 @@ import * as JSONC from "comment-json";
 import ignore from "ignore";
 import { IDE, InternalMcpOptions } from "../../..";
 import { convertYamlMcpConfigToInternalMcpOptions } from "../../../config/yaml/yamlToContinueConfig";
+import { readFileWith } from "../../../util/scanning/ScanningIde";
 import {
   DEFAULT_IGNORE_DIRS,
   DEFAULT_IGNORE_FILETYPES,
@@ -69,7 +70,7 @@ export async function loadJsonMcpConfigs(
         await Promise.all(
           jsonUris.map(async (uri) => {
             try {
-              const content = await ide.readFile(uri);
+              const content = await readFileWith(ide, uri, "config");
               jsonFiles.push({ uri, content });
             } catch (e) {
               errors.push({

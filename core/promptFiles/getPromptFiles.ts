@@ -7,7 +7,11 @@ import {
 } from ".";
 import { IDE } from "..";
 import { walkDir } from "../indexing/walkDir";
-import { getAiFirewallGlobalPath, readAllGlobalPromptFiles } from "../util/paths";
+import {
+  getAiFirewallGlobalPath,
+  readAllGlobalPromptFiles,
+} from "../util/paths";
+import { readFileWith } from "../util/scanning/ScanningIde";
 import { joinPathsToUri } from "../util/uri";
 
 export async function getPromptFilesFromDir(
@@ -28,7 +32,7 @@ export async function getPromptFilesFromDir(
       (p) => p.endsWith(".prompt") || p.endsWith(".md"),
     );
     const results = promptFilePaths.map(async (uri) => {
-      const content = await ide.readFile(uri); // make a try catch
+      const content = await readFileWith(ide, uri, "config"); // make a try catch
       return { path: uri, content };
     });
     return Promise.all(results);
@@ -72,7 +76,7 @@ export async function getAllPromptFiles(
 
   const result = await Promise.all(
     promptFiles.map(async (file) => {
-      const content = await ide.readFile(file.path);
+      const content = await readFileWith(ide, file.path, "config");
       return { path: file.path, content };
     }),
   );

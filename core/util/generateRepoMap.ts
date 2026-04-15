@@ -6,6 +6,7 @@ import { walkDirs } from "../indexing/walkDir";
 import { pruneLinesFromTop } from "../llm/countTokens";
 
 import { getRepoMapFilePath } from "./paths";
+import { readFileWith } from "./scanning/ScanningIde";
 import { findUriInDirs } from "./uri";
 
 export interface RepoMapOptions {
@@ -80,7 +81,7 @@ class RepoMapGenerator {
           let fileContent: string;
 
           try {
-            fileContent = await this.ide.readFile(uri);
+            fileContent = await readFileWith(this.ide, uri, "indexing");
           } catch (err) {
             console.error(
               "Failed to read file:\n" +

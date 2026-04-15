@@ -13,6 +13,7 @@ import type { IMessenger } from "../protocol/messenger";
 import { extractMinimalStackTraceInfo } from "../util/extractMinimalStackTraceInfo.js";
 import { Logger } from "../util/Logger.js";
 import { getIndexSqlitePath, getLanceDbPath } from "../util/paths.js";
+import { readFileWith } from "../util/scanning/ScanningIde.js";
 import { findUriInDirs, getUriPathBasename } from "../util/uri.js";
 
 import { ConfigResult } from "@ai-firewall/config-yaml";
@@ -181,16 +182,15 @@ export class CodebaseIndexer {
     > = {
       chunk: async () =>
         new ChunkCodebaseIndex(
-          this.ide.readFile.bind(this.ide),
+          (uri) => readFileWith(this.ide, uri, "indexing"),
           continueServerClient,
           embeddingsModel.maxEmbeddingChunkSize,
         ),
       codeSnippets: async () => new CodeSnippetsCodebaseIndex(this.ide),
       fullTextSearch: async () => new FullTextSearchCodebaseIndex(),
       embeddings: async () => {
-        const lanceDbIndex = await LanceDbIndex.create(
-          embeddingsModel,
-          this.ide.readFile.bind(this.ide),
+        const lanceDbIndex = await LanceDbIndex.create(embeddingsModel, (uri) =>
+          readFileWith(this.ide, uri, "indexing"),
         );
         return lanceDbIndex;
       },
@@ -268,7 +268,7 @@ export class CodebaseIndexer {
         await getComputeDeleteAddRemove(
           tag,
           { ...stats },
-          (filepath) => this.ide.readFile(filepath),
+          (filepath) => readFileWith(this.ide, filepath, "indexing"),
           repoName,
         );
 
@@ -581,7 +581,7 @@ export class CodebaseIndexer {
           await getComputeDeleteAddRemove(
             tag,
             { ...stats },
-            (filepath) => this.ide.readFile(filepath),
+            (filepath) => readFileWith(this.ide, filepath, "indexing"),
             repoName,
           );
         const totalOps = this.totalIndexOps(results);

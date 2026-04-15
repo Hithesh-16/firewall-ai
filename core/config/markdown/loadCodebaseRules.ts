@@ -5,6 +5,7 @@ import {
 import { IDE, RuleWithSource } from "../..";
 import { walkDirs } from "../../indexing/walkDir";
 import { RULES_MARKDOWN_FILENAME } from "../../llm/rules/constants";
+import { readFileWith } from "../../util/scanning/ScanningIde";
 import { findUriInDirs, getUriPathBasename } from "../../util/uri";
 
 export class CodebaseRulesCache {
@@ -25,7 +26,7 @@ export class CodebaseRulesCache {
     this.errors = errors;
   }
   async update(ide: IDE, uri: string) {
-    const content = await ide.readFile(uri);
+    const content = await readFileWith(ide, uri, "config");
     const workspaceDirs = await ide.getWorkspaceDirs();
     const { relativePathOrBasename, foundInDir } = findUriInDirs(
       uri,
@@ -84,7 +85,7 @@ export async function loadCodebaseRules(ide: IDE): Promise<{
     // Process each rules.md file
     for (const filePath of rulesMdFiles) {
       try {
-        const content = await ide.readFile(filePath);
+        const content = await readFileWith(ide, filePath, "config");
         const { relativePathOrBasename, foundInDir, uri } = findUriInDirs(
           filePath,
           await ide.getWorkspaceDirs(),

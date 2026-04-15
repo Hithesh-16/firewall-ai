@@ -254,34 +254,78 @@ const injection = scanPromptInjection("Ignore all previous instructions");
 
 ## File Scan Enforcement
 
-Every file read in the CLI and core agent tools passes through the proxy's `/api/scan/file` endpoint **before** the file content is returned to the LLM. This closes the gap where restricted files could be read directly from the filesystem.
+Every file read across the entire monorepo — context providers, tools, indexing, autocomplete, retrieval — flows through **one chokepoint**: the `ScanningIde` decorator in `core/util/scanning/ScanningIde.ts`. Instead of per-site scan calls sprinkled through context providers and tool implementations (the old model, now deleted), a single `Proxy`-based decorator wraps the `IDE` interface at both construction sites:
 
-**How it works:**
-1. Tool calls `readFile("path/to/file")`
-2. Static check: `throwIfFileIsSecurityConcern()` rejects known-dangerous paths (`.env`, `.pem`, `.ssh/`)
-3. Proxy scan: `scanFileViaProxy()` calls `POST /api/scan/file` with the file path
-4. Proxy runs full scanner pipeline (secrets, PII, entropy, injection) + policy evaluation
-5. Proxy resolves every finding to a 1-based `(line, column)` via `findingLocator.ts` and pre-masks each value (raw secrets never cross the wire)
-6. Based on the decision:
-   - **BLOCK** → `AIFirewallError` thrown with the markdown findings block attached, file is **never read**
-   - **REDACT** → proxy's sanitized content returned (secrets replaced with `[REDACTED_TYPE]`) **plus** a second `ContextItem` named "AI Firewall" carrying the per-finding report
-   - **ALLOW** → file read proceeds normally; if findings are present (e.g., low-severity entropy hits) the report `ContextItem` is still appended
-7. **Fail-open** — if the proxy is unreachable (not running), file reads proceed as before
+- `extensions/vscode/src/extension/VsCodeExtension.ts` — in-process VS Code host
+- `binary/src/index.ts` — out-of-process core used by JetBrains + the binary agent
 
-**Files enforcing this:**
-- `proxy/src/scanner/findingLocator.ts` — char offset → `(line, column)` + type-aware masking
-- `proxy/src/scanner/fileScanService.ts` — runs pipeline, attaches `line`/`column`/`masked` to each secret/pii entry
-- `core/util/fileScanProxy.ts` — shared client utility (5s timeout, fail-open) — flattens `secrets[]`+`pii[]` into a single `findings[]`
-- `core/util/formatScanFindings.ts` — markdown formatter (header + bullet list, monospace `file:line:col` chips)
-- `core/tools/implementations/readFile.ts`, `readFileRange.ts`, `readCurrentlyOpenFile.ts` — append the report `ContextItem` after the file content
-- `extensions/cli/src/tools/readFile.ts` — prepends the markdown report to the returned string so the Ink TUI renders it inline
+Every existing `ide.readFile(uri)` call keeps working unchanged and automatically gets the safe default purpose (`"llm"`). Callers who know better can opt into a different purpose via `readFileWith(ide, uri, purpose)`.
+
+### ScanPurpose decision matrix
+
+```ts
+type ScanPurpose = "llm" | "indexing" | "autocomplete" | "config" | "raw";
+```
+
+| Purpose | ALLOW | REDACT | BLOCK | Proxy call | Report emitted |
+|---------|-------|--------|-------|------------|----------------|
+| `llm` (default) | raw content | redacted content | throws `FileBlockedByScanError` | yes, 5s timeout | yes (chat context item) |
+| `indexing` | raw content | redacted content | returns `""` (skip from index) | yes, 1s timeout | no |
+| `autocomplete` | raw content | redacted content | returns `""` | **never** — cache only | no |
+| `config` | raw content | raw (bypass) | raw (bypass) | no | no |
+| `raw` | raw content | raw (bypass) | raw (bypass) | no | no |
+
+- **`llm`** is the safe default. If a new caller forgets to tag itself, it gets the strongest protection.
+- **`autocomplete`** is cache-only on the decorator's in-process LRU (`scanDecisionCache.ts`, cap 5000, keyed by `path:mtime:purpose`). A regression test asserts 50 reads complete in <100ms with a 50ms-per-call mocked proxy — if autocomplete ever regresses to synchronous scanning, CI fails.
+- **`indexing`** uses a 1s proxy timeout instead of 5s so a stalled proxy can't jam a big batch, and BLOCK degrades to empty string so one bad file can't kill indexing.
+- **`config`** bypasses entirely for the firewall's own rule/ignore files. A hardcoded allowlist (`.gitignore`, `.ai-firewallignore`, `.continueignore`, `plugin.json`, `policy.json`, `.ai-firewall/config.yaml`, `.ai-firewall/policy.json`, `mcpServers.json`) forces `"config"` even if the caller tagged `"llm"` — defense-in-depth against self-referential blocks.
+- **`raw`** is an explicit escape hatch (diff capture, GUI readFile passthrough) that must be justified inline with a `// scan-raw:` comment.
+
+### How a read actually flows
+
+1. Code calls `ide.readFile("path/to/file")` anywhere in core
+2. The `Proxy` wrapping intercepts the call
+3. `forcedConfigOverride(uri, purpose)` checks the hardcoded allowlist
+4. `scanDecisionCache.get(path, mtime, purpose)` tries the in-process LRU
+5. On cache miss (and not `autocomplete`), `scanFileViaProxy(uri, {purpose})` calls `POST /api/scan/file` with `X-AF-Scan-Purpose: <purpose>` header
+6. Proxy runs the full scanner pipeline (secrets, PII, entropy, injection, policy) and returns `{action, riskScore, reasons, findings, redactedContent?}` — every finding pre-masked with a 1-based `(line, column)`
+7. Decorator applies the decision matrix above
+8. On REDACT/BLOCK with `llm` purpose, a `ScanReport` is published to the `scanReportChannel`
+9. `core.ts` (which wrapped the turn in `runInScanContext(correlationId, ...)`) drains the channel at turn end and merges each report as an "AI Firewall" `ContextItem`
+
+### Scan report channel
+
+`core/util/scanning/scanReportChannel.ts` is a per-session pub/sub scoped by `AsyncLocalStorage<{correlationId}>`. Core wraps each user turn in `runInScanContext(correlationId, fn)`; the decorator reads the current correlation id via `currentCorrelationId()` and tags its publishes. Crosstalk between concurrent turns is impossible — subscribers only see their own correlation id. Reports published outside any context are silently dropped, so background reads (startup, indexing) never leak.
+
+### Files enforcing this
+
+| File | Responsibility |
+|------|----------------|
+| `core/util/scanning/ScanningIde.ts` | The decorator itself — `Proxy`-based wrap that intercepts `readFile`/`readRangeInFile`/`getCurrentFile` |
+| `core/util/scanning/ScanPurpose.ts` | 5-value purpose enum + behaviour predicates (`shouldEmitReport`, `allowsSyncProxy`, `bypassesScan`) |
+| `core/util/scanning/scanReportChannel.ts` | `AsyncLocalStorage`-scoped pub/sub — reports travel from decorator → chat layer without coupling intermediate callers |
+| `core/util/scanning/scanDecisionCache.ts` | In-process LRU cache (cap 5000) keyed by `path:mtime:purpose`; hot entries survive via re-insert on hit |
+| `core/util/scanning/FileBlockedByScanError.ts` | Typed error for BLOCK with `.report: ScanReport` attached — consent-flow hook point |
+| `core/util/scanning/sliceByLines.ts` | Whole-line slicing for `readRangeInFile` REDACT (character positions shift when redactor rewrites) |
+| `core/util/scanning/reportToContextItem.ts` | Convert a `ScanReport` into the "AI Firewall" chat context item via `formatScanFindings.ts` |
+| `core/util/fileScanProxy.ts` | HTTP client for `/api/scan/file` — now accepts `{purpose, cacheOnly, timeoutMs}` options |
+| `proxy/src/scanner/findingLocator.ts` | Server-side: char offset → `(line, column)` + type-aware masking |
+| `proxy/src/scanner/fileScanService.ts` | Server-side: runs pipeline, attaches `line`/`column`/`masked` per finding |
+| `extensions/cli/src/services/ScanningFileIo.ts` | CLI parallel — same decision matrix for CLI `fs.readFileSync`, used by `extensions/cli/src/tools/readFile.ts` |
+| `core/core.ts` (`getContextItems` handler) | Wraps each provider call in `runInScanContext`, subscribes for that turn, merges dedup-by-path reports as extra context items |
+
+### What was removed in the refactor
+
+Prior to the central chokepoint, scan calls were scattered across 7 per-site implementations: three context providers (`CurrentFileContextProvider`, `FileContextProvider`, `OpenFilesContextProvider`), three core tools (`readFile`, `readFileRange`, `readCurrentlyOpenFile`), and one CLI mirror. Each duplicated the scan call, the decision matrix, and the "AI Firewall" context item construction. Around **50 other file-read sites** (indexing, autocomplete, retrieval, config loaders, treeSitter, nextEdit, etc.) bypassed scanning entirely.
+
+The refactor deleted all 7 per-site implementations and `core/util/scanFileForContext.ts`. Every file read across the monorepo — including the previously-unprotected ones — now flows through `ScanningIde` automatically.
 
 <Info>
-The old VS Code toast (`AI Firewall: Sensitive data REDACTED ... HIGH_ENTROPY, HIGH_ENTROPY ...`) has been removed — it lacked file/line context because chat-time scans see a blob of text without provenance. Findings are now surfaced **at the moment of the file read** as part of the tool result card. The status-bar still flashes (warning yellow for REDACT, error red for BLOCK) and approval prompts are still modal, since those are interactive.
+Per-site scan code is now an anti-pattern. If you find yourself calling `scanFileViaProxy` directly from a context provider, tool, or retrieval helper, you are almost certainly duplicating what the decorator already does. Instead, tag the purpose via `readFileWith(ide, uri, purpose)`.
 </Info>
 
 <Info>
-The proxy caches scan results by SHA-256 content hash, so repeated reads of the same file are fast.
+The proxy caches scan results by SHA-256 content hash, and the decorator layers a second in-process LRU on top. Repeated reads of the same file+mtime+purpose are O(1).
 </Info>
 
 ## Scan Result Display

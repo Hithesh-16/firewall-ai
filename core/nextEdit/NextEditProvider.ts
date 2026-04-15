@@ -21,6 +21,7 @@ import { AutocompleteInput } from "../autocomplete/util/types.js";
 import { isSecurityConcern } from "../indexing/ignore.js";
 import { modelSupportsNextEdit } from "../llm/autodetect.js";
 import { localPathOrUriToPath } from "../util/pathToUri.js";
+import { readFileWith } from "../util/scanning/ScanningIde.js";
 import { EditAggregator } from "./context/aggregateEdits.js";
 import { createDiff, DiffFormatType } from "./context/diffFormatting.js";
 import { DocumentHistoryTracker } from "./DocumentHistoryTracker.js";
@@ -234,7 +235,11 @@ export class NextEditProvider {
 
     if (this.previousRequest) {
       const fileContent = (
-        await this.ide.readFile(this.previousRequest.filepath)
+        await readFileWith(
+          this.ide,
+          this.previousRequest.filepath,
+          "autocomplete",
+        )
       ).toString();
 
       const ast = await getAst(this.previousRequest.filepath, fileContent);

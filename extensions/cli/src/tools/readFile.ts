@@ -2,9 +2,10 @@ import * as fs from "fs";
 
 import { throwIfFileIsSecurityConcern } from "core/indexing/ignore.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
-import { scanFileViaProxy } from "core/util/fileScanProxy.js";
 import { formatScanFindingsMarkdown } from "core/util/formatScanFindings.js";
+import { isFileBlockedByScanError } from "core/util/scanning/FileBlockedByScanError.js";
 
+import { scanningReadFile } from "../services/ScanningFileIo.js";
 import { parseEnvNumber } from "../util/truncateOutput.js";
 
 import { formatToolArgument } from "./formatters.js";
@@ -84,31 +85,33 @@ export const readFileTool: Tool = {
       }
       const realPath = fs.realpathSync(filepath);
 
-      // Proxy-side file scan enforcement (fail-open if proxy unreachable)
-      const scanDecision = await scanFileViaProxy(realPath);
-      const findings = scanDecision.findings ?? [];
-
-      if (scanDecision.action === "BLOCK") {
-        const detail =
-          findings.length > 0
-            ? `\n\n${formatScanFindingsMarkdown(
-                realPath,
-                "BLOCK",
-                scanDecision.riskScore,
-                findings,
-              )}`
-            : "";
-        throw new ContinueError(
-          ContinueErrorReason.FileIsSecurityConcern,
-          `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})${detail}`,
-        );
+      // All scan enforcement + REDACT substitution + BLOCK throwing
+      // lives in `ScanningFileIo` — the CLI parallel of the core
+      // `ScanningIde` decorator. One chokepoint across IDE + CLI.
+      let content: string;
+      let report;
+      try {
+        const result = await scanningReadFile(realPath, "llm");
+        content = result.content;
+        report = result.report;
+      } catch (e) {
+        if (isFileBlockedByScanError(e)) {
+          const detail =
+            e.report.findings.length > 0
+              ? `\n\n${formatScanFindingsMarkdown(
+                  e.report.filePath,
+                  "BLOCK",
+                  e.report.riskScore,
+                  [...e.report.findings],
+                )}`
+              : "";
+          throw new ContinueError(
+            ContinueErrorReason.FileIsSecurityConcern,
+            `File blocked by security scan: ${e.report.reasons.join("; ") || `risk ${e.report.riskScore}`}${detail}`,
+          );
+        }
+        throw e;
       }
-
-      // For REDACT, use proxy's sanitized content; for ALLOW, read normally
-      const content =
-        scanDecision.action === "REDACT" && scanDecision.redactedContent
-          ? scanDecision.redactedContent
-          : fs.readFileSync(realPath, "utf-8");
 
       // Divide limits by parallel tool call count to avoid context overflow
       const parallelCount = context?.parallelToolCallCount ?? 1;
@@ -137,17 +140,17 @@ export const readFileTool: Tool = {
       // Mark this file as read for the edit tool
       markFileAsRead(realPath);
 
-      // Prepend the scan report so the agent (and the CLI banner) sees
-      // exactly what was redacted and where, instead of relying on a
-      // separate notification.
-      if (scanDecision.action !== "ALLOW" || findings.length > 0) {
-        const report = formatScanFindingsMarkdown(
-          realPath,
-          scanDecision.action,
-          scanDecision.riskScore,
-          findings,
+      // Prepend the scan report when the shim produced one so the
+      // agent (and the CLI banner) sees exactly what was redacted
+      // and where, instead of relying on a separate notification.
+      if (report) {
+        const markdown = formatScanFindingsMarkdown(
+          report.filePath,
+          report.action,
+          report.riskScore,
+          [...report.findings],
         );
-        return `${report}\n\nContent of ${filepath}:\n${content}`;
+        return `${markdown}\n\nContent of ${filepath}:\n${content}`;
       }
       return `Content of ${filepath}:\n${content}`;
     } catch (error) {

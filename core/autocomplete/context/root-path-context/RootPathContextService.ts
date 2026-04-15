@@ -4,6 +4,7 @@ import { LRUCache } from "lru-cache";
 import Parser from "web-tree-sitter";
 
 import { IDE } from "../../..";
+import { readRangeInFileWith } from "../../../util/scanning/ScanningIde";
 import {
   getFullLanguageName,
   getQueryForFile,
@@ -144,7 +145,12 @@ export class RootPathContextService {
         })
         .map(async (def) => ({
           ...def,
-          contents: await this.ide.readRangeInFile(def.filepath, def.range),
+          contents: await readRangeInFileWith(
+            this.ide,
+            def.filepath,
+            def.range,
+            "autocomplete",
+          ),
         })),
     );
 

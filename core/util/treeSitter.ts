@@ -3,6 +3,7 @@ import path from "path";
 
 import Parser, { Language } from "web-tree-sitter";
 import { FileSymbolMap, IDE, SymbolWithRange } from "..";
+import { readFileWith } from "./scanning/ScanningIde";
 import { getUriFileExtension } from "./uri";
 
 export enum LanguageName {
@@ -297,7 +298,7 @@ export async function getSymbolsForManyFiles(
 ): Promise<FileSymbolMap> {
   const filesAndSymbols = await Promise.all(
     uris.map(async (uri): Promise<[string, SymbolWithRange[]]> => {
-      const contents = await ide.readFile(uri);
+      const contents = await readFileWith(ide, uri, "indexing");
       let symbols = undefined;
       try {
         symbols = await getSymbolsForFile(uri, contents);

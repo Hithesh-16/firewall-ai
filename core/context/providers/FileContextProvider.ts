@@ -8,7 +8,6 @@ import {
 } from "../../";
 import { isSecurityConcern } from "../../indexing/ignore";
 import { walkDirs } from "../../indexing/walkDir";
-import { scanFileForContext } from "../../util/scanFileForContext";
 import {
   getShortestUniqueRelativeUriPaths,
   getUriDescription,
@@ -44,32 +43,29 @@ class FileContextProvider extends BaseContextProvider {
       ];
     }
 
-    const rawContent = await extras.ide.readFile(fileUri);
+    // The ScanningIde decorator intercepts this readFile at `llm`
+    // purpose — REDACT substitutes sanitized content, BLOCK throws
+    // a FileBlockedByScanError that core.ts catches and reports,
+    // and the "AI Firewall" context item is merged in by core.ts
+    // after this provider returns via the scan report channel.
+    const content = await extras.ide.readFile(fileUri);
 
     const { relativePathOrBasename, last2Parts, baseName } = getUriDescription(
       fileUri,
       await extras.ide.getWorkspaceDirs(),
     );
 
-    const scan = await scanFileForContext(
-      fileUri,
-      rawContent,
-      extras.fetch as typeof fetch,
-    );
-
-    const items: ContextItem[] = [
+    return [
       {
         name: baseName,
         description: last2Parts,
-        content: `\`\`\`${relativePathOrBasename}\n${scan.content}\n\`\`\``,
+        content: `\`\`\`${relativePathOrBasename}\n${content}\n\`\`\``,
         uri: {
           type: "file",
           value: fileUri,
         },
       },
     ];
-    if (scan.reportItem) items.push(scan.reportItem);
-    return items;
   }
 
   async loadSubmenuItems(

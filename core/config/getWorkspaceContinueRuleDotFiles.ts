@@ -1,5 +1,6 @@
 import { ConfigValidationError } from "@ai-firewall/config-yaml";
 import { IDE, RuleWithSource } from "..";
+import { readFileWith } from "../util/scanning/ScanningIde";
 import { joinPathsToUri } from "../util/uri";
 export const SYSTEM_PROMPT_DOT_FILE = ".continuerules";
 
@@ -13,7 +14,7 @@ export async function getWorkspaceContinueRuleDotFiles(ide: IDE) {
       const dotFile = joinPathsToUri(dir, SYSTEM_PROMPT_DOT_FILE);
       const exists = await ide.fileExists(dotFile);
       if (exists) {
-        const content = await ide.readFile(dotFile);
+        const content = await readFileWith(ide, dotFile, "config");
         rules.push({
           rule: content,
           sourceFile: dotFile,

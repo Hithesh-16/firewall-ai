@@ -4,6 +4,7 @@ import {
   pruneLinesFromBottom,
   pruneLinesFromTop,
 } from "../../llm/countTokens";
+import { readFileWith } from "../../util/scanning/ScanningIde";
 import {
   AutocompleteLanguageInfo,
   languageForFilepath,
@@ -47,7 +48,7 @@ export class HelperVars {
 
     this._fileContents =
       this.input.manuallyPassFileContents ??
-      (await this.ide.readFile(this.filepath));
+      (await readFileWith(this.ide, this.filepath, "autocomplete"));
 
     this._fileLines = this._fileContents.split("\n");
 

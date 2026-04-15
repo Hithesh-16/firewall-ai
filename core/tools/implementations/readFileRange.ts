@@ -4,14 +4,8 @@ import { getUriPathBasename } from "../../util/uri";
 import { ToolImpl } from ".";
 import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
-import {
-  scanFileViaProxy,
-  type FileScanFinding,
-} from "../../util/fileScanProxy";
-import {
-  formatScanFindingsMarkdown,
-  formatScanFindingsSummary,
-} from "../../util/formatScanFindings";
+import { formatScanFindingsMarkdown } from "../../util/formatScanFindings";
+import { isFileBlockedByScanError } from "../../util/scanning";
 import { getNumberArg, getStringArg } from "../parseArgs";
 import { throwIfFileExceedsHalfOfContext } from "./readFileLimit";
 import type { ContextItem } from "../../index";
@@ -57,50 +51,43 @@ export const readFileRangeImpl: ToolImpl = async (args, extras) => {
   // Security check on the resolved display path
   throwIfFileIsSecurityConcern(resolvedPath.displayPath);
 
-  // Phase E: route through the proxy's role-aware file scan before
-  // reading any bytes. Blocks any file matching `file_scope.blocklist`
-  // in the caller's effective policy — including per-role overrides
-  // the admin configured in RBAC. Fail-open if the proxy is
-  // unreachable; fail-closed is opt-in via policy.
-  const scanDecision = await scanFileViaProxy(
-    resolvedPath.displayPath,
-    extras.fetch as typeof fetch,
-  );
-
-  // Only surface findings that fall inside the requested line range —
-  // the user only sees lines startLine..endLine, so referencing line
-  // 200 in a 1..50 read would just confuse them.
-  const visibleFindings: FileScanFinding[] = (
-    scanDecision.findings ?? []
-  ).filter((f) => f.line >= startLine && f.line <= endLine);
-
-  if (scanDecision.action === "BLOCK") {
-    const detail =
-      visibleFindings.length > 0
-        ? `\n\n${formatScanFindingsMarkdown(
-            resolvedPath.displayPath,
-            "BLOCK",
-            scanDecision.riskScore,
-            visibleFindings,
-          )}`
-        : "";
-    throw new ContinueError(
-      ContinueErrorReason.FileIsSecurityConcern,
-      `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})${detail}`,
-    );
+  // File scanning is centralised in the `ScanningIde` decorator —
+  // it runs the scanner pipeline, filters findings to the requested
+  // line range, slices redacted content to the same window, and
+  // publishes the scan report to the session's scan report channel
+  // (which core.ts subscribes to). BLOCK throws the typed error
+  // this handler translates into a user-visible ContinueError.
+  let content: string;
+  try {
+    content = await extras.ide.readRangeInFile(resolvedPath.uri, {
+      start: {
+        line: startLine - 1, // Convert from 1-based to 0-based
+        character: 0,
+      },
+      end: {
+        line: endLine - 1, // Convert from 1-based to 0-based
+        character: MAX_CHAR_POSITION, // Read to end of line
+      },
+    });
+  } catch (e) {
+    if (isFileBlockedByScanError(e)) {
+      const report = e.report;
+      const detail =
+        report.findings.length > 0
+          ? `\n\n${formatScanFindingsMarkdown(
+              report.filePath,
+              "BLOCK",
+              report.riskScore,
+              [...report.findings],
+            )}`
+          : "";
+      throw new ContinueError(
+        ContinueErrorReason.FileIsSecurityConcern,
+        `File blocked by security scan: ${report.reasons.join("; ") || `risk ${report.riskScore}`}${detail}`,
+      );
+    }
+    throw e;
   }
-
-  // Use the IDE's readRangeInFile method with 0-based range (IDE expects 0-based internally)
-  const content = await extras.ide.readRangeInFile(resolvedPath.uri, {
-    start: {
-      line: startLine - 1, // Convert from 1-based to 0-based
-      character: 0,
-    },
-    end: {
-      line: endLine - 1, // Convert from 1-based to 0-based
-      character: MAX_CHAR_POSITION, // Read to end of line
-    },
-  });
 
   await throwIfFileExceedsHalfOfContext(
     resolvedPath.displayPath,
@@ -110,7 +97,7 @@ export const readFileRangeImpl: ToolImpl = async (args, extras) => {
 
   const rangeDescription = `${resolvedPath.displayPath} (lines ${startLine}-${endLine})`;
 
-  const items: ContextItem[] = [
+  return [
     {
       name: getUriPathBasename(resolvedPath.uri),
       description: rangeDescription,
@@ -120,22 +107,5 @@ export const readFileRangeImpl: ToolImpl = async (args, extras) => {
         value: resolvedPath.uri,
       },
     },
-  ];
-  if (scanDecision.action !== "ALLOW" || visibleFindings.length > 0) {
-    items.push({
-      name: "AI Firewall",
-      description: formatScanFindingsSummary(
-        scanDecision.action,
-        visibleFindings,
-      ),
-      content: formatScanFindingsMarkdown(
-        resolvedPath.displayPath,
-        scanDecision.action,
-        scanDecision.riskScore,
-        visibleFindings,
-      ),
-      icon: "shield",
-    });
-  }
-  return items;
+  ] satisfies ContextItem[];
 };

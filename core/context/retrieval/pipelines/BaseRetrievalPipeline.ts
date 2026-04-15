@@ -15,6 +15,7 @@ import { openedFilesLruCache } from "../../../autocomplete/util/openedFilesLruCa
 import { chunkDocument } from "../../../indexing/chunk/chunk";
 import { FullTextSearchCodebaseIndex } from "../../../indexing/FullTextSearchCodebaseIndex";
 import { LanceDbIndex } from "../../../indexing/LanceDbIndex";
+import { readFileWith } from "../../../util/scanning/ScanningIde";
 import { BuiltInToolNames } from "../../../tools/builtIn";
 import { callBuiltInTool } from "../../../tools/callTool";
 import { globSearchTool } from "../../../tools/definitions/globSearch";
@@ -74,7 +75,7 @@ export default class BaseRetrievalPipeline implements IRetrievalPipeline {
     }
 
     this.lanceDbIndex = await LanceDbIndex.create(embedModel, (uri) =>
-      this.options.ide.readFile(uri),
+      readFileWith(this.options.ide, uri, "indexing"),
     );
   }
 

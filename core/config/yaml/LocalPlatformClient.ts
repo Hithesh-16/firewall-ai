@@ -8,6 +8,7 @@ import * as dotenv from "dotenv";
 import { IDE } from "../..";
 import { ControlPlaneClient } from "../../control-plane/client";
 import { getAiFirewallDotEnv } from "../../util/paths";
+import { readFileWith } from "../../util/scanning/ScanningIde";
 import { joinPathsToUri } from "../../util/uri";
 
 export class LocalPlatformClient implements PlatformClient {
@@ -69,7 +70,11 @@ export class LocalPlatformClient implements PlatformClient {
         try {
           const fileExists = await this.ide.fileExists(envFilePath);
           if (fileExists) {
-            const envContent = await this.ide.readFile(envFilePath);
+            const envContent = await readFileWith(
+              this.ide,
+              envFilePath,
+              "config",
+            );
             const env = dotenv.parse(envContent);
             if (fqsn.secretName in env) {
               return env[fqsn.secretName];

@@ -4,7 +4,6 @@ import {
   ContextProviderExtras,
 } from "../../index.js";
 import { isSecurityConcern } from "../../indexing/ignore.js";
-import { scanFileForContext } from "../../util/scanFileForContext.js";
 import { getUriDescription } from "../../util/uri.js";
 import { BaseContextProvider } from "../index.js";
 
@@ -27,6 +26,10 @@ class OpenFilesContextProvider extends BaseContextProvider {
       : await ide.getOpenFiles();
     const workspaceDirs = await extras.ide.getWorkspaceDirs();
 
+    // The ScanningIde decorator intercepts these readFile calls at
+    // `llm` purpose; REDACT/BLOCK reports flow through the scan
+    // report channel and get merged as extra items by core.ts
+    // after this provider returns.
     const groups = await Promise.all(
       openFiles.map(async (filepath: string): Promise<ContextItem[]> => {
         const { relativePathOrBasename, last2Parts, baseName } =
@@ -46,17 +49,12 @@ class OpenFilesContextProvider extends BaseContextProvider {
             },
           ];
         }
-        const rawContent = await ide.readFile(filepath);
-        const scan = await scanFileForContext(
-          filepath,
-          rawContent,
-          extras.fetch as typeof fetch,
-        );
+        const content = await ide.readFile(filepath);
 
-        const items: ContextItem[] = [
+        return [
           {
             description: last2Parts,
-            content: `\`\`\`${relativePathOrBasename}\n${scan.content}\n\`\`\``,
+            content: `\`\`\`${relativePathOrBasename}\n${content}\n\`\`\``,
             name: baseName,
             uri: {
               type: "file",
@@ -64,8 +62,6 @@ class OpenFilesContextProvider extends BaseContextProvider {
             },
           },
         ];
-        if (scan.reportItem) items.push(scan.reportItem);
-        return items;
       }),
     );
     return groups.flat();

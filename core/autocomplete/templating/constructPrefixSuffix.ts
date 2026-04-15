@@ -1,5 +1,6 @@
 import { IDE } from "../..";
 import { getRangeInString } from "../../util/ranges";
+import { readFileWith } from "../../util/scanning/ScanningIde";
 import { languageForFilepath } from "../constants/AutocompleteLanguageInfo";
 import { AutocompleteInput } from "../util/types";
 
@@ -17,7 +18,8 @@ export async function constructInitialPrefixSuffix(
   const lang = languageForFilepath(input.filepath);
 
   const fileContents =
-    input.manuallyPassFileContents ?? (await ide.readFile(input.filepath));
+    input.manuallyPassFileContents ??
+    (await readFileWith(ide, input.filepath, "autocomplete"));
   const fileLines = fileContents.split("\n");
   let prefix =
     getRangeInString(fileContents, {

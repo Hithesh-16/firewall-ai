@@ -88,6 +88,14 @@ import { ContinueError, ContinueErrorReason } from "./util/errors";
 import { shareSession } from "./util/historyUtils";
 import { Logger } from "./util/Logger.js";
 import { syncModelToProxy } from "./util/proxyModelSync.js";
+import {
+  dedupeReports,
+  isFileBlockedByScanError,
+  reportToContextItem,
+  runInScanContext,
+  subscribeScanReports,
+} from "./util/scanning";
+import type { ScanReport } from "./util/scanning/FileBlockedByScanError";
 
 export class Core {
   configHandler: ConfigHandler;
@@ -1514,20 +1522,44 @@ export class Core {
         name: provider.description.title,
       });
 
-      const items = await provider.getContextItems(query, {
-        config,
-        llm,
-        embeddingsProvider: config.selectedModelByRole.embed,
-        fullInput,
-        ide: this.ide,
-        selectedCode,
-        reranker: config.selectedModelByRole.rerank,
-        fetch: (url, init) =>
-          // Important note: context providers fetch uses global request options not LLM request options
-          // Because LLM calls are handled separately
-          fetchwithRequestOptions(url, init, config.requestOptions),
-        isInAgentMode: msg.data.isInAgentMode,
+      // AI Firewall scan report channel: subscribe for this context
+      // provider call so any REDACT/BLOCK a ScanningIde read produces
+      // deeper in the stack gets delivered back here as an extra
+      // ContextItem. Scoped by a per-call correlation id so reports
+      // from overlapping provider runs can't cross-contaminate.
+      const correlationId = uuidv4();
+      const scanReports: ScanReport[] = [];
+      const unsubscribe = subscribeScanReports(correlationId, (r) => {
+        scanReports.push(r);
       });
+
+      let items;
+      try {
+        items = await runInScanContext(correlationId, () =>
+          provider.getContextItems(query, {
+            config,
+            llm,
+            embeddingsProvider: config.selectedModelByRole.embed,
+            fullInput,
+            ide: this.ide,
+            selectedCode,
+            reranker: config.selectedModelByRole.rerank,
+            fetch: (url, init) =>
+              // Important note: context providers fetch uses global request options not LLM request options
+              // Because LLM calls are handled separately
+              fetchwithRequestOptions(url, init, config.requestOptions),
+            isInAgentMode: msg.data.isInAgentMode,
+          }),
+        );
+      } finally {
+        unsubscribe();
+      }
+
+      // Merge any firewall reports collected during this call as
+      // extra context items. Dedupe by file path so a provider
+      // that reads the same file twice still only shows one card.
+      const mergedReports = dedupeReports(scanReports);
+      const reportItems = mergedReports.map(reportToContextItem);
 
       void Telemetry.capture(
         "useContextProvider",
@@ -1537,7 +1569,7 @@ export class Core {
         true,
       );
 
-      return items.map((item) => {
+      return [...items, ...reportItems].map((item) => {
         const id: ContextItemId = {
           providerTitle: provider.description.title,
           itemId: uuidv4(),
@@ -1546,6 +1578,18 @@ export class Core {
         return { ...item, id };
       });
     } catch (e) {
+      // If a file was BLOCKed inside the context provider, surface
+      // the firewall report via a toast before returning empty.
+      // The decorator's FileBlockedByScanError carries the full
+      // report on `.report` so follow-up PRs (consent flow) can
+      // pull it off the error again.
+      if (isFileBlockedByScanError(e)) {
+        void this.ide.showToast(
+          "error",
+          `AI Firewall blocked ${e.report.filePath}: ${e.report.reasons.join("; ") || `risk ${e.report.riskScore}`}`,
+        );
+        return [];
+      }
       let knownError = false;
 
       if (e instanceof Error) {

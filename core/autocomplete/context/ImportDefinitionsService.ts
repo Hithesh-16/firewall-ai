@@ -1,6 +1,10 @@
 import { IDE, RangeInFileWithContents } from "../..";
 import { PrecalculatedLruCache } from "../../util/LruCache";
 import {
+  readFileWith,
+  readRangeInFileWith,
+} from "../../util/scanning/ScanningIde";
+import {
   getFullLanguageName,
   getParserForFile,
   getQueryForFile,
@@ -58,7 +62,7 @@ export class ImportDefinitionsService {
       if (!foundInDir) {
         return null;
       } else {
-        fileContents = await this.ide.readFile(filepath);
+        fileContents = await readFileWith(this.ide, filepath, "autocomplete");
       }
     } catch (err) {
       // File removed
@@ -103,7 +107,12 @@ export class ImportDefinitionsService {
       fileInfo.imports[match.captures[0].node.text] = await Promise.all(
         defs.map(async (def) => ({
           ...def,
-          contents: await this.ide.readRangeInFile(def.filepath, def.range),
+          contents: await readRangeInFileWith(
+            this.ide,
+            def.filepath,
+            def.range,
+            "autocomplete",
+          ),
         })),
       );
     }

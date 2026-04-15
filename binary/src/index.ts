@@ -10,6 +10,7 @@ import { IpcIde } from "./IpcIde";
 import { IpcMessenger } from "./IpcMessenger";
 import { setupCoreLogging } from "./logging";
 import { TcpMessenger } from "./TcpMessenger";
+import { wrapWithScanner } from "../../core/util/scanning/ScanningIde";
 
 const logFilePath = getCoreLogsPath();
 fs.appendFileSync(logFilePath, "[info] Starting Continue core...\n");
@@ -31,7 +32,10 @@ program.action(async () => {
       // await setupCa();
       messenger = new IpcMessenger<ToCoreProtocol, FromCoreProtocol>();
     }
-    const ide = new IpcIde(messenger);
+    // AI Firewall scanning chokepoint: every IDE file read/write
+    // flows through the scanner here. JetBrains + the binary both
+    // route through this path, so wrapping once covers both.
+    const ide = wrapWithScanner(new IpcIde(messenger));
     const promptLogsPath = getPromptLogsPath();
 
     const core = new Core(messenger, ide);

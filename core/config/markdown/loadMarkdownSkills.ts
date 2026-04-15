@@ -7,6 +7,7 @@ import { IDE, Skill } from "../..";
 import { walkDir } from "../../indexing/walkDir";
 import { localPathToUri } from "../../util/pathToUri";
 import { getGlobalFolderWithName } from "../../util/paths";
+import { readFileWith } from "../../util/scanning/ScanningIde";
 import { findUriInDirs, joinPathsToUri } from "../../util/uri";
 import { getAllDotContinueDefinitionFiles } from "../loadLocalAssistants";
 
@@ -69,7 +70,7 @@ export async function loadMarkdownSkills(ide: IDE) {
     const workspaceDirs = await ide.getWorkspaceDirs();
     for (const fileUri of skillFiles) {
       try {
-        const content = await ide.readFile(fileUri);
+        const content = await readFileWith(ide, fileUri, "config");
         const { frontmatter, markdown } = parseMarkdownRule(
           content,
         ) as unknown as { frontmatter: Skill; markdown: string };

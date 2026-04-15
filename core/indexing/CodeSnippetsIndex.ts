@@ -1,6 +1,7 @@
 import Parser from "web-tree-sitter";
 
 import { migrate } from "../util/paths";
+import { readFileWith } from "../util/scanning/ScanningIde";
 import {
   getFullLanguageName,
   getParserForFile,
@@ -225,7 +226,7 @@ export class CodeSnippetsCodebaseIndex implements CodebaseIndex {
       try {
         snippets = await this.getSnippetsInFile(
           compute.path,
-          await this.ide.readFile(compute.path),
+          await readFileWith(this.ide, compute.path, "indexing"),
         );
       } catch (e) {
         // If can't parse, assume malformatted code
@@ -289,7 +290,7 @@ export class CodeSnippetsCodebaseIndex implements CodebaseIndex {
       try {
         snippets = await this.getSnippetsInFile(
           addTag.path,
-          await this.ide.readFile(addTag.path),
+          await readFileWith(this.ide, addTag.path, "indexing"),
         );
       } catch (e) {
         // If can't parse, assume malformatted code

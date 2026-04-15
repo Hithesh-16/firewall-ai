@@ -3,6 +3,7 @@ import { pathToFileURL } from "url";
 import Parser from "web-tree-sitter";
 import { FileType, IDE, Position } from "../../../";
 import { localPathOrUriToPath } from "../../../util/pathToUri";
+import { readFileWith } from "../../../util/scanning/ScanningIde";
 import { getFullLanguageName, getQueryForFile } from "../../../util/treeSitter";
 import {
   AutocompleteSnippetType,
@@ -352,7 +353,11 @@ export class StaticContextService {
             if (foundContents.has(tdLocation.filepath)) {
               content = foundContents.get(tdLocation.filepath)!;
             } else {
-              content = await this.ide.readFile(tdLocation.filepath);
+              content = await readFileWith(
+                this.ide,
+                tdLocation.filepath,
+                "autocomplete",
+              );
               foundContents.set(tdLocation.filepath, content);
             }
 

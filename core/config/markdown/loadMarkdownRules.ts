@@ -4,6 +4,7 @@ import {
 } from "@ai-firewall/config-yaml";
 import { IDE, RuleWithSource } from "../..";
 import { PROMPTS_DIR_NAME, RULES_DIR_NAME } from "../../promptFiles";
+import { readFileWith } from "../../util/scanning/ScanningIde";
 import { joinPathsToUri } from "../../util/uri";
 import { getAllDotContinueDefinitionFiles } from "../loadLocalAssistants";
 
@@ -29,7 +30,7 @@ export async function loadMarkdownRules(ide: IDE): Promise<{
         const agentFileUri = joinPathsToUri(workspaceDir, fileName);
         const exists = await ide.fileExists(agentFileUri);
         if (exists) {
-          const agentContent = await ide.readFile(agentFileUri);
+          const agentContent = await readFileWith(ide, agentFileUri, "config");
 
           const rule = markdownToRule(agentContent, {
             uriType: "file",

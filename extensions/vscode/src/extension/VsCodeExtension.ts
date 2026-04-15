@@ -56,6 +56,7 @@ import { modelSupportsNextEdit } from "core/llm/autodetect";
 import { NEXT_EDIT_MODELS } from "core/llm/constants";
 import { NextEditProvider } from "core/nextEdit/NextEditProvider";
 import { isNextEditTest } from "core/nextEdit/utils";
+import { wrapWithScanner } from "core/util/scanning/ScanningIde";
 import { JumpManager } from "../activation/JumpManager";
 import setupNextEditWindowManager, {
   NextEditWindowManager,
@@ -370,7 +371,14 @@ export class VsCodeExtension {
         resolveWebviewProtocol = resolve;
       },
     );
-    this.ide = new VsCodeIde(this.webviewProtocolPromise, context);
+    // AI Firewall scanning chokepoint: wrap the raw VsCodeIde so
+    // every file read/write across context providers, tools,
+    // indexing, and autocomplete routes through the central
+    // scanner. Callers keep calling `ide.readFile(uri)` unchanged
+    // and automatically get the safe default purpose (`"llm"`).
+    this.ide = wrapWithScanner(
+      new VsCodeIde(this.webviewProtocolPromise, context),
+    );
     this.ideUtils = new VsCodeIdeUtils();
     this.extensionContext = context;
     this.windowId = uuidv4();

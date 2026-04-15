@@ -6,14 +6,8 @@ import { throwIfFileIsSecurityConcern } from "../../indexing/ignore";
 import { getStringArg } from "../parseArgs";
 import { throwIfFileExceedsHalfOfContext } from "./readFileLimit";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
-import {
-  scanFileViaProxy,
-  type FileScanFinding,
-} from "../../util/fileScanProxy";
-import {
-  formatScanFindingsMarkdown,
-  formatScanFindingsSummary,
-} from "../../util/formatScanFindings";
+import { formatScanFindingsMarkdown } from "../../util/formatScanFindings";
+import { isFileBlockedByScanError } from "../../util/scanning";
 import { countTokensAsync } from "../../llm/countTokens";
 import type { ContextItem } from "../../index";
 
@@ -45,44 +39,33 @@ export const readFileImpl: ToolImpl = async (args, extras) => {
   // Security check on the resolved display path
   throwIfFileIsSecurityConcern(resolvedPath.displayPath);
 
-  // Proxy-side file scan enforcement (fail-open if proxy unreachable)
-  const scanDecision = await scanFileViaProxy(
-    resolvedPath.displayPath,
-    extras.fetch as typeof fetch,
-  );
-
-  const findings = scanDecision.findings ?? [];
-  const scanReportItem = buildScanReportItem(
-    resolvedPath.displayPath,
-    scanDecision.action,
-    scanDecision.riskScore,
-    findings,
-  );
-
-  if (scanDecision.action === "BLOCK") {
-    // Attach finding details to the error so the agent (and the chat
-    // UI's error renderer) can show file/line breakdowns instead of
-    // an opaque "blocked by security scan".
-    const detail =
-      findings.length > 0
-        ? `\n\n${formatScanFindingsMarkdown(
-            resolvedPath.displayPath,
-            "BLOCK",
-            scanDecision.riskScore,
-            findings,
-          )}`
-        : "";
-    throw new ContinueError(
-      ContinueErrorReason.FileIsSecurityConcern,
-      `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})${detail}`,
-    );
+  // File scanning is now performed centrally by the `ScanningIde`
+  // decorator. REDACT substitutes sanitized content, ALLOW returns
+  // raw content, and BLOCK throws a `FileBlockedByScanError` which
+  // we translate into a user-visible ContinueError here so the
+  // tool runner renders the markdown report with file/line detail.
+  let content: string;
+  try {
+    content = await extras.ide.readFile(resolvedPath.uri);
+  } catch (e) {
+    if (isFileBlockedByScanError(e)) {
+      const report = e.report;
+      const detail =
+        report.findings.length > 0
+          ? `\n\n${formatScanFindingsMarkdown(
+              report.filePath,
+              "BLOCK",
+              report.riskScore,
+              [...report.findings],
+            )}`
+          : "";
+      throw new ContinueError(
+        ContinueErrorReason.FileIsSecurityConcern,
+        `File blocked by security scan: ${report.reasons.join("; ") || `risk ${report.riskScore}`}${detail}`,
+      );
+    }
+    throw e;
   }
-
-  // For REDACT, use proxy's sanitized content; for ALLOW, read normally
-  const content =
-    scanDecision.action === "REDACT" && scanDecision.redactedContent
-      ? scanDecision.redactedContent
-      : await extras.ide.readFile(resolvedPath.uri);
 
   // Try context reduction for large files before throwing "too large" error
   const reducedContent = await tryReduceContent(
@@ -98,6 +81,10 @@ export const readFileImpl: ToolImpl = async (args, extras) => {
     extras.config.selectedModelByRole.chat,
   );
 
+  // The inline "AI Firewall" ContextItem is merged by `core.ts` via
+  // the scan report channel — this tool just returns the file. One
+  // source of truth for scan reporting (the decorator), no per-site
+  // duplication.
   const items: ContextItem[] = [
     {
       name: getUriPathBasename(resolvedPath.uri),
@@ -109,29 +96,8 @@ export const readFileImpl: ToolImpl = async (args, extras) => {
       },
     },
   ];
-  if (scanReportItem) items.push(scanReportItem);
   return items;
 };
-
-/**
- * Build a "AI Firewall" context item that the chat renders alongside
- * the file content. Returns undefined when the scan is silent (ALLOW
- * with no findings) so we don't add noise to clean reads.
- */
-function buildScanReportItem(
-  filePath: string,
-  action: "ALLOW" | "BLOCK" | "REDACT",
-  riskScore: number,
-  findings: FileScanFinding[],
-): ContextItem | undefined {
-  if (action === "ALLOW" && findings.length === 0) return undefined;
-  return {
-    name: "AI Firewall",
-    description: formatScanFindingsSummary(action, findings),
-    content: formatScanFindingsMarkdown(filePath, action, riskScore, findings),
-    icon: "shield",
-  };
-}
 
 /**
  * Try to reduce file content via the proxy reducer if it's large.

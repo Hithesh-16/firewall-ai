@@ -237,6 +237,23 @@ Fixes are grouped into phases that can each ship as one PR. Each phase is indepe
 
 **Acceptance:** Integration test where the upstream provider emits a fake `sk-proj-TESTKEY…` in a streaming response — the client sees `[REDACTED]` in both the final text and the banner.
 
+**Phase D — partial completion log (2026-04-16)**
+
+Quick wins shipped this session (D2, D5, D6 — and D7 closed by `// scan-raw:` justification per the plan's "same treatment or add a comment" guidance):
+
+- ✅✓ **D2** — `proxy/src/middleware/responseScanner.ts:49`: `DEFAULT_CONFIG.enabled` flipped to `true`. Per-request scan cost is sub-ms; `redact_on_detection` stays `false` so the default is "warn, don't rewrite" — surfaces incidents without changing payload bytes. Existing `testResponseScanSkipsWhenDisabled` still passes (it explicitly opts out).
+- ✅✓ **D5** — `proxy/src/routes/mcpGateway.route.ts:220`: ternary now `outputScanResult.redactedText ?? "[REDACTED]"`. When policy says "scan and warn but don't rewrite" and `redactedText` is undefined, the sanitized output is the literal `"[REDACTED]"` sentinel instead of leaking the raw `output` via the previous undefined-coalesce fallback.
+- ✅✓ **D6** — `core/config/loadProjectInstructions.ts`: rewrote to scan content via `scanPromptInjection` + `scanSecrets` inline before returning. If the injection score crosses the conservative `INJECTION_BLOCK_THRESHOLD = 60` (matches the package's default `isInjection` boundary), the file is excluded from the system prompt and a critical `ScanReport` is emitted via the scan-report channel. Lower-severity findings still emit informational reports. Function stayed sync (no async cascade through callers — there are zero callers in core today; both `loadProjectInstructions` and `loadProjectContext` were unused helpers, low blast radius). Inline scan plus an explicit `// scan-raw:` comment satisfy the chokepoint invariant.
+- ✅✓ **D7** — `core/indexing/continueignore.ts:7`: added a `// scan-raw:` justification. The global ignore file is parsed as gitignore-style globs and never reaches an LLM (no prompt injection vector); routing through the scanner adds latency without security value.
+
+Still open (need design discussion before execution):
+
+- ❌ **D1** — accumulated-buffer redaction at stream flush. Requires a state-machine change inside `createScanningTransform` so the final flush re-emits a redacted tail when `redact_on_detection: true`. Touches the streaming protocol assumptions.
+- ❌ **D3** — `JSON.parse` re-classified to LOW severity (E3 row in section 1.4). The chunk is caught in the next interval scan; the original "silent passthrough" claim was incorrect. D3 reduced to "wrap with explicit logging" — useful but no longer urgent.
+- ❌ **D4** — PII detokenization end-to-end + client interceptor for `X-AF-Response-Action`. Two-layer change (proxy + every client). Saved for a dedicated PR.
+
+`tsc --noEmit` clean, full proxy suite still 690 pass / 1 known pre-existing fail.
+
 ### Phase E — Token efficiency + cache hygiene (half day)
 
 **Goal:** Close the "accurate tokens, less waste" gaps. Low risk, independent of the rest of the plan.

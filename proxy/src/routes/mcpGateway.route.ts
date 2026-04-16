@@ -75,7 +75,7 @@ function setMcpHeaders(
   reply: { header: (name: string, value: string) => void },
   scanResult: { action: string; riskScore: number },
   serverName: string,
-  toolName: string
+  toolName: string,
 ): void {
   reply.header("X-AF-MCP-Action", scanResult.action);
   reply.header("X-AF-MCP-Risk-Score", String(scanResult.riskScore));
@@ -86,9 +86,8 @@ function setMcpHeaders(
 // ── Route Registration ─────────────────────────────────────────────────────
 
 export async function registerMcpGatewayRoutes(
-  app: FastifyInstance
+  app: FastifyInstance,
 ): Promise<void> {
-
   /**
    * POST /v1/mcp/tools/call — Scan inputs, forward to MCP, scan outputs
    *
@@ -106,123 +105,145 @@ export async function registerMcpGatewayRoutes(
    *   7. Log both scans to audit table
    *   8. Return with X-AF-MCP-* headers
    */
-  app.post("/v1/mcp/tools/call", { preHandler: requireAuth }, async (request, reply) => {
-    const parsed = toolCallSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply
-        .status(400)
-        .send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+  app.post(
+    "/v1/mcp/tools/call",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const parsed = toolCallSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    const { server_id, tool_name, arguments: args, output } = parsed.data;
+      const { server_id, tool_name, arguments: args, output } = parsed.data;
 
-    // 1. Serialize arguments to scannable text
-    const argsText = serializeArguments(args);
+      // 1. Serialize arguments to scannable text
+      const argsText = serializeArguments(args);
 
-    // 2. Scan inputs
-    const inputScan = scanMcpContent(argsText, {
-      direction: "input",
-      includeRedacted: true,
-    });
-
-    // 3. Log input scan
-    logMcpAudit(server_id, tool_name, inputScan);
-
-    // 4. Set response headers
-    setMcpHeaders(reply, inputScan, server_id, tool_name);
-
-    // 5. If BLOCK → reject
-    if (inputScan.action === "BLOCK") {
-      return reply.status(403).send({
-        error: "MCP tool call blocked by firewall",
-        code: "MCP_INPUT_BLOCKED",
-        server: server_id,
-        tool: tool_name,
-        scan: {
-          action: inputScan.action,
-          riskScore: inputScan.riskScore,
-          secretsFound: inputScan.secretsFound,
-          piiFound: inputScan.piiFound,
-          injectionScore: inputScan.injectionScore,
-          reasons: inputScan.reasons,
-        },
-      });
-    }
-
-    // 6. Scan output if provided (ASI02: tool misuse defense)
-    let outputScanResult: {
-      action: string;
-      riskScore: number;
-      secretsFound: number;
-      piiFound: number;
-      reasons: string[];
-      scanTimeMs: number;
-      redactedText?: string;
-    } | undefined;
-
-    if (output) {
-      const outputScan = scanMcpContent(output, {
-        direction: "output",
+      // 2. Scan inputs
+      const inputScan = scanMcpContent(argsText, {
+        direction: "input",
         includeRedacted: true,
       });
-      logMcpAudit(server_id, tool_name, outputScan);
 
-      reply.header("X-AF-MCP-Output-Action", outputScan.action);
-      reply.header("X-AF-MCP-Output-Risk-Score", String(outputScan.riskScore));
+      // 3. Log input scan
+      logMcpAudit(server_id, tool_name, inputScan);
 
-      if (outputScan.action === "BLOCK") {
+      // 4. Set response headers
+      setMcpHeaders(reply, inputScan, server_id, tool_name);
+
+      // 5. If BLOCK → reject
+      if (inputScan.action === "BLOCK") {
         return reply.status(403).send({
-          error: "MCP tool output blocked by firewall",
-          code: "MCP_OUTPUT_BLOCKED",
+          error: "MCP tool call blocked by firewall",
+          code: "MCP_INPUT_BLOCKED",
           server: server_id,
           tool: tool_name,
           scan: {
-            action: outputScan.action,
-            riskScore: outputScan.riskScore,
-            secretsFound: outputScan.secretsFound,
-            piiFound: outputScan.piiFound,
-            reasons: outputScan.reasons,
+            action: inputScan.action,
+            riskScore: inputScan.riskScore,
+            secretsFound: inputScan.secretsFound,
+            piiFound: inputScan.piiFound,
+            injectionScore: inputScan.injectionScore,
+            reasons: inputScan.reasons,
           },
         });
       }
 
-      outputScanResult = {
-        action: outputScan.action,
-        riskScore: outputScan.riskScore,
-        secretsFound: outputScan.secretsFound,
-        piiFound: outputScan.piiFound,
-        reasons: outputScan.reasons,
-        scanTimeMs: outputScan.scanTimeMs,
-        redactedText: outputScan.action === "REDACT" ? outputScan.redactedText : undefined,
-      };
-    }
+      // 6. Scan output if provided (ASI02: tool misuse defense)
+      let outputScanResult:
+        | {
+            action: string;
+            riskScore: number;
+            secretsFound: number;
+            piiFound: number;
+            reasons: string[];
+            scanTimeMs: number;
+            redactedText?: string;
+          }
+        | undefined;
 
-    // 7. Return scan results
-    return {
-      allowed: true,
-      server: server_id,
-      tool: tool_name,
-      inputScan: {
-        action: inputScan.action,
-        riskScore: inputScan.riskScore,
-        secretsFound: inputScan.secretsFound,
-        piiFound: inputScan.piiFound,
-        reasons: inputScan.reasons,
-        scanTimeMs: inputScan.scanTimeMs,
-      },
-      // Provide sanitized arguments if redaction was needed
-      sanitizedArguments: inputScan.action === "REDACT"
-        ? parseSanitizedArgs(inputScan.redactedText, args)
-        : args,
-      // Output scan results (if output was provided)
-      ...(outputScanResult ? {
-        outputScan: outputScanResult,
-        sanitizedOutput: outputScanResult.action === "REDACT"
-          ? outputScanResult.redactedText
-          : output,
-      } : {}),
-    };
-  });
+      if (output) {
+        const outputScan = scanMcpContent(output, {
+          direction: "output",
+          includeRedacted: true,
+        });
+        logMcpAudit(server_id, tool_name, outputScan);
+
+        reply.header("X-AF-MCP-Output-Action", outputScan.action);
+        reply.header(
+          "X-AF-MCP-Output-Risk-Score",
+          String(outputScan.riskScore),
+        );
+
+        if (outputScan.action === "BLOCK") {
+          return reply.status(403).send({
+            error: "MCP tool output blocked by firewall",
+            code: "MCP_OUTPUT_BLOCKED",
+            server: server_id,
+            tool: tool_name,
+            scan: {
+              action: outputScan.action,
+              riskScore: outputScan.riskScore,
+              secretsFound: outputScan.secretsFound,
+              piiFound: outputScan.piiFound,
+              reasons: outputScan.reasons,
+            },
+          });
+        }
+
+        outputScanResult = {
+          action: outputScan.action,
+          riskScore: outputScan.riskScore,
+          secretsFound: outputScan.secretsFound,
+          piiFound: outputScan.piiFound,
+          reasons: outputScan.reasons,
+          scanTimeMs: outputScan.scanTimeMs,
+          redactedText:
+            outputScan.action === "REDACT"
+              ? outputScan.redactedText
+              : undefined,
+        };
+      }
+
+      // 7. Return scan results
+      return {
+        allowed: true,
+        server: server_id,
+        tool: tool_name,
+        inputScan: {
+          action: inputScan.action,
+          riskScore: inputScan.riskScore,
+          secretsFound: inputScan.secretsFound,
+          piiFound: inputScan.piiFound,
+          reasons: inputScan.reasons,
+          scanTimeMs: inputScan.scanTimeMs,
+        },
+        // Provide sanitized arguments if redaction was needed
+        sanitizedArguments:
+          inputScan.action === "REDACT"
+            ? parseSanitizedArgs(inputScan.redactedText, args)
+            : args,
+        // Output scan results (if output was provided).
+        // Phase D.D5 (SECURITY_HARDENING_PLAN.md) — when the scan
+        // action is REDACT but `redactedText` is `undefined` (e.g.
+        // policy says scan-and-warn but don't rewrite), the previous
+        // ternary returned undefined, falling back to leaking the raw
+        // `output`. Coalesce to a hard "[REDACTED]" sentinel so
+        // unredacted content never escapes a REDACT decision.
+        ...(outputScanResult
+          ? {
+              outputScan: outputScanResult,
+              sanitizedOutput:
+                outputScanResult.action === "REDACT"
+                  ? (outputScanResult.redactedText ?? "[REDACTED]")
+                  : output,
+            }
+          : {}),
+      };
+    },
+  );
 
   /**
    * POST /v1/mcp/scan — Standalone text scan for MCP context
@@ -230,30 +251,34 @@ export async function registerMcpGatewayRoutes(
    * Scan arbitrary text (tool input or output) without the full tool call flow.
    * Useful for pre-flight checks or scanning tool responses independently.
    */
-  app.post("/v1/mcp/scan", { preHandler: requireAuth }, async (request, reply) => {
-    const parsed = textScanSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply
-        .status(400)
-        .send({ error: "Invalid payload", details: parsed.error.flatten() });
-    }
+  app.post(
+    "/v1/mcp/scan",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const parsed = textScanSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
+      }
 
-    const { text, direction } = parsed.data;
-    const result = scanMcpContent(text, { direction, includeRedacted: true });
+      const { text, direction } = parsed.data;
+      const result = scanMcpContent(text, { direction, includeRedacted: true });
 
-    return {
-      action: result.action,
-      riskScore: result.riskScore,
-      secretsFound: result.secretsFound,
-      piiFound: result.piiFound,
-      entropyFound: result.entropyFound,
-      injectionScore: result.injectionScore,
-      isInjection: result.isInjection,
-      reasons: result.reasons,
-      redactedText: result.redactedText,
-      scanTimeMs: result.scanTimeMs,
-    };
-  });
+      return {
+        action: result.action,
+        riskScore: result.riskScore,
+        secretsFound: result.secretsFound,
+        piiFound: result.piiFound,
+        entropyFound: result.entropyFound,
+        injectionScore: result.injectionScore,
+        isInjection: result.isInjection,
+        reasons: result.reasons,
+        redactedText: result.redactedText,
+        scanTimeMs: result.scanTimeMs,
+      };
+    },
+  );
 
   /**
    * GET /v1/mcp/audit — Query MCP audit log
@@ -280,7 +305,7 @@ export async function registerMcpGatewayRoutes(
  */
 function parseSanitizedArgs(
   redactedText: string | undefined,
-  originalArgs: Record<string, unknown>
+  originalArgs: Record<string, unknown>,
 ): Record<string, unknown> {
   if (!redactedText) return originalArgs;
 

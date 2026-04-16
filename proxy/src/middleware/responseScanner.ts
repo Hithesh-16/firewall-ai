@@ -45,8 +45,15 @@ export interface ResponseScanResult {
   scanTimeMs: number;
 }
 
+// Phase D.D2 (SECURITY_HARDENING_PLAN.md) — defaults flipped to
+// `enabled: true`. The previous opt-in default left LLM05 (model
+// emitting secrets/PII) silently undetected for any deployment that
+// hadn't manually edited policy.json. Per-request scan cost is
+// sub-millisecond on typical response sizes; the trade is worth it.
+// `redact_on_detection` is still opt-in so the default is "warn,
+// don't rewrite" — surfaces incidents without changing payload bytes.
 const DEFAULT_CONFIG: ResponseScanConfig = {
-  enabled: false,
+  enabled: true,
   scan_secrets: true,
   scan_pii: true,
   redact_on_detection: false,
@@ -61,7 +68,7 @@ const DEFAULT_CONFIG: ResponseScanConfig = {
  */
 export function scanResponseText(
   text: string,
-  config: Partial<ResponseScanConfig> = {}
+  config: Partial<ResponseScanConfig> = {},
 ): ResponseScanResult {
   const startTime = Date.now();
   const cfg = { ...DEFAULT_CONFIG, ...config };
@@ -113,7 +120,7 @@ export function scanResponseText(
 function redactResponseText(
   text: string,
   secrets: SecretMatch[],
-  pii: PiiMatch[]
+  pii: PiiMatch[],
 ): string {
   let redacted = text;
   const allMatches = [
@@ -139,10 +146,12 @@ function redactResponseText(
  * Extract the assistant's response text from an OpenAI-format response object.
  */
 export function extractCompletionText(
-  responseData: Record<string, unknown>
+  responseData: Record<string, unknown>,
 ): string {
   try {
-    const choices = responseData.choices as Array<Record<string, unknown>> | undefined;
+    const choices = responseData.choices as
+      | Array<Record<string, unknown>>
+      | undefined;
     if (!choices || choices.length === 0) return "";
     const message = choices[0]!.message as Record<string, unknown> | undefined;
     if (!message) return "";
@@ -158,10 +167,12 @@ export function extractCompletionText(
  */
 export function replaceCompletionText(
   responseData: Record<string, unknown>,
-  newText: string
+  newText: string,
 ): Record<string, unknown> {
   try {
-    const choices = responseData.choices as Array<Record<string, unknown>> | undefined;
+    const choices = responseData.choices as
+      | Array<Record<string, unknown>>
+      | undefined;
     if (!choices || choices.length === 0) return responseData;
     const firstChoice = choices[0]!;
     const message = firstChoice.message as Record<string, unknown> | undefined;
@@ -186,7 +197,7 @@ export function replaceCompletionText(
 
 export function setResponseScanHeaders(
   reply: { header: (name: string, value: string) => void },
-  result: ResponseScanResult
+  result: ResponseScanResult,
 ): void {
   reply.header("X-AF-Response-Action", result.action);
   if (result.secretsFound > 0) {
@@ -208,7 +219,7 @@ export function setResponseScanHeaders(
  * On stream end, runs a final scan on the full accumulated text.
  */
 export function createScanningTransform(
-  config: Partial<ResponseScanConfig> = {}
+  config: Partial<ResponseScanConfig> = {},
 ): Transform {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   let accumulated = "";

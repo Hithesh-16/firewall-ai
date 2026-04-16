@@ -3,8 +3,9 @@ import * as fs from "fs";
 import { validateMultiEdit } from "core/edit/searchAndReplace/multiEditValidation.js";
 import { executeMultiFindAndReplace } from "core/edit/searchAndReplace/performReplace.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
-import { scanFileViaProxy } from "core/util/fileScanProxy.js";
+import { isFileBlockedByScanError } from "core/util/scanning/FileBlockedByScanError.js";
 
+import { scanningReadFile } from "../services/ScanningFileIo.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   calculateLinesOfCodeDiff,
@@ -108,21 +109,28 @@ WARNINGS:
 
     const { edits } = validateMultiEdit(args);
 
-    // Phase E: scan the file against the caller's effective policy
-    // before reading any bytes. `edit.ts` requires a prior readFile
-    // tool call (which scans), but `multiEdit.ts` does not gate on
-    // readFilesSet — it's a stand-alone entry point. Without this
-    // scan, an agent could call MultiEdit directly on an .env file
-    // and bypass file_scope.blocklist entirely.
-    const scanDecision = await scanFileViaProxy(resolvedPath);
-    if (scanDecision.action === "BLOCK") {
-      throw new ContinueError(
-        ContinueErrorReason.FileIsSecurityConcern,
-        `File blocked by security scan: ${scanDecision.reasons.join("; ")} (risk: ${scanDecision.riskScore})`,
-      );
+    // Phase B (SECURITY_HARDENING_PLAN.md CH2): single trip through
+    // `scanningReadFile` instead of the previous duplicate
+    // `scanFileViaProxy` + `fs.readFileSync` pair. The shim consults
+    // the in-process decision cache (cache key includes mtime so
+    // back-to-back edits don't re-scan), enforces BLOCK by throwing,
+    // and returns the redacted content on REDACT — same shape as the
+    // IDE-side `ScanningIde` decorator.
+    let currentContent: string;
+    try {
+      const result = await scanningReadFile(resolvedPath, "llm");
+      currentContent = result.content;
+    } catch (err) {
+      if (isFileBlockedByScanError(err)) {
+        throw new ContinueError(
+          ContinueErrorReason.FileIsSecurityConcern,
+          `MultiEdit blocked by security scan: ${err.report.reasons.join("; ")} ` +
+            `(risk: ${err.report.riskScore})`,
+        );
+      }
+      throw err;
     }
 
-    const currentContent = fs.readFileSync(resolvedPath, "utf-8");
     const newContent = executeMultiFindAndReplace(currentContent, edits);
 
     // Generate diff for preview

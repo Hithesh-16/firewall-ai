@@ -5,7 +5,9 @@ import { validateSingleEdit } from "core/edit/searchAndReplace/findAndReplaceUti
 import { executeFindAndReplace } from "core/edit/searchAndReplace/performReplace.js";
 import { throwIfFileIsSecurityConcern } from "core/indexing/ignore.js";
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
+import { isFileBlockedByScanError } from "core/util/scanning/FileBlockedByScanError.js";
 
+import { scanningReadFile } from "../services/ScanningFileIo.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   calculateLinesOfCodeDiff,
@@ -114,7 +116,26 @@ WARNINGS:
       replace_all,
     );
 
-    const oldContent = fs.readFileSync(resolvedPath, "utf-8");
+    // Phase B (SECURITY_HARDENING_PLAN.md CH1): the previous direct
+    // `fs.readFileSync` here bypassed the scanning chokepoint. Route
+    // through `scanningReadFile` so BLOCK throws, REDACT returns
+    // sanitised content, and ALLOW carries any informational findings
+    // up via the scan-report channel — same shape the IDE side uses.
+    let oldContent: string;
+    try {
+      const result = await scanningReadFile(resolvedPath, "llm");
+      oldContent = result.content;
+    } catch (err) {
+      if (isFileBlockedByScanError(err)) {
+        throw new ContinueError(
+          ContinueErrorReason.FileIsSecurityConcern,
+          `Edit blocked by security scan: ${err.report.reasons.join("; ")} ` +
+            `(risk: ${err.report.riskScore})`,
+        );
+      }
+      throw err;
+    }
+
     const newContent = executeFindAndReplace(
       oldContent,
       oldString,

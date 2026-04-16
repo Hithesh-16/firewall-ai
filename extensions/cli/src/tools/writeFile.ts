@@ -3,8 +3,10 @@ import * as path from "path";
 
 import { ContinueError, ContinueErrorReason } from "core/util/errors.js";
 import { scanFileViaProxy } from "core/util/fileScanProxy.js";
+import { isFileBlockedByScanError } from "core/util/scanning/FileBlockedByScanError.js";
 import { createTwoFilesPatch } from "diff";
 
+import { scanningReadFile } from "../services/ScanningFileIo.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import {
   calculateLinesOfCodeDiff,
@@ -76,7 +78,27 @@ export const writeFileTool: Tool = {
 
     try {
       if (fs.existsSync(filepath)) {
-        const oldContent = fs.readFileSync(filepath, "utf-8");
+        // Phase B (SECURITY_HARDENING_PLAN.md CH6): route the
+        // preview read through the scanning shim. The write itself
+        // was already gated by the `scanFileViaProxy(filepath)`
+        // check above, so this isn't a security gap per se — but
+        // routing through the shim keeps the invariant "no CLI tool
+        // touches `fs.readFileSync` on a project file directly" so
+        // future tool authors can't mistakenly bypass scanning.
+        let oldContent: string;
+        try {
+          const result = await scanningReadFile(filepath, "llm");
+          oldContent = result.content;
+        } catch (err) {
+          if (isFileBlockedByScanError(err)) {
+            throw new ContinueError(
+              ContinueErrorReason.FileIsSecurityConcern,
+              `Write preview blocked by security scan: ${err.report.reasons.join("; ")} ` +
+                `(risk: ${err.report.riskScore})`,
+            );
+          }
+          throw err;
+        }
 
         const diff = createTwoFilesPatch(
           args.filepath,
@@ -102,8 +124,15 @@ export const writeFileTool: Tool = {
           ],
         };
       }
-    } catch {
-      // do nothing
+    } catch (err) {
+      // Re-throw security errors — they're explicit user-facing
+      // BLOCKs and must not be swallowed by the original "do nothing"
+      // catch-all (which existed only to tolerate file-doesn't-exist
+      // races on `existsSync` → `readFileSync`).
+      if (err instanceof ContinueError) {
+        throw err;
+      }
+      // do nothing for benign errors (e.g., race on existsSync)
     }
     const lines: string[] = content.split("\n");
     const previewLines = lines.slice(0, 3);
@@ -141,10 +170,24 @@ export const writeFileTool: Tool = {
         fs.mkdirSync(dirPath, { recursive: true });
       }
 
-      // Read existing file content if it exists
+      // Read existing file content if it exists.
+      // Routes through the chokepoint shim — the preprocess step
+      // already populated the decision cache for this path+mtime, so
+      // this read is essentially free (cache hit). Keeps Phase B's
+      // "no CLI tool calls fs.readFileSync on a project file directly"
+      // invariant intact.
       let oldContent = "";
       if (fs.existsSync(args.filepath)) {
-        oldContent = fs.readFileSync(args.filepath, "utf-8");
+        try {
+          const result = await scanningReadFile(args.filepath, "llm");
+          oldContent = result.content;
+        } catch {
+          // BLOCK shouldn't happen here (preprocess already passed),
+          // but if it does we treat oldContent as empty so the diff
+          // logic below produces an "added" stat instead of crashing
+          // the write. The actual write was permitted upstream.
+          oldContent = "";
+        }
       }
 
       // Write new content

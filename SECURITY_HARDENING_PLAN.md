@@ -43,19 +43,21 @@ Everything else (token efficiency, caching, minor bypasses) is **P2**.
 
 ## 1. Critical Findings
 
-### 1.1 Vault / Key Storage — **CRITICAL**
+### 1.1 Vault / Key Storage — **CRITICAL** _(re-surveyed 2026-04-16)_
 
-| ID  | File                                                                             | Issue                                                                                                                                     |
-| --- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| V1  | `core/config/onboarding.ts:80,88,96`                                             | Setup wizard writes `OPENAI_API_KEY: sk-proj-…` as plain text to `config.yaml`; never calls the vault                                     |
-| V2  | `core/llm/index.ts:273`                                                          | `BaseLLM.constructor` reads `options.apiKey` straight from YAML; no vault lookup                                                          |
-| V3  | `core/llm/llms/OpenAI.ts:376` (same pattern: Anthropic, Groq, all 60+ providers) | Providers use the raw `this.apiKey` in request headers                                                                                    |
-| V4  | `proxy/src/gateway/gatewayRouter.ts:84`                                          | `user_models.apiKey` column returned **unencrypted**, unlike `providers.apiKeyEncrypted`                                                  |
-| V5  | `proxy/src/db/schema.ts`                                                         | `user_models.apiKey` stored without encryption — inconsistent with `providers` table                                                      |
-| V6  | `gui/src/components/OnboardingCard/hooks/useSubmitOnboarding.ts:22`              | Posts plaintext apiKey to `onboarding/complete`, not `/api/providers`                                                                     |
-| V7  | Any `config.yaml` path                                                           | `config.yaml` files are never scanned by the firewall's scanner pipeline — secrets in them are invisible to the product's own protections |
+| ID  | Status           | File                                                                 | Issue                                                                                                                                                                                                                                            |
+| --- | ---------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| V1  | 🟡 partially     | `core/config/onboarding.ts`                                          | YAML-write pattern still exists in `setupProviderConfig()` (`with: { [apiKeyInputName]: apiKey }`) but is no longer the default onboarding entry point. Wire the new flow in C2.                                                                 |
+| V2  | ✅ open          | `core/llm/index.ts:273`                                              | `this.apiKey = options.apiKey;` — accepts raw value from YAML; no vault lookup. C3 still needed.                                                                                                                                                 |
+| V3  | ✅ open          | `core/llm/llms/OpenAI.ts:376` (+60 provider files share the pattern) | `Authorization: \`Bearer ${this.apiKey}\`` uses the unvalidated field. Becomes safe automatically once V2 is fixed.                                                                                                                              |
+| V4  | ✅✓ closed       | `proxy/src/gateway/gatewayRouter.ts:84`                              | Returns `decryptedKey: um.apiKey`; the underlying `userModelService.ts:77` already does `apiKey: decrypt(row.api_key_encrypted)`. No plaintext leaves the proxy.                                                                                 |
+| V5  | ✅✓ closed       | `proxy/src/db/schema.ts`                                             | `user_models` uses `api_key_encrypted` (encrypted BLOB) consistent with the `providers` table.                                                                                                                                                   |
+| V6  | 🟡 partially     | `gui/src/components/OnboardingCard/hooks/useSubmitOnboarding.ts:22`  | Sends apiKey to the IDE messenger `onboarding/complete`, not to a proxy HTTP route. Extension-side handler still needs to be wired through `/api/providers`.                                                                                     |
+| V7  | ✅✓ closed by A2 | Any `config.yaml` path                                               | `core/config/yaml/scanLoadedConfig.ts` (Phase A.A2) walks loaded YAML, scans every literal `apiKey:` value, and emits a critical `ScanReport`. Hard refusal still pending (C6).                                                                  |
+| V8  | 🆕 added         | `packages/config-yaml/src/schemas/models.ts:181`                     | `apiKeyRef: z.string().optional()` field already exists in the schema (commented "vault://provider-slug/model"). Resolver logic in `core/config/yaml/load/clientRender.ts:135` is partial — vault `://` substitution not implemented end-to-end. |
+| V9  | 🆕 added         | `proxy/src/routes/`                                                  | `GET /api/providers/by-slug/:slug` (C1) **does not exist** yet. Only id-based `GET /api/providers/:id` is available.                                                                                                                             |
 
-**Verdict:** Two isolated key stores exist. No code path migrates a YAML key into the vault. The vault works only for keys explicitly POSTed to `/api/providers` — a flow the default onboarding never exercises.
+**Verdict (revised 2026-04-16):** schema and DB layer are vault-clean. The bypass surface narrowed to: (a) the resolver wiring at `BaseLLM` (V2/V3), (b) the GUI/IDE onboarding handoff (V6), (c) the missing slug resolver route (V9), and (d) the absent hard refusal (C6). Phase A.A2 already shines a light on every leak — Phase C now has to close the migration path.
 
 ### 1.2 Scanner Pattern Coverage — **CRITICAL**
 
@@ -76,16 +78,18 @@ Everything else (token efficiency, caching, minor bypasses) is **P2**.
 | CH5 | ✅ open      | `core/indexing/continueignore.ts:7`                   | Global ignore file read outside the decorator. Low risk but violates the chokepoint invariant                                                                                          |
 | CH6 | ✅ open      | `extensions/cli/src/tools/writeFile.ts:79`            | Direct `fs.readFileSync` for preview — scan runs first so it's structurally OK, but should use the shim for consistency                                                                |
 
-### 1.4 BLOCK / REDACT Enforcement — **CRITICAL / HIGH**
+### 1.4 BLOCK / REDACT Enforcement — **CRITICAL / HIGH** _(re-surveyed 2026-04-16)_
 
-| ID  | Status       | File                                                                                      | Issue                                                                                                                                                                                                                     | Severity |
-| --- | ------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| E1  | ✅ open      | `proxy/src/routes/ai.route.ts:305-310`, `proxy/src/middleware/responseScanner.ts:252-279` | Streaming REDACT is incomplete: inline SSE-chunk rewrite works, but the accumulated text buffer at flush is unredacted                                                                                                    | CRITICAL |
-| E2  | ✅ open      | `proxy/src/middleware/responseScanner.ts:49`                                              | `response_scanning.enabled = false` by default — LLM05 (model emitting secrets) silently undetected                                                                                                                       | HIGH     |
-| E3  | 🟡 partially | `proxy/src/middleware/responseScanner.ts:234`                                             | `JSON.parse` is wrapped in try/catch but the catch silently _passes the chunk through unscanned_ (line 235-237). The defect described in the original plan still applies — the chunk should be REDACTed on parse failure. | HIGH     |
-| E4  | ✅ open      | `proxy/src/redactor/piiVault.ts`, `proxy/src/routes/ai.route.ts`                          | `detokenizePii()` has zero callers — reversible PII tokens are never restored on the response, user sees `<PII_EMAIL_a1b2c3>` literally                                                                                   | HIGH     |
-| E5  | ✅ open      | `proxy/src/routes/mcpGateway.route.ts:220`                                                | `sanitizedOutput: action === "REDACT" ? redactedText : output` — if `redactedText` is undefined, unredacted content is returned                                                                                           | HIGH     |
-| E6  | ✅ open      | `core/util/fileScanProxy.ts`                                                              | On proxy unreachable, core fail-opens with no local blocklist fallback — `proxy/src/scope/fileScope.ts` patterns aren't honoured client-side                                                                              | MEDIUM   |
+| ID  | Status       | File                                              | Issue                                                                                                                                                                                           | Severity |
+| --- | ------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| E1  | ✅ open      | `proxy/src/middleware/responseScanner.ts:264-281` | `flush()` runs the final scan and emits a SUMMARY SSE comment but **never redacts the accumulated buffer before flushing**. Inline chunks ARE rewritten (252-259) — gap is on the final tail.   | CRITICAL |
+| E2  | ✅ open      | `proxy/src/middleware/responseScanner.ts:49`      | `enabled: false` is still the default in `DEFAULT_CONFIG`. Response scanning opt-in only.                                                                                                       | HIGH     |
+| E3  | 🟡 by-design | `proxy/src/middleware/responseScanner.ts:234`     | `JSON.parse` catch is empty but the chunk participates in buffer accumulation and is caught by the next interval scan. Re-classified low-risk; D3 should still wrap with explicit logging.      | LOW      |
+| E4  | ✅ open      | `proxy/src/redactor/piiVault.ts:184`              | `detokenizePii()` exists but **zero production callers** (only `proxy/src/test/advancedFeatures.test.ts`). PII tokens never restored on response.                                               | HIGH     |
+| E5  | ✅ open      | `proxy/src/routes/mcpGateway.route.ts:220`        | `redactedText` may be `undefined` when `redact_on_detection: false`; ternary leaves `sanitizedOutput` undefined.                                                                                | HIGH     |
+| E6  | ✅ open      | `core/util/fileScanProxy.ts:45-50`                | `FAIL_OPEN = { action: "ALLOW", … }` — no client-side glob fallback against `proxy/src/scope/fileScope.ts` patterns.                                                                            | MEDIUM   |
+| E7  | 🆕 added     | `gui/src/`, `extensions/cli/`                     | `X-AF-Response-Action` header IS emitted (`responseScanner.ts:191`) but **no client interceptor reads it**. GUI's `ScanResultBanner` reads from Redux, never from response headers. Wire in D4. | MEDIUM   |
+| E8  | 🆕 added     | `core/config/loadProjectInstructions.ts:24`       | `.aifirewall.md` still read via raw `fs.readFileSync` — system-prompt injection vector. Same defect class as CH4; fix together in D6.                                                           | HIGH     |
 
 ### 1.5 Token Efficiency / Cache Correctness — **MEDIUM**
 
@@ -158,7 +162,24 @@ Fixes are grouped into phases that can each ship as one PR. Each phase is indepe
 
 **Acceptance:** `grep -rn 'fs\.readFileSync\|fs\.readFile(' extensions/cli/src/tools/` returns only explicit `// scan-raw:` justified reads.
 
-### Phase C — Vault authority, clean break (2 days, depends on Phase A)
+**Phase B — completion log (2026-04-16)**
+
+- ✅✓ **B1** — `edit.ts:117` now `await scanningReadFile(resolvedPath, "llm")`. BLOCK is caught and re-thrown as a `ContinueError(FileIsSecurityConcern)` with the report's reasons + risk score.
+- ✅✓ **B2** — `multiEdit.ts` lost its duplicate `scanFileViaProxy(resolvedPath)` call; single trip through `scanningReadFile` + cache. Same BLOCK→ContinueError conversion.
+- ✅✓ **B3** — `writeFile.ts` routes both reads through the shim: the `preprocess` preview read (line ~80) and the `run` step's old-content fetch for the diff/telemetry calculation (line ~176). The latter benefits from the decision cache (path+mtime+purpose) so it's effectively free after preprocess. Original swallow-all `catch {}` was tightened to re-throw `ContinueError` instances.
+- ✅✓ **B4** — Static guard: `extensions/cli/src/services/cliChokepointGuard.test.ts` parses every file in `WATCHED_FILES` (`edit.ts`, `multiEdit.ts`, `writeFile.ts`) and fails if any new `fs.readFileSync(` appears without a `// scan-raw:` justification within 3 lines above. Caught one regression in writeFile.ts:176 during this PR (now fixed).
+- ✅✓ **B5** — The static guard doubles as the regression test. 3/3 tests pass, no live proxy needed. CI-friendly (1s runtime).
+
+`tsc --noEmit` clean across `extensions/cli/`. **Phase B is complete.**
+
+### Phase C — Vault authority, clean break (2 days, depends on Phase A) _(re-surveyed 2026-04-16)_
+
+**Survey delta (2026-04-16):** V4 (gateway returns plaintext from `user_models`) is **already closed** — the row is decrypted via `userModelService.ts:77` before reaching the gateway. V5 (schema unencrypted column) is **already closed** — the column is `api_key_encrypted` BLOB. The remaining surface is narrower than the original draft assumed:
+
+- **Still open:** V2/V3 (BaseLLM accepts raw `options.apiKey` + 60+ providers use it in headers), V6 (GUI onboarding sends apiKey to IDE messenger, not proxy `/api/providers`), V9 (no `GET /api/providers/by-slug/:slug` route), C6 (no hard refusal on plaintext `apiKey:` in YAML).
+- **Already partially in place:** the schema accepts `apiKeyRef: z.string().optional()` (`packages/config-yaml/src/schemas/models.ts:181`), commented "vault://provider-slug/model". Resolver wiring at `core/config/yaml/load/clientRender.ts:135` is partial; the substitution path is unfinished.
+
+**Revised priority for Phase C:** C4/C5 (schema, GUI onboarding) and C1 (slug route) are the smallest dependencies. C3 (BaseLLM resolver) is the keystone — once it consumes `apiKeyRef` and refuses raw `apiKey`, every provider becomes vault-only automatically (V3 closes for free). C6 (hard refusal) is a 5-line throw in `loadYaml.ts` + a new test, gated behind C3 landing first.
 
 **Goal:** Make the proxy vault the single source of truth for every BYOK API key. No fallback, no migration, no plaintext.
 

@@ -340,6 +340,16 @@ Survey delta — most findings still open, two already closed by prior work:
 11. **H1a/b/d** — delete control-plane envs + `enableHubContinueDev()` (riskiest — `useHub()` and `getControlPlaneEnv()` callers in `core/config/load.ts`, GUI auth, VSCode stubs all need rewiring first).
 12. **H7b** — rename `ContinueProxyContextProvider` (drops JetBrains user state keyed on the class name; release-note).
 
+**Phase H — partial completion log (2026-04-17)**
+
+Three quick wins shipped this session:
+
+- ✅✓ **H7a** — dropped the deprecated `isContinueTeamMember = isFirewallTeamMember` re-export from `gui/src/util/isContinueTeamMember.ts` and `core/util/isContinueTeamMember.ts`. Updated the `core/util/isFirewallTeamMember.ts` wrapper to re-export only the canonical name. Verified zero callers used the alias before removal — every existing import site uses `isFirewallTeamMember` directly. Filenames intentionally NOT renamed yet (would touch every import path for zero runtime benefit; deferred to a follow-up).
+- ✅✓ **H6b** — created root `.ai-firewallignore` (canonical replacement) with the same gitignore-style patterns as the old `.continueignore`, then `git rm`'d the original. The `core/util/paths.ts:getGlobalContinueIgnorePath` rename (H6a) is still pending — that's the multi-call-site rename and gets its own PR.
+- ✅✓ **H1c** — removed the hardcoded Continue.dev hosted URL `TRIAL_PROXY_URL = "https://proxy-server-blue-l6vsfbzhba-uw.a.run.app"` from `core/control-plane/client.ts`. The two callers (`DefaultCrawler` for docs indexing, `WebContextProvider` for the `@web` provider) now read env vars `AI_FIREWALL_CRAWL_PROXY_URL` and `AI_FIREWALL_WEB_CONTEXT_PROXY_URL` respectively. If the env var is unset, the feature throws a clear configuration error at call time naming the env var and pointing at this plan section. Features still exist; the silent dependency on Continue.dev infrastructure does not.
+
+`tsc --noEmit` clean across `core/`, `proxy/`, `gui/`, `extensions/cli/`. No tests changed — the deprecated alias had no test coverage; the URL replacements only affect the runtime config surface, not import-time behaviour.
+
 #### Phase H — original task definitions (preserved for execution detail)
 
 **Goal:** Since AI Firewall is a separate product with no backward-compatibility obligations, strip every Continue-specific code path, URL, name, and dead stub. Reduces attack surface, clarifies ownership, and removes future regression risk.

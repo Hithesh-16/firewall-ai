@@ -46,8 +46,14 @@ export interface CreditStatus {
   hasPurchasedCredits: boolean;
 }
 
-export const TRIAL_PROXY_URL =
-  "https://proxy-server-blue-l6vsfbzhba-uw.a.run.app";
+// Phase H.H1c (SECURITY_HARDENING_PLAN.md) — the previous hardcoded
+// Continue.dev hosted URL (`proxy-server-blue-l6vsfbzhba-uw.a.run.app`)
+// has been removed. The two features that used it (DefaultCrawler for
+// docs indexing and WebContextProvider for the `@web` context provider)
+// now read their own env vars (`AI_FIREWALL_CRAWL_PROXY_URL` /
+// `AI_FIREWALL_WEB_CONTEXT_PROXY_URL`) and throw a clear configuration
+// error if unset. Self-host the equivalent endpoints to re-enable
+// those features.
 
 export interface RemoteSessionMetadata extends BaseSessionMetadata {
   isRemote: true;

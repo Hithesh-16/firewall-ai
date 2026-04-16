@@ -1,8 +1,25 @@
 import { URL } from "node:url";
 
 import { getHeaders } from "../../../continueServer/stubs/headers";
-import { TRIAL_PROXY_URL } from "../../../control-plane/client";
 import { PageData } from "./DocsCrawler";
+
+// Phase H.H1c (SECURITY_HARDENING_PLAN.md) — replaced the hardcoded
+// Continue.dev hosted crawl proxy with an env-driven URL. Self-host
+// the equivalent /crawl endpoint and set this env var to re-enable
+// docs crawling.
+const CRAWL_PROXY_URL_ENV = "AI_FIREWALL_CRAWL_PROXY_URL";
+
+function getCrawlProxyUrl(): string {
+  const url = process.env[CRAWL_PROXY_URL_ENV];
+  if (!url) {
+    throw new Error(
+      `Docs crawler not configured. Set ${CRAWL_PROXY_URL_ENV} to a self-hosted ` +
+        `crawl proxy URL (the previous hardcoded Continue.dev endpoint was removed in ` +
+        `SECURITY_HARDENING_PLAN.md Phase H.H1c).`,
+    );
+  }
+  return url;
+}
 
 export class DefaultCrawler {
   constructor(
@@ -12,7 +29,8 @@ export class DefaultCrawler {
   ) {}
 
   async crawl(): Promise<PageData[]> {
-    const resp = await fetch(new URL("crawl", TRIAL_PROXY_URL).toString(), {
+    const proxyUrl = getCrawlProxyUrl();
+    const resp = await fetch(new URL("crawl", proxyUrl).toString(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -181,6 +181,12 @@ Fixes are grouped into phases that can each ship as one PR. Each phase is indepe
 
 **Revised priority for Phase C:** C4/C5 (schema, GUI onboarding) and C1 (slug route) are the smallest dependencies. C3 (BaseLLM resolver) is the keystone — once it consumes `apiKeyRef` and refuses raw `apiKey`, every provider becomes vault-only automatically (V3 closes for free). C6 (hard refusal) is a 5-line throw in `loadYaml.ts` + a new test, gated behind C3 landing first.
 
+**Phase C — partial completion log (2026-04-17)**
+
+- ✅✓ **C1 (`GET /api/providers/by-slug/:slug`)** — added to `proxy/src/routes/provider.route.ts`. Composes the existing `resolveProviderForUser(userId, orgId, slug)` + `getProviderBySlug` services and returns `{slug, baseUrl, source: "user"|"org"|"global", decryptedKey}` to authenticated callers. Resolution order matches `gatewayRouter`: user override → org default → global registry. Returns 404 with a clear "no vault entry resolves this slug" message if nothing matches — failing closed per the C-phase principle. Gated by the `provider:read` capability (same as the existing `GET /api/providers`). This is the foundation C3 (BaseLLM resolver) will plug into.
+
+The other Phase C items (C2 onboarding rewrite, C3 BaseLLM resolver, C5 GUI wizard, C6 hard refusal) are larger and break existing flows — held for sign-off before execution. C7 was already closed by Phase A.A2 scanner.
+
 **Goal:** Make the proxy vault the single source of truth for every BYOK API key. No fallback, no migration, no plaintext.
 
 **Decision log**

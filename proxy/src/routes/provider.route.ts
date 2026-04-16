@@ -3,12 +3,20 @@ import { z } from "zod";
 import { requireAuth, requireCapability } from "../auth/authMiddleware";
 import {
   createProvider,
+  decryptProviderKey,
   deleteProvider,
+  getProviderBySlug,
   listProviders,
   getProviderById,
-  updateProvider
+  updateProvider,
 } from "../gateway/providerService";
-import { addModel, deleteModel, listModels, updateModel } from "../gateway/modelService";
+import { resolveProviderForUser } from "../gateway/userProviderService";
+import {
+  addModel,
+  deleteModel,
+  listModels,
+  updateModel,
+} from "../gateway/modelService";
 
 /**
  * Default base URLs per provider kind. The web onboarding wizard sends
@@ -48,14 +56,11 @@ const createProviderSchema = z
     baseUrl: z.string().url().optional(),
     deploymentName: z.string().optional(),
   })
-  .refine(
-    (v) => v.baseUrl || (v.kind && DEFAULT_PROVIDER_BASE_URLS[v.kind]),
-    {
-      message:
-        "baseUrl is required (or send a `kind` with a known default, e.g. openai)",
-      path: ["baseUrl"],
-    },
-  )
+  .refine((v) => v.baseUrl || (v.kind && DEFAULT_PROVIDER_BASE_URLS[v.kind]), {
+    message:
+      "baseUrl is required (or send a `kind` with a known default, e.g. openai)",
+    path: ["baseUrl"],
+  })
   .refine(
     (v) => {
       // Ollama doesn't need a key; everyone else does.
@@ -69,7 +74,7 @@ const updateProviderSchema = z.object({
   name: z.string().min(1).optional(),
   apiKey: z.string().min(1).optional(),
   baseUrl: z.string().url().optional(),
-  enabled: z.boolean().optional()
+  enabled: z.boolean().optional(),
 });
 
 const addModelSchema = z.object({
@@ -77,7 +82,7 @@ const addModelSchema = z.object({
   displayName: z.string().optional(),
   inputCostPer1k: z.number().min(0).optional(),
   outputCostPer1k: z.number().min(0).optional(),
-  maxContextTokens: z.number().int().min(0).optional()
+  maxContextTokens: z.number().int().min(0).optional(),
 });
 
 const updateModelSchema = z.object({
@@ -85,10 +90,12 @@ const updateModelSchema = z.object({
   inputCostPer1k: z.number().min(0).optional(),
   outputCostPer1k: z.number().min(0).optional(),
   maxContextTokens: z.number().int().min(0).optional(),
-  enabled: z.boolean().optional()
+  enabled: z.boolean().optional(),
 });
 
-export async function registerProviderRoutes(app: FastifyInstance): Promise<void> {
+export async function registerProviderRoutes(
+  app: FastifyInstance,
+): Promise<void> {
   // --- Providers ---
 
   app.post(
@@ -97,7 +104,9 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
     async (request, reply) => {
       const parsed = createProviderSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
       try {
@@ -120,16 +129,18 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
           slug: provider.slug,
           baseUrl: provider.baseUrl,
           enabled: provider.enabled,
-          createdAt: provider.createdAt
+          createdAt: provider.createdAt,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         if (msg.includes("UNIQUE constraint")) {
-          return reply.status(409).send({ error: "Provider with this name already exists" });
+          return reply
+            .status(409)
+            .send({ error: "Provider with this name already exists" });
         }
         return reply.status(500).send({ error: msg });
       }
-    }
+    },
   );
 
   app.get(
@@ -143,9 +154,9 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
         slug: p.slug,
         baseUrl: p.baseUrl,
         enabled: p.enabled,
-        createdAt: p.createdAt
+        createdAt: p.createdAt,
       }));
-    }
+    },
   );
 
   app.get(
@@ -164,9 +175,79 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
         baseUrl: provider.baseUrl,
         enabled: provider.enabled,
         createdAt: provider.createdAt,
-        updatedAt: provider.updatedAt
+        updatedAt: provider.updatedAt,
       };
-    }
+    },
+  );
+
+  /**
+   * GET /api/providers/by-slug/:slug — Phase C.C1
+   * (SECURITY_HARDENING_PLAN.md)
+   *
+   * Vault resolver. Authenticated callers (the BaseLLM constructor
+   * once C3 lands, plus any other proxy-side resolver) hit this
+   * endpoint with `apiKeyRef: vault://<slug>` material to get the
+   * decrypted API key + base URL out of the vault.
+   *
+   * Resolution order matches `resolveProviderForUser`:
+   *   1. user override   (caller's personal `user_providers` row)
+   *   2. org default     (caller's org's `org_providers` row)
+   *   3. global registry (the legacy `providers` table)
+   *
+   * The first match wins. If nothing matches, return 404 — callers
+   * MUST fail closed (Phase C principle: "no silent downgrade to
+   * plaintext"). The legacy global fallback is kept until C2/C3
+   * fully migrate the onboarding flow; future PRs can drop it.
+   *
+   * Audit: every successful resolve is logged via the existing
+   * `admin_audit` channel (TODO in Phase C follow-up).
+   */
+  app.get(
+    "/api/providers/by-slug/:slug",
+    { preHandler: [requireAuth, requireCapability("provider:read")] },
+    async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      if (!slug || slug.length === 0) {
+        return reply.status(400).send({ error: "slug is required" });
+      }
+
+      const ctx = request.authContext;
+      const userId = ctx?.user?.id ?? null;
+      const orgId = ctx?.user?.orgId ?? null;
+
+      // 1 + 2: user / org scoped resolution.
+      const resolved = resolveProviderForUser(userId, orgId, slug);
+      if (resolved) {
+        return {
+          slug: resolved.providerSlug,
+          baseUrl: resolved.baseUrl ?? null,
+          source: resolved.source,
+          decryptedKey: resolved.apiKey,
+        };
+      }
+
+      // 3: legacy global registry fallback. Will be removed once C2
+      // makes the user/org scope the canonical write path.
+      const global = getProviderBySlug(slug);
+      if (global && global.enabled) {
+        return {
+          slug: global.slug,
+          providerId: global.id,
+          baseUrl: global.baseUrl,
+          source: "global" as const,
+          decryptedKey: decryptProviderKey(global),
+        };
+      }
+
+      return reply.status(404).send({
+        error: "Provider not found",
+        slug,
+        message:
+          "No vault entry resolves this slug. Add it via POST /api/providers " +
+          "or PUT /api/me/providers/:slug. SECURITY_HARDENING_PLAN.md C2 " +
+          "tracks the onboarding rewrite that makes this the only write path.",
+      });
+    },
   );
 
   app.patch(
@@ -176,7 +257,9 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
       const { id } = request.params as { id: string };
       const parsed = updateProviderSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
       const updated = updateProvider(Number(id), parsed.data);
       if (!updated) {
@@ -188,9 +271,9 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
         slug: updated.slug,
         baseUrl: updated.baseUrl,
         enabled: updated.enabled,
-        updatedAt: updated.updatedAt
+        updatedAt: updated.updatedAt,
       };
-    }
+    },
   );
 
   app.delete(
@@ -203,7 +286,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
         return reply.status(404).send({ error: "Provider not found" });
       }
       return { success: true };
-    }
+    },
   );
 
   // --- Models ---
@@ -220,7 +303,9 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
 
       const parsed = addModelSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
       try {
@@ -228,17 +313,19 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
           displayName: parsed.data.displayName,
           inputCostPer1k: parsed.data.inputCostPer1k,
           outputCostPer1k: parsed.data.outputCostPer1k,
-          maxContextTokens: parsed.data.maxContextTokens
+          maxContextTokens: parsed.data.maxContextTokens,
         });
         return reply.status(201).send(model);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         if (msg.includes("UNIQUE constraint")) {
-          return reply.status(409).send({ error: "Model already exists for this provider" });
+          return reply
+            .status(409)
+            .send({ error: "Model already exists for this provider" });
         }
         return reply.status(500).send({ error: msg });
       }
-    }
+    },
   );
 
   app.get(
@@ -251,7 +338,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
         return reply.status(404).send({ error: "Provider not found" });
       }
       return listModels(Number(providerId));
-    }
+    },
   );
 
   app.get(
@@ -259,7 +346,7 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
     { preHandler: [requireAuth, requireCapability("provider:read")] },
     async () => {
       return listModels();
-    }
+    },
   );
 
   app.patch(
@@ -269,14 +356,16 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
       const { id } = request.params as { id: string };
       const parsed = updateModelSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
       const updated = updateModel(Number(id), parsed.data);
       if (!updated) {
         return reply.status(404).send({ error: "Model not found" });
       }
       return updated;
-    }
+    },
   );
 
   app.delete(
@@ -289,6 +378,6 @@ export async function registerProviderRoutes(app: FastifyInstance): Promise<void
         return reply.status(404).send({ error: "Model not found" });
       }
       return { success: true };
-    }
+    },
   );
 }

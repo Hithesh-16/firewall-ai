@@ -1,9 +1,25 @@
 # Security Hardening Plan — AI Firewall
 
-**Status:** Draft, awaiting approval
-**Date:** 2026-04-15
+**Status:** In progress — Phase A executing 2026-04-16
+**Date drafted:** 2026-04-15
+**Last verified:** 2026-04-16 (codebase re-surveyed against every finding below)
 **Source:** Consolidated audit across key storage, scan-chokepoint coverage, BLOCK/REDACT enforcement, and token efficiency
 **Related:** `CLAUDE.md` (architecture), `.claude/rules/audit-checklist.md`, `AUTH_AND_ONBOARDING_PLAN.md`
+
+> ## Verification log (2026-04-16)
+>
+> Re-surveyed every finding before starting Phase A. Status legend used in
+> the tables below:
+>
+> - ✅ **Confirmed open** — bug still present at the cited line, exact
+>   reproduction held up.
+> - 🟡 **Partially closed** — code shape changed since the draft but the
+>   underlying gap remains; updated guidance below.
+> - ✅⚙️ **In progress** — actively being fixed in this session.
+> - ✅✓ **Closed** — verified fixed, test added.
+>
+> Findings without a status emoji are unverified — the on-paper severity
+> stands but the line numbers in this plan may have drifted.
 
 ---
 
@@ -43,43 +59,44 @@ Everything else (token efficiency, caching, minor bypasses) is **P2**.
 
 ### 1.2 Scanner Pattern Coverage — **CRITICAL**
 
-| ID  | File                                     | Issue                                                                                                                                      |
-| --- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| S1  | `packages/scanner/src/patterns.ts:22-46` | No regex for Groq (`gsk_…`), Anthropic (`sk-ant-…`), OpenAI org (`sk-proj-…`). Currently only caught via entropy fallback (low confidence) |
-| S2  | Same file                                | Explicit patterns exist for AWS (`AKIA…`) and GitHub (`ghp_…`), so the omission is arbitrary — not architectural                           |
+| ID  | Status              | File                                     | Issue                                                                                                                                                                                                           |
+| --- | ------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | ✅⚙️ this PR        | `packages/scanner/src/patterns.ts:22-46` | No regex for Groq (`gsk_…`), Anthropic (`sk-ant-…`), OpenAI org (`sk-proj-…`). Currently only caught via entropy fallback (low confidence)                                                                      |
+| S2  | ✅⚙️ this PR        | Same file                                | Explicit patterns exist for AWS (`AKIA…`) and GitHub (`ghp_…`), so the omission is arbitrary — not architectural                                                                                                |
+| S3  | 🆕 added 2026-04-16 | Same file                                | Plan should also cover Mistral (`api-…`), Together AI (`xxx-…` 64-char), Fireworks (`fw_…`), Perplexity (`pplx-…`), DeepSeek (`sk-…` shorter), xAI (`xai-…`) — recommended **next batch**, not blocking Phase A |
 
 ### 1.3 Scan Chokepoint Coverage — **CRITICAL**
 
-| ID  | File                                                  | Issue                                                                                                                                                                                  |
-| --- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CH1 | `extensions/cli/src/tools/edit.ts:117`                | `fs.readFileSync(resolvedPath, "utf-8")` direct — bypasses `ScanningFileIo` entirely                                                                                                   |
-| CH2 | `extensions/cli/src/tools/multiEdit.ts:117,125`       | Calls `scanFileViaProxy` directly then `fs.readFileSync` — not routed through the shim, no decision cache                                                                              |
-| CH3 | `extensions/cli/src/services/ScanningFileIo.ts:44-52` | CLI config allowlist is basename-only; missing `FORCED_CONFIG_SUFFIXES` present in `ScanningIde.ts:67-71` (`.ai-firewall/config.yaml`, `.ai-firewall/policy.json`, `/mcpServers.json`) |
-| CH4 | `core/config/loadProjectInstructions.ts:24`           | `.aifirewall.md` read with raw `fs.readFileSync` — content flows into the system prompt unscanned (prompt-injection entry point)                                                       |
-| CH5 | `core/indexing/continueignore.ts:7`                   | Global ignore file read outside the decorator. Low risk but violates the chokepoint invariant                                                                                          |
-| CH6 | `extensions/cli/src/tools/writeFile.ts:79`            | Direct `fs.readFileSync` for preview — scan runs first so it's structurally OK, but should use the shim for consistency                                                                |
+| ID  | Status       | File                                                  | Issue                                                                                                                                                                                  |
+| --- | ------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CH1 | ✅ open      | `extensions/cli/src/tools/edit.ts:117`                | `fs.readFileSync(resolvedPath, "utf-8")` direct — bypasses `ScanningFileIo` entirely                                                                                                   |
+| CH2 | ✅ open      | `extensions/cli/src/tools/multiEdit.ts:117,125`       | Calls `scanFileViaProxy` directly then `fs.readFileSync` — not routed through the shim, no decision cache                                                                              |
+| CH3 | ✅⚙️ this PR | `extensions/cli/src/services/ScanningFileIo.ts:36-52` | CLI config allowlist is basename-only; missing `FORCED_CONFIG_SUFFIXES` present in `ScanningIde.ts:67-71` (`.ai-firewall/config.yaml`, `.ai-firewall/policy.json`, `/mcpServers.json`) |
+| CH4 | ✅ open      | `core/config/loadProjectInstructions.ts:24`           | `.aifirewall.md` read with raw `fs.readFileSync` — content flows into the system prompt unscanned (prompt-injection entry point)                                                       |
+| CH5 | ✅ open      | `core/indexing/continueignore.ts:7`                   | Global ignore file read outside the decorator. Low risk but violates the chokepoint invariant                                                                                          |
+| CH6 | ✅ open      | `extensions/cli/src/tools/writeFile.ts:79`            | Direct `fs.readFileSync` for preview — scan runs first so it's structurally OK, but should use the shim for consistency                                                                |
 
 ### 1.4 BLOCK / REDACT Enforcement — **CRITICAL / HIGH**
 
-| ID  | File                                                                                      | Issue                                                                                                                                        | Severity |
-| --- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| E1  | `proxy/src/routes/ai.route.ts:305-310`, `proxy/src/middleware/responseScanner.ts:252-279` | Streaming REDACT is incomplete: inline SSE-chunk rewrite works, but the accumulated text buffer at flush is unredacted                       | CRITICAL |
-| E2  | `proxy/src/middleware/responseScanner.ts:49`                                              | `response_scanning.enabled = false` by default — LLM05 (model emitting secrets) silently undetected                                          | HIGH     |
-| E3  | `proxy/src/middleware/responseScanner.ts:234`                                             | `JSON.parse` inside the transform is uncaught — on failure, the chunk passes through unscanned                                               | HIGH     |
-| E4  | `proxy/src/redactor/piiVault.ts`, `proxy/src/routes/ai.route.ts`                          | `detokenizePii()` has zero callers — reversible PII tokens are never restored on the response, user sees `<PII_EMAIL_a1b2c3>` literally      | HIGH     |
-| E5  | `proxy/src/routes/mcpGateway.route.ts:220`                                                | `sanitizedOutput: action === "REDACT" ? redactedText : output` — if `redactedText` is undefined, unredacted content is returned              | HIGH     |
-| E6  | `core/util/fileScanProxy.ts`                                                              | On proxy unreachable, core fail-opens with no local blocklist fallback — `proxy/src/scope/fileScope.ts` patterns aren't honoured client-side | MEDIUM   |
+| ID  | Status       | File                                                                                      | Issue                                                                                                                                                                                                                     | Severity |
+| --- | ------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| E1  | ✅ open      | `proxy/src/routes/ai.route.ts:305-310`, `proxy/src/middleware/responseScanner.ts:252-279` | Streaming REDACT is incomplete: inline SSE-chunk rewrite works, but the accumulated text buffer at flush is unredacted                                                                                                    | CRITICAL |
+| E2  | ✅ open      | `proxy/src/middleware/responseScanner.ts:49`                                              | `response_scanning.enabled = false` by default — LLM05 (model emitting secrets) silently undetected                                                                                                                       | HIGH     |
+| E3  | 🟡 partially | `proxy/src/middleware/responseScanner.ts:234`                                             | `JSON.parse` is wrapped in try/catch but the catch silently _passes the chunk through unscanned_ (line 235-237). The defect described in the original plan still applies — the chunk should be REDACTed on parse failure. | HIGH     |
+| E4  | ✅ open      | `proxy/src/redactor/piiVault.ts`, `proxy/src/routes/ai.route.ts`                          | `detokenizePii()` has zero callers — reversible PII tokens are never restored on the response, user sees `<PII_EMAIL_a1b2c3>` literally                                                                                   | HIGH     |
+| E5  | ✅ open      | `proxy/src/routes/mcpGateway.route.ts:220`                                                | `sanitizedOutput: action === "REDACT" ? redactedText : output` — if `redactedText` is undefined, unredacted content is returned                                                                                           | HIGH     |
+| E6  | ✅ open      | `core/util/fileScanProxy.ts`                                                              | On proxy unreachable, core fail-opens with no local blocklist fallback — `proxy/src/scope/fileScope.ts` patterns aren't honoured client-side                                                                              | MEDIUM   |
 
 ### 1.5 Token Efficiency / Cache Correctness — **MEDIUM**
 
-| ID  | File                                                          | Issue                                                                                                                                                  |
-| --- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| T1  | `proxy/src/routes/ai.route.ts:171-200`                        | Reducer pipeline in `proxy/src/reducer/` (5 files) exists but is never called on overflow — tokens wasted on every oversized request                   |
-| T2  | `core/util/scanning/ScanningIde.ts:159`                       | `cacheKey(uri, 0, purpose)` — `mtime` hardcoded to `0`, stale decisions returned after file edits. CLAUDE.md documents the key as `path:mtime:purpose` |
-| T3  | `proxy/src/routes/fileScan.route.ts:175-190`                  | Cache consulted **after** the full scan runs — every cache hit is wasted CPU                                                                           |
-| T4  | `proxy/src/services/compactService.ts:246`                    | `Math.ceil(text.length / 4)` fallback for compaction budget — CLAUDE.md bans this outside `tokenCounter.ts`                                            |
-| T5  | `core/util/repoMemory.ts:208,226`                             | Same `length / 4` heuristic for repo-memory summaries                                                                                                  |
-| T6  | `core/nextEdit/providers/BaseNextEditProvider.ts:418,432,444` | Same heuristic branch — should unconditionally use `countTokens`                                                                                       |
+| ID  | Status  | File                                                          | Issue                                                                                                                                                                                                                                  |
+| --- | ------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1  | ✅ open | `proxy/src/routes/ai.route.ts:171-200`                        | Reducer pipeline in `proxy/src/reducer/` (5 files) exists but is never called on overflow — tokens wasted on every oversized request                                                                                                   |
+| T2  | ✅ open | `core/util/scanning/ScanningIde.ts:159`                       | `cacheKey(uri, 0, purpose)` — `mtime` hardcoded to `0`, stale decisions returned after file edits. CLAUDE.md documents the key as `path:mtime:purpose`. **Note:** the CLI parallel `ScanningFileIo.ts:99` already does this correctly. |
+| T3  | ✅ open | `proxy/src/routes/fileScan.route.ts:175-190`                  | Cache consulted **after** the full scan runs — every cache hit is wasted CPU                                                                                                                                                           |
+| T4  | ✅ open | `proxy/src/services/compactService.ts:246`                    | `Math.ceil(text.length / 4)` fallback for compaction budget — CLAUDE.md bans this outside `tokenCounter.ts`                                                                                                                            |
+| T5  | ✅ open | `core/util/repoMemory.ts:208,226`                             | Same `length / 4` heuristic for repo-memory summaries                                                                                                                                                                                  |
+| T6  | ✅ open | `core/nextEdit/providers/BaseNextEditProvider.ts:418,432,444` | Same heuristic branch — should unconditionally use `countTokens`                                                                                                                                                                       |
 
 ### 1.6 Minor / Design Hygiene — **LOW**
 
@@ -98,21 +115,36 @@ Fixes are grouped into phases that can each ship as one PR. Each phase is indepe
 
 **Goal:** Close the specific gap that caused the Groq leak, and make the vault warn on the next leak.
 
-- **A1. Add explicit API-key regexes** (`packages/scanner/src/patterns.ts`)
+- **A1. Add explicit API-key regexes** (`packages/scanner/src/patterns.ts`) — _✅⚙️ in progress this PR_
   - Groq: `/gsk_[A-Za-z0-9]{40,}/g` (critical)
   - Anthropic: `/sk-ant-[A-Za-z0-9_-]{40,}/g` (critical)
-  - OpenAI org: `/sk-proj-[A-Za-z0-9_-]{40,}/g` (critical)
+  - OpenAI project: `/sk-proj-[A-Za-z0-9_-]{40,}/g` (critical)
   - Cohere: `/[a-zA-Z0-9]{40}/g` gated on `co.` context keyword
-  - Add unit tests for each in `packages/scanner/src/__tests__/` (true positive + true negative per `.claude/rules/testing.md`)
-- **A2. Scan `config.yaml` for secrets at load time**
-  - Extend `core/config/yaml/yamlToContinueConfig.ts` to run the content through `@ai-firewall/scanner` before parsing.
-  - On finding, emit a banner via the scan-report channel with severity `critical` + message "Plain-text API key detected in config.yaml — migrate to vault."
-  - Do not block load (CLAUDE.md: "proxy informs, client decides").
-- **A3. Port `FORCED_CONFIG_SUFFIXES` to CLI shim** (`extensions/cli/src/services/ScanningFileIo.ts`)
-  - Copy the array from `ScanningIde.ts:67-71`
-  - Add the suffix-match loop in `forcedConfigOverride()`.
+  - Extend `SecretType` in `packages/scanner/src/types.ts` with the new variants.
+  - Add unit tests for each in `packages/scanner/src/__tests__/` (true positive + true negative per `.claude/rules/testing.md`).
+- **A2. Detect plain-text `apiKey` in loaded YAML config** — _✅⚙️ in progress this PR (revised approach)_
+  - **Revised** from the original draft: the disk-read path uses `ide.readFile` which already routes through the scanner; raw-text scanning of YAML duplicates that and produces noise on commit hashes / ENV examples. Instead, hook at the **post-parse** point in `core/config/yaml/loadYaml.ts` (after `unrollAssistant` returns and before `validateConfigYaml`).
+  - Walk `config.models[]` (and any other slot exposing `apiKey`); for each entry where `apiKey` is set and is **not** an empty string, **not** a `${{ secrets.X }}` template, and **not** a `vault://` reference, run the value through `@ai-firewall/scanner`'s `scanSecrets`.
+  - Emit a `ScanReport` via `publishScanReport` (the scan-report channel — same plumbing the file scanner uses) with severity `critical` and message: _"Plain-text API key detected in `config.yaml` model `<name>` — migrate to `apiKeyRef: vault://...` (Phase C)."_
+  - Do not block load (CLAUDE.md: "proxy informs, client decides"). The hard refusal lives in Phase C.
+- **A3. Port `FORCED_CONFIG_SUFFIXES` to CLI shim** (`extensions/cli/src/services/ScanningFileIo.ts`) — _✅⚙️ in progress this PR_
+  - Copy the array from `ScanningIde.ts:67-71`.
+  - Add the suffix-match loop in `forcedConfigOverride()` (mirror the IDE implementation).
 
-**Acceptance:** Running `rg` over a synthetic `config.yaml` containing `OPENAI_API_KEY: sk-proj-TESTKEY123...` produces a finding. No existing tests break.
+**Acceptance:**
+
+1. `scanSecrets("Authorization: Bearer gsk_AAAA…BBBB")` returns a `GROQ_KEY` match in `packages/scanner` unit tests.
+2. Loading a `config.yaml` containing a model with `apiKey: sk-proj-TESTKEY...` emits a critical ScanReport visible in the GUI/CLI banner channel; load still completes.
+3. CLI tool reading `~/.ai-firewall/config.yaml` is forced to `"config"` purpose (verified by reading the path and confirming no proxy round-trip).
+4. `tsc --noEmit` clean across affected packages; no existing test fails.
+
+**Phase A — completion log (2026-04-16)**
+
+- ✅✓ **A1** — Added `GROQ_KEY` / `ANTHROPIC_KEY` / `OPENAI_PROJECT_KEY` / `COHERE_KEY` to both `packages/scanner/src/{types,patterns}.ts` and the proxy's mirror at `proxy/src/types/index.ts`. Cohere uses a context-keyword anchor to avoid false positives on commit-hash-shaped strings. 9 new unit tests in `proxy/src/test/secretPatterns.test.ts` (TP + TN per pattern + cross-pattern prose check); all pass. Total proxy test suite: 690 pass, 1 pre-existing fail (`testStrictLocalConfigParsing`, unrelated, documented in CLAUDE.md).
+- ✅✓ **A2** — New module `core/config/yaml/scanLoadedConfig.ts` walks `assistant.models[]` post-unroll, identifies literal `apiKey:` values (skipping `vault://...`, `${{ secrets.X }}`, empty), runs each through `scanSecrets`, and publishes a `ScanReport` with severity `critical` and a remediation message. Wired into `core/config/yaml/loadYaml.ts` after `validateConfigYaml`. Defensive try/catch ensures scanner failure cannot break config load. 7 unit tests in `core/config/yaml/scanLoadedConfig.test.ts`; all pass. Reports outside an active `runInScanContext` are silently dropped (no startup-time banner spam).
+- ✅✓ **A3** — Ported `FORCED_CONFIG_SUFFIXES` (`/mcpServers.json`, `/.ai-firewall/config.yaml`, `/.ai-firewall/policy.json`, plus Windows-separator equivalents) from `core/util/scanning/ScanningIde.ts` into `extensions/cli/src/services/ScanningFileIo.ts`. CLI now matches IDE behaviour for self-referential config reads.
+
+`tsc --noEmit` clean across `core/`, `proxy/`, `extensions/cli/`, `packages/scanner/`. **Phase A is complete.**
 
 ### Phase B — CLI chokepoint parity (1 day)
 

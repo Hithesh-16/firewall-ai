@@ -21,37 +21,101 @@ export type PiiPattern = {
 
 export const secretPatterns: SecretPattern[] = [
   { type: "AWS_KEY", regex: /AKIA[0-9A-Z]{16}/g, severity: "critical" },
-  { type: "PRIVATE_KEY", regex: /-----BEGIN (?:RSA |EC |DSA |ENCRYPTED )?PRIVATE KEY-----/g, severity: "critical" },
-  { type: "JWT", regex: /eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g, severity: "high" },
-  { type: "BEARER_TOKEN", regex: /Bearer\s[A-Za-z0-9\-_.]{20,}/g, severity: "high" },
+  {
+    type: "PRIVATE_KEY",
+    regex: /-----BEGIN (?:RSA |EC |DSA |ENCRYPTED )?PRIVATE KEY-----/g,
+    severity: "critical",
+  },
+  {
+    type: "JWT",
+    regex: /eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g,
+    severity: "high",
+  },
+  {
+    type: "BEARER_TOKEN",
+    regex: /Bearer\s[A-Za-z0-9\-_.]{20,}/g,
+    severity: "high",
+  },
   {
     type: "GENERIC_API_KEY",
     regex: /(api[_-]?key|apikey)\s*[:=]\s*['"]?[A-Za-z0-9\-_]{20,}/gi,
-    severity: "high"
+    severity: "high",
   },
-  { type: "DATABASE_URL", regex: /(postgres|mysql|mongodb):\/\/[^\s]+/gi, severity: "critical" },
-  { type: "GITHUB_TOKEN", regex: /gh[pousr]_[A-Za-z0-9_]{36,}/g, severity: "critical" },
+  {
+    type: "DATABASE_URL",
+    regex: /(postgres|mysql|mongodb):\/\/[^\s]+/gi,
+    severity: "critical",
+  },
+  {
+    type: "GITHUB_TOKEN",
+    regex: /gh[pousr]_[A-Za-z0-9_]{36,}/g,
+    severity: "critical",
+  },
   { type: "SLACK_TOKEN", regex: /xox[baprs]-[A-Za-z0-9-]+/g, severity: "high" },
-  { type: "GOOGLE_API_KEY", regex: /AIza[0-9A-Za-z\-_]{35}/g, severity: "high" },
+  {
+    type: "GOOGLE_API_KEY",
+    regex: /AIza[0-9A-Za-z\-_]{35}/g,
+    severity: "high",
+  },
   { type: "AZURE_KEY", regex: /[A-Za-z0-9+/]{86}==/g, severity: "critical" },
+
+  // ── Named-format LLM provider keys (SECURITY_HARDENING_PLAN.md S1) ──
+  // Each provider ships keys with a recognizable prefix; relying on the
+  // generic entropy fallback is what allowed the 2026-04-15 Groq leak.
+  // Patterns are anchored to the prefix so false positives on user prose
+  // are negligible. Length lower-bounds chosen to match the shortest
+  // documented key length per provider; `+` allows for future growth.
+  { type: "GROQ_KEY", regex: /gsk_[A-Za-z0-9]{40,}/g, severity: "critical" },
+  {
+    type: "ANTHROPIC_KEY",
+    regex: /sk-ant-[A-Za-z0-9_-]{40,}/g,
+    severity: "critical",
+  },
+  {
+    type: "OPENAI_PROJECT_KEY",
+    regex: /sk-proj-[A-Za-z0-9_-]{40,}/g,
+    severity: "critical",
+  },
+  // Cohere keys are 40 chars of [a-zA-Z0-9] with no prefix — too generic
+  // to anchor on shape alone. We require a `co.`/`cohere` context keyword
+  // within ~40 chars to keep false positives down.
+  {
+    type: "COHERE_KEY",
+    regex:
+      /(?:co(?:here)?[._-]?(?:api[_-]?key|key|token)|COHERE_API_KEY)\s*[:=]\s*['"]?[A-Za-z0-9]{40}\b/gi,
+    severity: "critical",
+  },
+
   {
     type: "HARDCODED_PASSWORD",
     regex: /(password|passwd|pwd)\s*[:=]\s*['"][^'"]{6,}['"]/gi,
-    severity: "high"
+    severity: "high",
   },
   {
     type: "ENV_VARIABLE",
     regex: /[A-Z_]{3,}=\S{8,}/g,
-    severity: "medium"
-  }
+    severity: "medium",
+  },
 ];
 
 export const piiPatterns: PiiPattern[] = [
-  { type: "EMAIL", regex: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, severity: "medium" },
+  {
+    type: "EMAIL",
+    regex: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+    severity: "medium",
+  },
   { type: "PHONE", regex: /\+?[0-9]{10,13}/g, severity: "medium" },
-  { type: "AADHAAR", regex: /[2-9][0-9]{3}\s[0-9]{4}\s[0-9]{4}/g, severity: "high" },
+  {
+    type: "AADHAAR",
+    regex: /[2-9][0-9]{3}\s[0-9]{4}\s[0-9]{4}/g,
+    severity: "high",
+  },
   { type: "PAN", regex: /[A-Z]{5}[0-9]{4}[A-Z]/g, severity: "high" },
   { type: "SSN", regex: /\d{3}-\d{2}-\d{4}/g, severity: "high" },
   { type: "CREDIT_CARD", regex: /\b(?:\d[ -]*?){13,16}\b/g, severity: "high" },
-  { type: "IP_ADDRESS", regex: /\b\d{1,3}(?:\.\d{1,3}){3}\b/g, severity: "medium" }
+  {
+    type: "IP_ADDRESS",
+    regex: /\b\d{1,3}(?:\.\d{1,3}){3}\b/g,
+    severity: "medium",
+  },
 ];

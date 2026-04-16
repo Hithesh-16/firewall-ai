@@ -1,5 +1,10 @@
 export type Severity = "critical" | "high" | "medium";
 
+// Keep this list in lock-step with `packages/scanner/src/types.ts`
+// `SecretType`. The proxy carries its own copy so it can compile
+// without depending on the scanner package's TS source — but the
+// shapes MUST match or the re-exported scanner functions fail
+// type-check at the proxy boundary.
 export type SecretType =
   | "AWS_KEY"
   | "PRIVATE_KEY"
@@ -13,7 +18,12 @@ export type SecretType =
   | "AZURE_KEY"
   | "HARDCODED_PASSWORD"
   | "ENV_VARIABLE"
-  | "HIGH_ENTROPY";
+  | "HIGH_ENTROPY"
+  // Phase A.A1 — named-format LLM provider keys.
+  | "GROQ_KEY"
+  | "ANTHROPIC_KEY"
+  | "OPENAI_PROJECT_KEY"
+  | "COHERE_KEY";
 
 export type PiiType =
   | "EMAIL"

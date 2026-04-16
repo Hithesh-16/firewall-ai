@@ -20,7 +20,14 @@ export type SecretType =
   | "AZURE_KEY"
   | "HARDCODED_PASSWORD"
   | "ENV_VARIABLE"
-  | "HIGH_ENTROPY";
+  | "HIGH_ENTROPY"
+  // ── Named-format LLM provider keys (Phase A — see SECURITY_HARDENING_PLAN.md S1).
+  // Detected explicitly because relying on entropy alone produced the
+  // 2026-04-15 Groq-key incident.
+  | "GROQ_KEY"
+  | "ANTHROPIC_KEY"
+  | "OPENAI_PROJECT_KEY"
+  | "COHERE_KEY";
 
 export type PiiType =
   | "EMAIL"

@@ -47,6 +47,9 @@ import * as unicodeNormalizerTests from "./unicodeNormalizer.test";
 import * as ruleFileScanTests from "./ruleFileScan.test";
 import * as responseScannerTests from "./responseScanner.test";
 
+// Phase A.A1 — Named-format LLM provider key patterns
+import * as secretPatternsTests from "./secretPatterns.test";
+
 // Task Framework + Memory System + Tool Permissions tests
 import * as tasksTests from "./tasks.test";
 import * as toolPermTests from "./toolPermissions.test";
@@ -862,6 +865,40 @@ async function run() {
     [
       "responseScanner:replaceCompletion",
       responseScannerTests.testReplaceCompletionText,
+    ],
+    // Phase A.A1 — Named-format LLM provider key patterns
+    ["secretPatterns:groqDetected", secretPatternsTests.testGroqKeyDetected],
+    [
+      "secretPatterns:groqNoFalsePositive",
+      secretPatternsTests.testGroqKeyNoFalsePositiveOnPrefixAlone,
+    ],
+    [
+      "secretPatterns:anthropicDetected",
+      secretPatternsTests.testAnthropicKeyDetected,
+    ],
+    [
+      "secretPatterns:anthropicNoGenericSk",
+      secretPatternsTests.testAnthropicKeyNoFalsePositiveOnGenericSk,
+    ],
+    [
+      "secretPatterns:openaiProjectDetected",
+      secretPatternsTests.testOpenAiProjectKeyDetected,
+    ],
+    [
+      "secretPatterns:openaiProjectNoUserKey",
+      secretPatternsTests.testOpenAiProjectKeyNoFalsePositiveOnUserKey,
+    ],
+    [
+      "secretPatterns:cohereWithContext",
+      secretPatternsTests.testCohereKeyDetectedWithContext,
+    ],
+    [
+      "secretPatterns:cohereNoRandom40",
+      secretPatternsTests.testCohereKeyNoFalsePositiveOnRandom40Chars,
+    ],
+    [
+      "secretPatterns:proseClean",
+      secretPatternsTests.testProseDoesNotTriggerNewPatterns,
     ],
     // Task Framework: ID generation
     ["task:idPrefixLocalAgent", tasksTests.testTaskIdPrefixLocalAgent],

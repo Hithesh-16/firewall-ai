@@ -33,6 +33,10 @@ import {
   setCachedDecision,
 } from "core/util/scanning/scanDecisionCache.js";
 
+// Keep these two lists in lock-step with the IDE-side decorator at
+// `core/util/scanning/ScanningIde.ts` (FORCED_CONFIG_BASENAMES /
+// FORCED_CONFIG_SUFFIXES). The CLI parallel was missing the suffix
+// list — see SECURITY_HARDENING_PLAN.md finding CH3.
 const FORCED_CONFIG_BASENAMES = new Set<string>([
   ".gitignore",
   ".ai-firewallignore",
@@ -40,6 +44,16 @@ const FORCED_CONFIG_BASENAMES = new Set<string>([
   "plugin.json",
   "policy.json",
 ]);
+
+const FORCED_CONFIG_SUFFIXES = [
+  "/mcpServers.json",
+  "/.ai-firewall/config.yaml",
+  "/.ai-firewall/policy.json",
+  // Windows separator equivalents — the CLI runs there too.
+  "\\mcpServers.json",
+  "\\.ai-firewall\\config.yaml",
+  "\\.ai-firewall\\policy.json",
+];
 
 function forcedConfigOverride(
   filePath: string,
@@ -49,6 +63,9 @@ function forcedConfigOverride(
   const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
   const basename = slash >= 0 ? filePath.slice(slash + 1) : filePath;
   if (FORCED_CONFIG_BASENAMES.has(basename)) return "config";
+  for (const suffix of FORCED_CONFIG_SUFFIXES) {
+    if (filePath.endsWith(suffix)) return "config";
+  }
   return purpose;
 }
 

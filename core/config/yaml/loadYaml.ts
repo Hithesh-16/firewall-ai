@@ -41,6 +41,7 @@ import { getAllDotContinueDefinitionFiles } from "../loadLocalAssistants";
 import { unrollLocalYamlBlocks } from "./loadLocalYamlBlocks";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 import { llmsFromModelConfig } from "./models";
+import { scanLoadedConfigForPlaintextKeys } from "./scanLoadedConfig";
 import {
   convertYamlMcpConfigToInternalMcpOptions,
   convertYamlRuleToContinueRule,
@@ -147,6 +148,23 @@ async function loadConfigYaml(options: {
 
   if (config) {
     errors.push(...validateConfigYaml(nonNullifyConfigYaml(config)));
+
+    // Phase A.A2 — emit a critical scan report for any model whose
+    // `apiKey:` field is a literal value (not `vault://...`, not a
+    // `${{ secrets.X }}` template). Inform-only; the hard refusal
+    // ships in Phase C. Reports are silently dropped if no
+    // `runInScanContext` window is active (e.g. startup load), which
+    // is the desired behaviour — we don't want banners flashing
+    // without an active chat turn to attach them to.
+    try {
+      const sourceFile =
+        packageIdentifier.uriType === "file"
+          ? packageIdentifier.fileUri
+          : "config.yaml";
+      scanLoadedConfigForPlaintextKeys(config, sourceFile);
+    } catch {
+      // Defense-in-depth: scanner failures must never break config load.
+    }
   }
 
   if (errors?.some((error) => error.fatal)) {

@@ -9,7 +9,20 @@ export type CachingStrategy = (
   anthropicBody: MessageCreateParams,
 ) => MessageCreateParams;
 
-// Utility function to estimate token count
+// Heuristic token count used ONLY as a coarse threshold gate for the
+// Anthropic prompt-cache decision below ("should we mark this message
+// `cache_control: ephemeral`?"). Per SECURITY_HARDENING_PLAN.md E3 the
+// `Math.ceil(length / 4)` pattern is banned outside
+// `proxy/src/gateway/tokenCounter.ts` — this leaf package is the
+// documented exception:
+//   1. It can't import the proxy's `tokenCounter` (cross-package
+//      direction would invert the dependency graph).
+//   2. The decision boundary is "is this >500 tokens roughly?" — the
+//      cost of a wrong answer is only a small shift in cache hit rate,
+//      not a correctness or security issue.
+//   3. Pulling tiktoken/@anthropic-ai/tokenizer here for an
+//      ~10%-accurate decision would add a heavy WASM dep on the
+//      adapter's hot path.
 const estimateTokenCount = (text: string): number => Math.ceil(text.length / 4);
 
 // Strategy 1: No Caching

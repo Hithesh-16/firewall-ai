@@ -17,7 +17,11 @@
  * - User intent (last user message) always preserved
  */
 
-import { countMessageTokens, type ChatMessage } from "../gateway/tokenCounter";
+import {
+  countMessageTokens,
+  countTokens,
+  type ChatMessage,
+} from "../gateway/tokenCounter";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -186,9 +190,17 @@ export async function compactConversation(
     const overBy = afterCount.tokens - maxTokens;
     let dropped = 0;
 
-    // Drop from compactedOld (oldest first)
+    // Drop from compactedOld (oldest first).
+    // Phase E.E3 (SECURITY_HARDENING_PLAN.md): replaced the
+    // `Math.ceil(text.length / 4)` heuristic with the real
+    // tokenizer (`countTokens` resolves to tiktoken when available,
+    // and falls back to the heuristic only if the WASM encoder
+    // can't load — the fallback now lives in one place).
     while (compactedOld.length > 0) {
-      const approxTokensSaved = estimateTokens(compactedOld[0].content);
+      const { tokens: approxTokensSaved } = await countTokens(
+        compactedOld[0].content,
+        model,
+      );
       compactedOld = compactedOld.slice(1);
       dropped++;
       messagesRemoved++;
@@ -241,10 +253,11 @@ function summarizeMessage(content: string): string {
   return SUMMARIZED_PREFIX + truncated + "...";
 }
 
-function estimateTokens(text: string): number {
-  // Quick heuristic — 4 chars per token
-  return Math.max(1, Math.ceil(text.length / 4));
-}
+// `estimateTokens` heuristic helper removed in Phase E.E3 — the
+// only call site (`compactConversation`'s drop-oldest loop) now uses
+// `countTokens` from the canonical `tokenCounter.ts`. Per CLAUDE.md
+// the `Math.ceil(text.length / 4)` pattern is banned outside
+// `proxy/src/gateway/tokenCounter.ts`'s `estimateTokensFallback`.
 
 // ── Time-based compaction check ────────────────────────────────
 

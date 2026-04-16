@@ -265,6 +265,19 @@ Still open (need design discussion before execution):
 
 **Acceptance:** `rg 'length\s*/\s*4' --type ts` returns only `proxy/src/gateway/tokenCounter.ts` and test files.
 
+**Phase E — completion log (2026-04-16)**
+
+- ✅✓ **E1** — `core/util/scanning/ScanningIde.ts`: hardcoded `cacheKeyMtime = 0` replaced with `await statMtime(uri)` (uses `fs.promises.stat`, strips `file://` and query/fragment, falls back to 0 for vfs/untitled paths). Cache key now matches CLAUDE.md's documented `path:mtime:purpose` shape — file edits invalidate stale decisions automatically. The CLI parallel `ScanningFileIo.ts` already did this correctly; the IDE side is now in line.
+- ✅✓ **E2** — `proxy/src/scanner/fileScanService.ts`: cache lookup moved BEFORE the scanner pipeline. Read + hash still run (we need the hash to key the cache), but the seven-scanner pipeline is skipped on cache hit. Returns the cached result with `cached: true` and an updated `scanDurationMs`.
+- ✅✓ **E3** — three of four `Math.ceil(length / 4)` violations closed with the canonical tokenizer:
+  - `proxy/src/services/compactService.ts:246` — `estimateTokens` helper deleted, sole caller now uses `await countTokens(text, model)` from `tokenCounter.ts` (tiktoken with documented heuristic fallback).
+  - `core/util/repoMemory.ts:208,226` — both `tokenEstimate` assignments use `countTokens()` from `core/llm/countTokens.ts` (sync, llama2 default tokenizer).
+  - `packages/openai-adapters/src/apis/AnthropicCachingStrategies.ts:13` — kept the local heuristic, but added an explicit "documented exception" comment justifying it (cache-decision gate where ~10% accuracy is fine; can't import `tokenCounter` from a leaf adapter package without inverting the dependency graph).
+  - `core/nextEdit/providers/BaseNextEditProvider.ts:418,432,444` — kept the `heuristic: "fourChars" | "tokenizer"` API parameter (it's an explicit, documented performance opt-out for autocomplete inner loops). Added a clarifying comment that this is the documented exception per the same E3 rationale.
+- ❌ **E4** — pre-commit lint guard not added in this batch. The remaining violations are now all explicitly justified with comments, so a guard is no longer urgent. Recommend adding a `rg 'length\s*/\s*4' --type ts` check in CI as the simpler enforcement.
+
+`tsc --noEmit` clean across `core/`, `proxy/`, `extensions/cli/`. Full proxy suite still 690 pass / 1 known pre-existing fail.
+
 ### Phase F — Context reducer wiring (1 day, needs design call)
 
 **Goal:** Stop wasting tokens on every context overflow without violating CLAUDE.md's "never auto-truncate" principle.
@@ -276,7 +289,58 @@ Still open (need design discussion before execution):
 
 **Acceptance:** With the flag off, behaviour is identical to today. With the flag on, an overflow request succeeds and the response header is set.
 
-### Phase H — Continue.dev cruft removal (2 days)
+**Phase F — verification (2026-04-16)**
+
+All four tasks remain entirely greenfield. Survey results:
+
+- `compactConversation` exists at `gui/src/util/compactConversation.ts`, **not in the proxy**. Wiring it into `proxy/src/routes/ai.route.ts:171-200` requires moving it to a shared package (`packages/scanner/` or a new `packages/reducer/`) since `proxy/` cannot import from `gui/`.
+- `proxy/src/types/index.ts` `PolicyConfig` has no `auto_compact_on_overflow` flag (or any `auto_compact_*`).
+- Zero repo-wide hits for `X-AF-Auto-Compacted`.
+
+**Decision needed before execution:** the plan's F2 imports `compactConversation` from `gui/`. That violates the `proxy → gui` boundary (proxy doesn't depend on the GUI). Either (a) move `compactConversation` into a shared package, or (b) reimplement a smaller version in the proxy (the proxy already has `proxy/src/services/compactService.ts` — re-survey that before deciding). Defer Phase F until this is decided.
+
+### Phase H — Continue.dev cruft removal (2 days) _(re-surveyed 2026-04-16)_
+
+Survey delta — most findings still open, two already closed by prior work:
+
+| Item                                                             | Status                | Notes                                                                                                                                |
+| ---------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **H1a** `PRODUCTION_HUB_ENV`/`STAGING_ENV`/`TEST_ENV`            | ✅ open               | All three defined in `core/control-plane/env.ts:15-37` (URLs now point at `localhost:8080`, but the multi-env scaffolding lives on). |
+| **H1b** `enableHubContinueDev()`                                 | ✅ open               | `core/control-plane/env.ts:61-63` — stub still returns `true`.                                                                       |
+| **H1c** `TRIAL_PROXY_URL`                                        | ✅ open               | `core/control-plane/client.ts:49-50` — points at `proxy-server-blue-l6vsfbzhba-uw.a.run.app`.                                        |
+| **H1d** `ContinueProxyAnalyticsProvider.ts`                      | ✅ open               | File exists in `core/control-plane/analytics/`.                                                                                      |
+| **H1e** Free-trial branch in `streamChat.ts`                     | 🟡 partial            | No explicit "free-trial" string in `core/llm/streamChat.ts`; `core/config/load.ts:6` references `usesCreditsBasedApiKey()`.          |
+| **H2a** `core/llm/llms/stubs/ContinueProxy.ts`                   | ✅ open               | File + companion `.vitest.ts` still present.                                                                                         |
+| **H2b** `providerName === "free-trial"` branches                 | ✅ open (2 hits)      | One commented in `core/nextEdit/NextEditProvider.ts`, one active in `core/config/load.ts`.                                           |
+| **H3a** `extensions/cli/src/auth/workos.ts`                      | ✅ open               | 830-line WorkOS device-auth flow.                                                                                                    |
+| **H3b** `extensions/vscode/src/stubs/WorkOsAuthProvider.ts`      | ✅ open               | File + `.vitest.ts` still present.                                                                                                   |
+| **H3c** `WORKOS_CLIENT_ID_*` in `proxy/src/auth/ssoService.ts`   | ✅✓ closed            | Proxy now uses generic `SSO_*` env pattern; no hardcoded WorkOS IDs.                                                                 |
+| **H4a** `packages/continue-sdk/`                                 | ✅ open               | Directory exists (Python API + openapi_client). Audit imports before deletion.                                                       |
+| **H4b** `packages/hub/`                                          | ✅ open (rename only) | Package name already `@ai-firewall/hub`; internal references not yet swept.                                                          |
+| **H5a** `core/config/migrateSharedConfig.ts`                     | ✅ open               | File still imported by `ConfigHandler.ts` and `core.ts` per the original plan; trace before deleting.                                |
+| **H5b** `.continueignore` files                                  | ✅ open (3 instances) | Root `/`, `extensions/vscode/`, `binary/`.                                                                                           |
+| **H6a** `getContinueUtilsPath` / `getGlobalContinueIgnorePath`   | ✅ open               | Both in `core/util/paths.ts:50-67`. Called by `getChromiumPath()`.                                                                   |
+| **H6b** Root `.continueignore` file                              | ✅ open               | 112 bytes; not yet replaced by `.ai-firewallignore`.                                                                                 |
+| **H7a** `gui/src/util/isContinueTeamMember.ts`                   | 🟡 partial            | Deprecated alias still exported (line 12 forwards to `isFirewallTeamMember`). One-line removal.                                      |
+| **H7b** `core/context/providers/ContinueProxyContextProvider.ts` | ✅ open               | Class still named `ContinueProxyContextProvider`; description says "Continue for Teams".                                             |
+| **H8** `continue.dev` URL references                             | ✅✓ closed            | Zero hits in `**/*.ts` — already swept.                                                                                              |
+
+**Recommended Phase H execution order (easiest → riskiest):**
+
+1. ✅✓ **H8** — verification only (already clean).
+2. ✅✓ **H3c** — already clean.
+3. **H7a** — drop the deprecated `isContinueTeamMember` re-export (1 line).
+4. **H6b** — delete root `.continueignore` (already replaced by `.ai-firewallignore`).
+5. **H1c** — delete `TRIAL_PROXY_URL` + audit callers.
+6. **H6a** — rename `getContinueUtilsPath` / `getGlobalContinueIgnorePath` (touches multiple call sites; do as one PR).
+7. **H2a** + **H2b** — delete `ContinueProxy.ts` stub + remove free-trial branches.
+8. **H5** — delete `migrateSharedConfig.ts` + the 3 `.continueignore` files + dual-format parsing in `core/config/load.ts:81-95`.
+9. **H3a/b** — delete WorkOS CLI/VSCode files (risky — verify no callers).
+10. **H4** — drop `packages/continue-sdk/`, sweep `packages/hub/` for residual references (risky — verify exhaustively).
+11. **H1a/b/d** — delete control-plane envs + `enableHubContinueDev()` (riskiest — `useHub()` and `getControlPlaneEnv()` callers in `core/config/load.ts`, GUI auth, VSCode stubs all need rewiring first).
+12. **H7b** — rename `ContinueProxyContextProvider` (drops JetBrains user state keyed on the class name; release-note).
+
+#### Phase H — original task definitions (preserved for execution detail)
 
 **Goal:** Since AI Firewall is a separate product with no backward-compatibility obligations, strip every Continue-specific code path, URL, name, and dead stub. Reduces attack surface, clarifies ownership, and removes future regression risk.
 

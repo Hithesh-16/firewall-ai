@@ -29,6 +29,8 @@
  * `/api/scan/file` (which reads from disk). Tracked as a follow-up.
  */
 
+import { promises as fsPromises } from "node:fs";
+
 import type { IDE, Range } from "../../index.js";
 import {
   scanFileViaProxy,
@@ -146,17 +148,34 @@ interface DecideOptions {
 /**
  * Consult cache → proxy (unless cache-only purpose) → fail-open.
  * Does NOT enforce the action or throw. Returns the raw decision.
+ *
+ * Cache key is `path:mtime:purpose` — when the file is edited the
+ * mtime changes and a stale decision is automatically invalidated.
+ * Phase E.E1 (SECURITY_HARDENING_PLAN.md): the previous version
+ * hardcoded `mtime = 0` and returned stale BLOCK decisions after a
+ * file's secrets were stripped. The CLI parallel `ScanningFileIo`
+ * already did this correctly; bringing the IDE side in line.
  */
+async function statMtime(uri: string): Promise<number> {
+  // Strip `file://` prefix and any query/fragment (URI-style readers).
+  const clean = uri.replace(/^file:\/\//, "").replace(/[?#].*$/, "");
+  try {
+    const s = await fsPromises.stat(clean);
+    return s.mtimeMs;
+  } catch {
+    // Stat failures (vscode-remote, untitled, vfs URIs) — fall back
+    // to a fixed key so caching still works within a session, just
+    // without mtime invalidation. Same trade as before for those
+    // paths.
+    return 0;
+  }
+}
+
 async function decide(opts: DecideOptions): Promise<FileScanDecision | null> {
   const effectivePurpose = forcedConfigOverride(opts.uri, opts.purpose);
   if (bypassesScan(effectivePurpose)) return null;
 
-  // Cache lookup (mtime not available without a stat; key purely
-  // on path+purpose for now — good enough until we add an fs.stat
-  // in the decorator. Autocomplete correctness is the guard rail
-  // here: a stale cache entry for autocomplete just means a
-  // keystroke reads slightly older content, which is harmless.)
-  const cacheKeyMtime = 0;
+  const cacheKeyMtime = await statMtime(opts.uri);
   const cached = getCachedDecision(opts.uri, cacheKeyMtime, effectivePurpose);
   if (cached) return cached;
 

@@ -397,6 +397,15 @@ export abstract class BaseNextEditModelProvider {
   }
 
   // Shared utility for calculating editable regions.
+  //
+  // NOTE on the `heuristic` parameter: `"fourChars"` is an
+  // explicit, documented performance opt-out exposed to tight
+  // inner loops (per-keystroke autocomplete) where every microsecond
+  // matters. The `Math.ceil(text.length / 4)` calls below are the
+  // body of that opt-out; per SECURITY_HARDENING_PLAN.md E3 they're
+  // the ONE allowed exception outside `proxy/src/gateway/tokenCounter.ts`
+  // because the API surface explicitly advertises a heuristic mode.
+  // Default stays `"tokenizer"` so cold callers always pay for accuracy.
   protected calculateOptimalEditableRegion(
     helper: HelperVars,
     maxTokens: number = 512,

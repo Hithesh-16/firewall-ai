@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { BaseSessionMetadata, Session } from "..";
+import { countTokens } from "../llm/countTokens";
 import { HistoryManager } from "./history";
 import { getAiFirewallGlobalPath } from "./paths";
 
@@ -47,7 +48,11 @@ function getSummariesDir(): string {
 }
 
 function getRepoHash(workspaceDir: string): string {
-  return crypto.createHash("sha256").update(workspaceDir).digest("hex").slice(0, 16);
+  return crypto
+    .createHash("sha256")
+    .update(workspaceDir)
+    .digest("hex")
+    .slice(0, 16);
 }
 
 function getSummaryPath(workspaceDir: string): string {
@@ -196,16 +201,22 @@ export function extractRepoContext(
 
   // Trim to token budget (rough: 4 chars per token)
   const maxChars = MAX_SUMMARY_TOKENS * 4;
-  const trimmedSummary = summary.length > maxChars
-    ? summary.slice(0, maxChars) + "\n... (truncated)"
-    : summary;
+  const trimmedSummary =
+    summary.length > maxChars
+      ? summary.slice(0, maxChars) + "\n... (truncated)"
+      : summary;
 
   const result: RepoSummary = {
     workspaceDirectory: workspaceDir,
     summary: trimmedSummary,
     sessionCount: sessions.length,
     generatedAt: Date.now(),
-    tokenEstimate: Math.ceil(trimmedSummary.length / 4),
+    // Phase E.E3 (SECURITY_HARDENING_PLAN.md) — replaced
+    // `Math.ceil(text.length / 4)` heuristic with the canonical
+    // tiktoken-backed counter. Default model "llama2" is fine
+    // for a per-summary estimate (counter is content-aware, not
+    // model-specific for this purpose).
+    tokenEstimate: countTokens(trimmedSummary),
   };
 
   // Scan summary for secrets/PII before caching (best-effort via @ai-firewall/scanner)
@@ -223,7 +234,8 @@ export function extractRepoContext(
         safeSummary = safeSummary.split(p.value).join(`[REDACTED_${p.type}]`);
       }
       result.summary = safeSummary;
-      result.tokenEstimate = Math.ceil(safeSummary.length / 4);
+      // Phase E.E3 — same canonical counter as above.
+      result.tokenEstimate = countTokens(safeSummary);
     }
   } catch {
     // Scanner not available — store unscanned (acceptable for local-only)
@@ -257,7 +269,9 @@ export function getRepoSummary(
 /**
  * Format repo summary for injection into system message.
  */
-export function formatRepoSummaryForSystemMessage(summary: RepoSummary): string {
+export function formatRepoSummaryForSystemMessage(
+  summary: RepoSummary,
+): string {
   return [
     "\n--- Repository Context (from past conversations) ---",
     summary.summary,

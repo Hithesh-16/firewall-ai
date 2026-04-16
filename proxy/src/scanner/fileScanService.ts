@@ -21,6 +21,7 @@ import { adjustSeverity } from "./contextScanner";
 import { scanPromptInjection } from "./promptInjectionScanner";
 import { evaluatePolicy } from "../policy/policyEngine";
 import { redact } from "../redactor/redactor";
+import { getCachedScan } from "./fileScanCache";
 import { checkFileScope } from "../scope/fileScope";
 import { buildLineStarts, locatePosition, maskValue } from "./findingLocator";
 import type { FileScanResult, PolicyConfig, PolicyAction } from "../types";
@@ -103,8 +104,24 @@ export function scanFileContent(
     };
   }
 
-  // 4. Compute content hash (SHA-256 for cache key)
+  // 4. Compute content hash (SHA-256 for cache key).
   const fileHash = crypto.createHash("sha256").update(content).digest("hex");
+
+  // 4a. Phase E.E2 (SECURITY_HARDENING_PLAN.md) — cache-first.
+  // Previously the cache was consulted AFTER the full scanner
+  // pipeline ran, so every cache hit still paid the scanner cost.
+  // Now we check before running the (relatively expensive) scanner
+  // pipeline. Read + hash are cheap; the savings are in steps 5+.
+  const cached = getCachedScan(absolutePath, fileHash);
+  if (cached) {
+    return {
+      ...cached,
+      filePath: absolutePath,
+      fileHash,
+      scanDurationMs: Date.now() - startTime,
+      cached: true,
+    };
+  }
 
   // 5. Run scanner pipeline
   const secretResult = scanSecrets(content);

@@ -124,6 +124,120 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
     return <OutOfCreditsDialog />;
   }
 
+  // ── AI Firewall block — render a firewall-themed surface ─────
+  //
+  // When the proxy returns 403 with a BLOCK decision, BaseLLM throws
+  // a `FirewallBlockedRequestError` (see core/llm/firewallScan.ts).
+  // We detect it by name + message prefix so we don't have to import
+  // the typed error across the package boundary, then render a
+  // dedicated dialog with the masked finding list — instead of the
+  // generic "Error handling model response" frame which hides the
+  // useful info behind a "View error output" toggle.
+  const isFirewallBlock =
+    (error instanceof Error && error.name === "FirewallBlockedRequestError") ||
+    (typeof message === "string" &&
+      message.startsWith("AI Firewall blocked this request"));
+
+  if (isFirewallBlock) {
+    // Pull structured detail off the error if available; fall back to
+    // string parsing if a downstream wrapper has stripped the typed
+    // class (e.g. JSON-serialized over IPC).
+    const detail =
+      error instanceof Error &&
+      "detail" in error &&
+      typeof (error as { detail?: unknown }).detail === "object"
+        ? (
+            error as {
+              detail: {
+                riskScore?: number;
+                reasons?: string[];
+                findings?: Array<{
+                  type: string;
+                  severity?: string;
+                  masked?: string;
+                }>;
+              };
+            }
+          ).detail
+        : undefined;
+    const riskScore =
+      detail?.riskScore ??
+      (() => {
+        const m = /risk:\s*(\d+)/i.exec(message ?? "");
+        return m ? Number(m[1]) : undefined;
+      })();
+    const reasons = detail?.reasons ?? [];
+    const findings = detail?.findings ?? [];
+
+    return (
+      <div className="flex flex-col gap-4 px-3 pb-3 pt-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{"\u26D4"}</span>
+          <h3 className="text-error m-0 p-0 text-lg font-medium">
+            AI Firewall blocked this request
+          </h3>
+        </div>
+
+        <p className="m-0 p-0 text-sm">
+          The proxy detected sensitive content in your message and refused to
+          forward it to <code>{selectedModel?.title ?? "the model"}</code>. Edit
+          the input to remove the flagged content and resubmit.
+          {typeof riskScore === "number" ? (
+            <>
+              {" "}
+              <span className="text-description">
+                (risk score:&nbsp;<strong>{riskScore}</strong>/100)
+              </span>
+            </>
+          ) : null}
+        </p>
+
+        {findings.length > 0 ? (
+          <div className="bg-error/5 border-error/30 flex flex-col gap-2 rounded border p-3">
+            <div className="text-xs font-semibold uppercase tracking-wider">
+              Findings
+            </div>
+            <ul className="m-0 flex flex-col gap-1 p-0">
+              {findings.map((f, i) => (
+                <li
+                  key={`${f.type}-${i}`}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <code className="bg-error/10 rounded px-1.5 py-0.5 text-xs">
+                    {f.type}
+                  </code>
+                  {f.severity ? (
+                    <span className="text-description text-xs">
+                      {f.severity}
+                    </span>
+                  ) : null}
+                  {f.masked ? (
+                    <code className="text-description text-xs">{f.masked}</code>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {reasons.length > 0 ? (
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-description text-xs font-semibold uppercase tracking-wider">
+              Reasons
+            </span>
+            <ul className="m-0 flex flex-col gap-0.5 pl-5">
+              {reasons.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="flex flex-row flex-wrap gap-2">{resubmitButton}</div>
+      </div>
+    );
+  }
+
   let errorContent = (
     <div className="mb-1 mt-3">
       <div className="m-0 p-0">

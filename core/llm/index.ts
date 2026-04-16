@@ -1,7 +1,10 @@
 import { ModelRole } from "@ai-firewall/config-yaml";
 import { fetchwithRequestOptions } from "@ai-firewall/fetch";
 import { findLlmInfo } from "@ai-firewall/llm-info";
-import { firewallPreflightScan } from "./firewallScan.js";
+import {
+  firewallPreflightScan,
+  FirewallBlockedRequestError,
+} from "./firewallScan.js";
 import { firewallResponseScan } from "./firewallResponseScan.js";
 import {
   BaseLlmApi,
@@ -1289,7 +1292,20 @@ export abstract class BaseLLM implements ILLM {
         completionOptions.model,
       );
       if (scanResult.blocked) {
-        throw new Error(scanResult.blockMessage ?? "Blocked by AI Firewall");
+        // Throw a typed error carrying the structured BlockDetail
+        // (findings + reasons + risk). The GUI's StreamError dialog
+        // detects this name and renders a firewall-themed surface
+        // instead of the generic "Error handling model response"
+        // panel — see gui/src/pages/gui/StreamError.tsx.
+        const message =
+          scanResult.blockMessage ?? "AI Firewall blocked this request";
+        if (scanResult.blockDetail) {
+          throw new FirewallBlockedRequestError(
+            message,
+            scanResult.blockDetail,
+          );
+        }
+        throw new Error(message);
       }
       if (scanResult.finalBody !== scanBody) {
         try {

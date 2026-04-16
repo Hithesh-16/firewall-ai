@@ -1459,7 +1459,12 @@ export class Core {
   private async handleCompleteOnboarding(
     msg: Message<CompleteOnboardingPayload>,
   ) {
-    const { mode, provider, apiKey } = msg.data;
+    // Phase C.C2 (SECURITY_HARDENING_PLAN.md) — `apiKeyRef` is the
+    // ONLY credential field the IDE accepts. The webview vaults the
+    // key against the proxy first (see useSubmitOnboarding.ts) and
+    // sends only the reference shape `vault://<slug>`. The legacy
+    // `apiKey` field on the payload was removed in core/index.d.ts.
+    const { mode, provider, apiKeyRef } = msg.data;
 
     let editConfigYamlCallback: (config: ConfigYaml) => ConfigYaml;
 
@@ -1469,9 +1474,9 @@ export class Core {
         break;
 
       case OnboardingModes.API_KEY:
-        if (provider && apiKey) {
+        if (provider && apiKeyRef) {
           editConfigYamlCallback = (config: ConfigYaml) =>
-            setupProviderConfig(config, provider, apiKey);
+            setupProviderConfig(config, provider, apiKeyRef);
         } else {
           editConfigYamlCallback = setupQuickstartConfig;
         }

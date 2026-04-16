@@ -8,20 +8,25 @@ export const LOCAL_ONBOARDING_CHAT_TITLE = "Llama 3.1 8B";
 export const LOCAL_ONBOARDING_EMBEDDINGS_MODEL = "nomic-embed-text:latest";
 export const LOCAL_ONBOARDING_EMBEDDINGS_TITLE = "Nomic Embed";
 
-const ANTHROPIC_MODEL_CONFIG = {
-  slugs: ["anthropic/claude-3-7-sonnet", "anthropic/claude-4-sonnet"],
-  apiKeyInputName: "ANTHROPIC_API_KEY",
-};
-const OPENAI_MODEL_CONFIG = {
-  slugs: ["openai/gpt-4.1", "openai/o3", "openai/gpt-4.1-mini"],
-  apiKeyInputName: "OPENAI_API_KEY",
-};
-
-// TODO: These need updating on the hub
-const GEMINI_MODEL_CONFIG = {
-  slugs: ["google/gemini-2.5-pro", "google/gemini-2.0-flash"],
-  apiKeyInputName: "GEMINI_API_KEY",
-};
+/**
+ * Concrete model entries seeded by the onboarding wizard for each
+ * hosted provider. Each entry is written DIRECTLY to config.yaml
+ * with `provider + model + apiKeyRef` instead of the previous
+ * `uses: <hub-slug> + with: { OPENAI_API_KEY: apiKey }` pair —
+ * the previous shape leaked the plaintext key into the YAML, which
+ * Phase C of SECURITY_HARDENING_PLAN.md eliminates.
+ *
+ * Defaults intentionally kept narrow (one model per provider) so the
+ * onboarding YAML stays readable; users can add more from the
+ * /settings/models surface afterwards.
+ */
+const ANTHROPIC_MODEL_DEFAULTS = [
+  { name: "Claude Sonnet", model: "claude-sonnet-4-20250514" },
+];
+const OPENAI_MODEL_DEFAULTS = [{ name: "GPT-4.1", model: "gpt-4.1" }];
+const GEMINI_MODEL_DEFAULTS = [
+  { name: "Gemini 2.5 Pro", model: "gemini-2.5-pro" },
+];
 
 /**
  * We set the "best" chat + autocopmlete models by default
@@ -65,36 +70,44 @@ export function setupQuickstartConfig(config: ConfigYaml): ConfigYaml {
   return config;
 }
 
+/**
+ * Phase C.C2 (SECURITY_HARDENING_PLAN.md) — the third arg is now an
+ * `apiKeyRef` (e.g. `"vault://openai"`) produced by the upstream GUI
+ * after POST'ing the actual key to the proxy vault. Onboarding writes
+ * this reference into config.yaml; the BaseLLM resolver (C3) fetches
+ * the real key from the proxy at instantiation. Plaintext API keys
+ * are never written to disk by this code path.
+ */
 export function setupProviderConfig(
   config: ConfigYaml,
   provider: string,
-  apiKey: string,
+  apiKeyRef: string,
 ): ConfigYaml {
   let newModels;
 
   switch (provider) {
     case "openai":
-      newModels = OPENAI_MODEL_CONFIG.slugs.map((slug) => ({
-        uses: slug,
-        with: {
-          [OPENAI_MODEL_CONFIG.apiKeyInputName]: apiKey,
-        },
+      newModels = OPENAI_MODEL_DEFAULTS.map((m) => ({
+        name: m.name,
+        provider: "openai",
+        model: m.model,
+        apiKeyRef,
       }));
       break;
     case "anthropic":
-      newModels = ANTHROPIC_MODEL_CONFIG.slugs.map((slug) => ({
-        uses: slug,
-        with: {
-          [ANTHROPIC_MODEL_CONFIG.apiKeyInputName]: apiKey,
-        },
+      newModels = ANTHROPIC_MODEL_DEFAULTS.map((m) => ({
+        name: m.name,
+        provider: "anthropic",
+        model: m.model,
+        apiKeyRef,
       }));
       break;
     case "gemini":
-      newModels = GEMINI_MODEL_CONFIG.slugs.map((slug) => ({
-        uses: slug,
-        with: {
-          [GEMINI_MODEL_CONFIG.apiKeyInputName]: apiKey,
-        },
+      newModels = GEMINI_MODEL_DEFAULTS.map((m) => ({
+        name: m.name,
+        provider: "gemini",
+        model: m.model,
+        apiKeyRef,
       }));
       break;
     default:

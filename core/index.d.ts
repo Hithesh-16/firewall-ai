@@ -96,7 +96,8 @@ type RequiredLLMOptions =
   | "completionOptions";
 
 export interface ILLM
-  extends Omit<LLMOptions, RequiredLLMOptions>,
+  extends
+    Omit<LLMOptions, RequiredLLMOptions>,
     Required<Pick<LLMOptions, RequiredLLMOptions>> {
   get providerName(): string;
   get underlyingProviderName(): string;
@@ -662,6 +663,13 @@ export interface LLMOptions {
   logger?: ILLMLogger;
   llmRequestHook?: (model: string, prompt: string) => any;
   apiKey?: string;
+  /**
+   * Phase C.C3 (SECURITY_HARDENING_PLAN.md) — vault reference of
+   * shape `vault://<slug>` (or `vault://<slug>/<model>`). When set,
+   * BaseLLM lazily resolves the real key via the proxy's
+   * `GET /api/providers/by-slug/:slug` endpoint at first request.
+   */
+  apiKeyRef?: string;
 
   // continueProperties
   apiKeyLocation?: string;
@@ -1951,7 +1959,13 @@ export interface Skill {
 export interface CompleteOnboardingPayload {
   mode: OnboardingModes;
   provider?: string;
-  apiKey?: string;
+  /**
+   * Vault reference produced by `POST /api/providers` on the proxy
+   * (e.g. `vault://openai/gpt-4`). Phase C of the security plan
+   * makes this the only way an onboarding flow conveys credential
+   * material to the IDE — `apiKey` (raw) is gone.
+   */
+  apiKeyRef?: string;
 }
 
 export interface CompiledMessagesResult {

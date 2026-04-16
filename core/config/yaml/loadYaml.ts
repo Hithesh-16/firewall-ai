@@ -42,6 +42,7 @@ import { unrollLocalYamlBlocks } from "./loadLocalYamlBlocks";
 import { LocalPlatformClient } from "./LocalPlatformClient";
 import { llmsFromModelConfig } from "./models";
 import { scanLoadedConfigForPlaintextKeys } from "./scanLoadedConfig";
+import { isPlaintextApiKey } from "./apiKeyClassifier";
 import {
   convertYamlMcpConfigToInternalMcpOptions,
   convertYamlRuleToContinueRule,
@@ -151,11 +152,7 @@ async function loadConfigYaml(options: {
 
     // Phase A.A2 — emit a critical scan report for any model whose
     // `apiKey:` field is a literal value (not `vault://...`, not a
-    // `${{ secrets.X }}` template). Inform-only; the hard refusal
-    // ships in Phase C. Reports are silently dropped if no
-    // `runInScanContext` window is active (e.g. startup load), which
-    // is the desired behaviour — we don't want banners flashing
-    // without an active chat turn to attach them to.
+    // `${{ secrets.X }}` template).
     try {
       const sourceFile =
         packageIdentifier.uriType === "file"
@@ -164,6 +161,37 @@ async function loadConfigYaml(options: {
       scanLoadedConfigForPlaintextKeys(config, sourceFile);
     } catch {
       // Defense-in-depth: scanner failures must never break config load.
+    }
+
+    // Phase C.C6 (SECURITY_HARDENING_PLAN.md) — HARD REFUSAL.
+    // Any model entry with a plaintext `apiKey:` is rejected at
+    // load time with a fatal error. Acceptable values:
+    //   - omitted (no key — fine for local providers like Ollama)
+    //   - `apiKeyRef: vault://<slug>` (Phase C resolver path)
+    //   - templated input: `${{ secrets.X }}` or `${ENV_VAR}`
+    // No silent downgrade, no migration command, no env://
+    // fallback — the plan's decision log is explicit:
+    //   "A config.yaml containing a raw apiKey: field must
+    //    REFUSE TO LOAD with a clear error pointing to the
+    //    onboarding flow."
+    const plaintextOffenders: string[] = [];
+    for (const model of config.models ?? []) {
+      if (!model) continue;
+      const apiKey = (model as { apiKey?: string }).apiKey;
+      if (!isPlaintextApiKey(apiKey)) continue;
+      const name = (model as { name?: string }).name ?? "(unnamed)";
+      plaintextOffenders.push(name);
+    }
+    if (plaintextOffenders.length > 0) {
+      errors.push({
+        fatal: true,
+        message:
+          `Plain-text 'apiKey:' detected on model(s): ${plaintextOffenders.join(", ")}. ` +
+          `AI Firewall does not load configs with raw API keys — keys must live in the ` +
+          `proxy vault. Run the onboarding wizard (or POST your key to ` +
+          `/api/providers and replace 'apiKey:' with 'apiKeyRef: vault://<slug>') ` +
+          `to migrate. See SECURITY_HARDENING_PLAN.md Phase C.`,
+      });
     }
   }
 

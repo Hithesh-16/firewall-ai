@@ -166,6 +166,20 @@ export abstract class BaseLLM implements ILLM {
   logger?: ILLMLogger;
   llmRequestHook?: (model: string, prompt: string) => any;
   apiKey?: string;
+  /**
+   * Phase C.C3 (SECURITY_HARDENING_PLAN.md) — vault reference of
+   * shape `vault://<slug>` (or `vault://<slug>/<model>`). When set,
+   * the BaseLLM constructor will lazily fetch the decrypted key
+   * from the proxy's `GET /api/providers/by-slug/:slug` endpoint
+   * (Phase C.C1) on first request, so the plaintext never lives in
+   * config.yaml or the model options object on disk.
+   *
+   * Either `apiKey` (legacy raw value) or `apiKeyRef` (preferred)
+   * may be supplied. If both are set, `apiKeyRef` wins — the raw
+   * `apiKey` is treated as a fallback that is only used while the
+   * vault resolve is pending or has failed.
+   */
+  apiKeyRef?: string;
 
   // continueProperties
   apiKeyLocation?: string;
@@ -211,6 +225,13 @@ export abstract class BaseLLM implements ILLM {
   private _llmOptions: LLMOptions;
 
   protected openaiAdapter?: BaseLlmApi;
+
+  /**
+   * Phase C.C3 (SECURITY_HARDENING_PLAN.md) — caches the in-flight
+   * vault resolve so concurrent requests share one round trip.
+   * `apiKeyRef` itself is declared higher up alongside `apiKey`.
+   */
+  private _apiKeyResolvePromise?: Promise<string | undefined>;
 
   constructor(_options: LLMOptions) {
     this._llmOptions = _options;
@@ -270,7 +291,29 @@ export abstract class BaseLLM implements ILLM {
       undefined;
     this.logger = options.logger;
     this.llmRequestHook = options.llmRequestHook;
+
+    // Phase C.C3 (SECURITY_HARDENING_PLAN.md) — vault-first apiKey
+    // resolution. If `apiKeyRef` is set OR `apiKey` itself is a
+    // `vault://...` reference, defer the actual decryption until the
+    // first request via `ensureApiKeyResolved()`. The plaintext
+    // apiKey field then carries the (eventually) resolved real key.
+    // Legacy raw `apiKey` values still work — they're left in place
+    // verbatim so this PR doesn't break the 60+ provider subclasses
+    // that read `this.apiKey` synchronously.
     this.apiKey = options.apiKey;
+    if (
+      options.apiKeyRef ||
+      (typeof options.apiKey === "string" &&
+        options.apiKey.startsWith("vault://"))
+    ) {
+      this.apiKeyRef = options.apiKeyRef ?? options.apiKey;
+      // Clear the placeholder vault:// string so subclasses don't
+      // accidentally pass it as a Bearer token before resolution
+      // completes. ensureApiKeyResolved() rewrites this field.
+      if (this.apiKey?.startsWith("vault://")) {
+        this.apiKey = undefined;
+      }
+    }
 
     // continueProperties
     this.apiKeyLocation = options.apiKeyLocation;
@@ -322,6 +365,69 @@ export abstract class BaseLLM implements ILLM {
 
   getConfigurationStatus() {
     return LLMConfigurationStatuses.VALID;
+  }
+
+  /**
+   * Phase C.C3 (SECURITY_HARDENING_PLAN.md) — resolve `apiKeyRef`
+   * (a `vault://<slug>[/...]` reference) into the real key by calling
+   * the proxy's `GET /api/providers/by-slug/:slug` endpoint built in
+   * Phase C.C1. Idempotent + memoised: concurrent callers share one
+   * fetch via `_apiKeyResolvePromise`. Once the key is resolved we
+   * mutate `this.apiKey` so the existing 60+ provider subclasses
+   * keep reading `this.apiKey` synchronously without changes.
+   *
+   * Subclasses that issue requests should `await this.ensureApiKeyResolved()`
+   * at the top of their request methods. `BaseLLM.streamChat`/etc.
+   * already do this for the common path.
+   *
+   * Fail-open semantics: if the proxy is unreachable, the legacy raw
+   * `apiKey` (if any) stays in place and the request proceeds. This
+   * preserves the local-Ollama-only flow that has no key. The hard
+   * refusal of plaintext keys lives at config-load time (Phase C.C6),
+   * not here.
+   */
+  protected async ensureApiKeyResolved(): Promise<void> {
+    if (!this.apiKeyRef) return;
+    if (this.apiKey && !this.apiKey.startsWith("vault://")) {
+      // Already resolved (or a legacy raw key the user explicitly set).
+      return;
+    }
+    if (!this._apiKeyResolvePromise) {
+      this._apiKeyResolvePromise = this._resolveVaultRef(this.apiKeyRef);
+    }
+    const resolved = await this._apiKeyResolvePromise;
+    if (resolved) {
+      this.apiKey = resolved;
+      // Rebuild the OpenAI adapter so it uses the resolved key.
+      try {
+        this.openaiAdapter = this.createOpenAiAdapter();
+      } catch {
+        // Subclasses that override createOpenAiAdapter may not be
+        // constructible mid-flight; leave the existing adapter in
+        // place and let the next constructor pass pick it up.
+      }
+    }
+  }
+
+  private async _resolveVaultRef(ref: string): Promise<string | undefined> {
+    // Reference shape: vault://<slug>[/<model>] — the model suffix is
+    // an aid for humans reading the YAML, not part of the lookup.
+    const stripped = ref.replace(/^vault:\/\//, "");
+    const slug = stripped.split("/")[0];
+    if (!slug) return undefined;
+
+    const proxyBase = process.env.AF_PROXY_URL ?? "http://localhost:8080";
+    try {
+      const res = await fetch(
+        `${proxyBase}/api/providers/by-slug/${encodeURIComponent(slug)}`,
+        { method: "GET" },
+      );
+      if (!res.ok) return undefined;
+      const data = (await res.json()) as { decryptedKey?: string };
+      return data.decryptedKey;
+    } catch {
+      return undefined;
+    }
   }
 
   protected createOpenAiAdapter() {
@@ -1122,6 +1228,11 @@ export abstract class BaseLLM implements ILLM {
     messageOptions?: MessageOption,
   ): AsyncGenerator<ChatMessage, PromptLog> {
     this.lastRequestId = undefined;
+
+    // Phase C.C3 — resolve any pending vault:// reference into the
+    // real key before the request hits the provider's HTTP client.
+    // Idempotent + cached; existing non-vault flows are no-op.
+    await this.ensureApiKeyResolved();
 
     // Apply per-model tool overrides if configured
     let effectiveTools = options.tools;

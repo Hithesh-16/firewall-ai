@@ -431,8 +431,120 @@ Three quick wins shipped this session:
 **Goal:** Address secrets already in git history on `origin/dev-final`.
 
 - **G1.** Rotate the Groq key (and any other keys in the committed SQLite DB). **Do this immediately, regardless of the rest of the plan.**
-- **G2.** Decide whether to run `git filter-repo` to purge `proxy/data/**` from all history. This rewrites every commit SHA on `dev-final` and requires a force-push. **Not recommended until all contributors are warned; defer to the repo owner.**
+- **G2.** ✅✓ closed 2026-04-17. `git filter-repo --invert-paths --path proxy/data --force` rewrote all 6 branches; force-pushed to all of them on `Hithesh-16/firewall-ai`. Backup branches `backup` + `backup-pre-g2-2026-04-17` preserved locally for the reflog window. Old commit SHAs may still be reachable on GitHub via direct URL until their GC catches up; key rotation (G1) remains the only real mitigation.
 - **G3.** Audit GitHub's secret-scanning alerts panel for any other flagged secrets; close each with an explicit reason.
+
+---
+
+## Phase I — Agent Harness Parity (effort: M, ~2 weeks) _(added 2026-04-17, see `docs/DEEPAGENTS_INTEGRATION_ANALYSIS.md`)_
+
+**Goal:** Surface the multi-agent capabilities we already have and close gaps the LangChain `deepagents` analysis flagged. Decisions on the original open questions are baked in below (Q-numbers reference §6 of the analysis doc).
+
+- **I1. Unified `provider:model-id` resolver** _(decision Q6: standardize everywhere)_
+  - Add `proxy/src/gateway/modelResolver.ts` exposing `resolveModel("openai:gpt-4o" | "anthropic:claude-sonnet-4-6" | …) → LLMConfig`.
+  - Wire into `core/llm/llms/index.ts`, CLI `/model` command, and the GUI model picker so the same string identifies a model in every surface.
+  - Default fallback to current org default (mirrors deepagents `get_default_model()`).
+  - Acceptance: `curl localhost:8080/v1/chat/completions -d '{"model":"openai:gpt-4o",...}'` resolves correctly across all 60+ existing providers.
+- **I2. Declarative subagent registry** _(decision Q1: project + user scope, project wins)_
+  - Reads `<workspace>/.ai-firewall/subagents.yaml` then `~/.ai-firewall/subagents.yaml`; project entries override user entries by `name`.
+  - Each entry: `name`, `description`, `system_prompt`, optional `tools`, `model`, `skills`. Same shape as deepagents' `SubAgent` TypedDict.
+  - When the registry is non-empty, inject a `task(name, instructions)` tool into the model's tool list at request time. Implementation calls `agentService.spawn()` with the matching subagent's prompt/model/tools.
+  - Files: `core/tools/implementations/taskTool.ts`, `proxy/src/agents/registry.ts`, GUI `AgentRegistryPage`.
+  - Acceptance: agent calls `task(name="researcher", instructions="...")` → child worker spawns with researcher's system prompt + scoped tools, parent gets only the final result.
+- **I3. Async subagent state channel** _(decision Q8: survive process restart via SQLite)_
+  - Extend `proxy/src/services/agentService.ts` with `async_tasks` state field persisted to a new SQLite table `async_tasks(id, parent_session, prompt, status, started_at, last_check_at, result_json)`.
+  - Add 5 tools mirroring deepagents: `start_async_task`, `check_async_task`, `update_async_task`, `cancel_async_task`, `list_async_tasks`.
+  - Survives `compactService` runs (lives outside the message log) and proxy restarts.
+  - Acceptance: parent can spawn 3 background tasks, ask for status while they run, cancel one, restart the proxy, and see the surviving 2 still in the table with `status: running`.
+- **I4. Planning middleware in CLI** _(decision Q4 partial: structured plan)_
+  - Move `core/tools/implementations/planTool.ts` into the shared CLI tool registry (`extensions/cli/src/tools/`).
+  - Inject a system-prompt fragment from `proxy/src/middleware/planningPrompt.ts` that nudges multi-step plan creation for tasks ≥3 steps.
+  - Add `/todos` slash command in CLI + GUI to read the current plan state.
+  - Acceptance: CLI agent autonomously calls `planTool` for tasks ≥3 steps; todos visible via `/todos` in both surfaces.
+
+---
+
+## Phase J — MCP & Commands Parity (effort: S/M, ~1 week)
+
+**Goal:** Bring MCP integration to parity with deepagents (auto-discovery, project trust, slash commands) and add the Chrome DevTools MCP server the user explicitly asked for.
+
+- **J1. `.mcp.json` discovery service**
+  - New `proxy/src/services/mcpDiscoveryService.ts` scanning, in precedence order:
+    1. `<proj>/.mcp.json` (Claude-compatible — interop with users coming from claude-code)
+    2. `<proj>/.ai-firewall/.mcp.json`
+    3. `~/.ai-firewall/.mcp.json`
+  - Project entries override user entries by server name. Expose via `GET /api/mcp/servers`.
+  - Acceptance: dropping a `.mcp.json` in workspace root auto-loads the server on next chat without restart.
+- **J2. Project MCP trust store** _(decision Q9: fingerprint + manifest scan, defense-in-depth)_
+  - `proxy/src/services/mcpTrustService.ts` with two layers:
+    - SHA-256 of each project config in new SQLite table `mcp_trust(fingerprint, project_path, decision, decided_at)`.
+    - Proxy-side scan of the spawned MCP server's manifest (binary path / npm package name) through the same scanner pipeline (so policy can deny known-malicious packages).
+  - Prompt user on first encounter (CLI dialog + GUI banner). `--trust-project-mcp` env flag for CI.
+  - Acceptance: changing the `.mcp.json` content invalidates trust and re-prompts; a manifest matching a denylist pattern is auto-blocked even with prior trust.
+- **J3. Missing slash commands in proxy**
+  - Add `/mcp`, `/agents`, `/spawn`, `/skills`, `/todos` to `proxy/src/commands/builtinCommands.ts` so they're discoverable from both CLI and GUI.
+  - `/mcp [list | enable <id> | disable <id> | install <slug>]`, `/agents` lists registry + active workers, `/spawn <name>` triggers async subagent, `/skills` lists loaded skills, `/todos` reads the current plan.
+  - Acceptance: GUI command palette shows all 5 in addition to existing 15.
+- **J4. CLI tool parity**
+  - Port the 8 highest-value missing tools to `extensions/cli/src/tools/`: `spawnAgent`, `planTool`, `memory`, `skillTool`, `readSkill`, `worktree`, `globSearch`, `grepSearch`.
+  - Acceptance: CLI tool count rises from 14 to 22; coverage matches IDE for the planning/memory/spawn surface.
+- **J5. Bundle Chrome DevTools MCP plugin** _(NEW — user's explicit ask)_
+  - New `proxy/src/plugins/bundled/chrome-devtools/plugin.json` registering the Chrome DevTools MCP server (`@modelcontextprotocol/server-chromium` or equivalent).
+  - Acceptance: after `enabling` the plugin via `/mcp enable chrome-devtools`, the agent can call browser tools (navigate, screenshot, get-console-messages) through the firewall's MCP gateway.
+
+**Phase J — partial completion log (2026-04-17)**
+
+Two quick wins shipped this session — the user's explicit ask:
+
+- ✅✓ **J3 (`/mcp` slash command)** — added to `proxy/src/commands/builtinCommands.ts` and exported via `BUILTIN_COMMANDS`. Subcommands: `list` (default), `enable <name>`, `disable <name>`, `install <slug>` (placeholder; explains it's a follow-up). Wired into `pluginLoader` for enable/disable. 6 new unit tests in `proxy/src/test/commands.test.ts` (registered, list output, enable-unknown, enable-missing-arg, unknown-subcommand, install-not-impl) — all green. Total proxy suite: 696 pass / 1 known pre-existing fail.
+- ✅✓ **J5 (Chrome DevTools MCP plugin bundled)** — new `proxy/src/plugins/bundled/chrome-devtools/plugin.json` registers `chrome-devtools-mcp` via stdio. Disabled by default (Chromium has a non-trivial resource footprint). Enable with `/mcp enable chrome-devtools`. All browser tool calls (navigate / click / take_screenshot / list_console_messages / etc.) route through `/v1/mcp/tools/call` so the firewall's MCP Security Gateway scans inputs/outputs the same way it does for the bundled `filesystem` server. The plugin loader's auto-discovery picked it up without code changes.
+
+The other Phase J items (J1 `.mcp.json` discovery, J2 trust store, J4 CLI tool parity) remain on the runway.
+
+---
+
+## Phase K — Streaming, Frontend, HITL (effort: M, ~1.5 weeks)
+
+**Goal:** Replace 5s polling with real-time event streams; add the HITL `edit` decision so users can correct tool args before exec.
+
+- **K1. Unified streaming taxonomy** _(decision Q3: opt-in via header now, GUI default in 60 days)_
+  - Define `proxy/src/gateway/streamEvents.ts` with `{type, ns, data}` events: `subagent.start` / `subagent.token` / `subagent.end` / `tool.call.delta` / `tool.call.final` / `todo.update` / `memory.update`.
+  - Emit alongside existing OpenAI SSE on `/v1/chat/completions` via a new `X-AF-Stream: events` opt-in header (default off).
+  - Plan to flip default to `events` in the release after 60 days; document the migration window in CHANGELOG.
+  - Acceptance: `curl … -H 'X-AF-Stream: events'` returns interleaved event lines parseable by a JS consumer.
+- **K2. `useAgentStream` React hook**
+  - New `gui/src/hooks/useAgentStream.ts` modelled on deepagents' `useStream`: `{messages, subagents, todos, status}`.
+  - Backed by a new `GET /api/agents/stream` SSE endpoint.
+  - Migrate `CoordinatorView.tsx` and `AgentManagerPage.tsx` off the 5s poll.
+  - Acceptance: subagent events appear in the GUI within 100ms of emission; CPU usage on idle drops measurably vs the polling baseline.
+- **K3. HITL `edit` decision** _(decision Q4: structured JSON editor with Zod validation)_
+  - Extend `approvalService.resolve(decision: "allow" | "deny" | "edit", editedArgs?)`.
+  - Plumb through `approval_requests.action` enum + WS `approval_resolved` payload.
+  - GUI `ApprovalDialog` shows the tool's Zod schema + a structured form for editing args (not freeform JSON — the schema-validated UI prevents the next bug class).
+  - Acceptance: user intercepts a tool call, modifies its arguments via the form, approves the edited form; downstream tool sees the modified args and rejects malformed edits at validation time.
+
+---
+
+## Phase L — Skill Auto-match + Memory Auto-prepend (effort: S/M, ~1 week)
+
+**Goal:** Bring deepagents' "progressive disclosure" pattern (load just-in-time context) to skills and memory. ACP adapter (the doc's original L1) deferred per decision Q2.
+
+- **L1. Skill auto-match middleware** _(decision Q7: embedding-based matching via existing `embeddingDetector.ts`)_
+  - New `proxy/src/middleware/skillMatcher.ts`: at chat-start, compute embedding of the latest user message and the loaded skills' frontmatter `description` field (cached). Inject the best match (max 1, max 4k tokens) as a system message if cosine similarity ≥ 0.7.
+  - Reuses `proxy/src/ml/embeddingDetector.ts`'s feature extractor — no new ML dep.
+  - Opt-in via `policy.json` `skills.auto_match: true`. Defense: skills already pass through scanner pipeline at load.
+  - Acceptance: prompting "make me a commit" auto-injects the bundled `commit` skill body; `X-AF-Skill-Matched` response header set with the matched skill name.
+- **L2. Memory auto-prepend** _(decision Q5: default OFF — privacy risk)_
+  - Opt-in `memory.auto_prepend_in_system_prompt: false` (default off).
+  - When enabled: reads `MEMORY.md` index + selected entries (≤ 8k tokens), prepends to system prompt.
+  - GUI surfaces a clear privacy notice when the user enables this (one-time confirm banner).
+  - Acceptance: enabling the flag and adding a memory makes it visible to the next assistant turn without an explicit `@memory` reference; disabling reverts immediately.
+
+---
+
+## Deferred (separate decision)
+
+- **L3 (deepagents §3.13 ACP)** — Zed/Cursor embedding via Agent Client Protocol. Per decision Q2, deferring until there's a real demand signal. Technical sketch preserved in `docs/DEEPAGENTS_INTEGRATION_ANALYSIS.md` §3.13 if/when we want to revisit.
 
 ---
 

@@ -1372,6 +1372,22 @@ async function run() {
       "cmd:searchCaseInsensitive",
       commandTests.testSearchCommandsCaseInsensitive,
     ],
+    // Phase J.J3 — /mcp slash command
+    ["cmd:mcpRegistered", commandTests.testMcpCommandRegistered],
+    ["cmd:mcpListReturnsPlugins", commandTests.testMcpListReturnsLoadedPlugins],
+    [
+      "cmd:mcpEnableUnknownReturnsError",
+      commandTests.testMcpEnableUnknownPluginReturnsError,
+    ],
+    [
+      "cmd:mcpEnableMissingArg",
+      commandTests.testMcpEnableMissingArgReturnsUsage,
+    ],
+    ["cmd:mcpUnknownSubcommand", commandTests.testMcpUnknownSubcommand],
+    [
+      "cmd:mcpInstallNotImplemented",
+      commandTests.testMcpInstallNotYetImplemented,
+    ],
     // Coordinator + Worker Pool
     [
       "coord:findAgentGeneralPurpose",

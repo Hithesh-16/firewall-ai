@@ -453,3 +453,87 @@ export function testSearchCommandsCaseInsensitive() {
     "Should find doctor via uppercase search",
   );
 }
+
+// ── /mcp command (Phase J.J3 — SECURITY_HARDENING_PLAN.md) ───
+
+export async function testMcpCommandRegistered() {
+  clearCommandCache();
+  const cmd = findCommand("mcp");
+  assert.ok(cmd !== null, "Should find /mcp command");
+  assert.strictEqual(cmd!.name, "mcp");
+  assert.strictEqual(cmd!.type, "local");
+}
+
+export async function testMcpListReturnsLoadedPlugins() {
+  clearCommandCache();
+  const cmd = findCommand("mcp");
+  assert.ok(cmd !== null);
+  // `local` commands have a `call` method.
+  assert.strictEqual(cmd!.type, "local");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (cmd as any).call("list", defaultContext());
+  assert.strictEqual(result.success, true);
+  // Output format is "[ enabled] name@version  —  description" or "No plugins loaded".
+  assert.ok(
+    typeof result.output === "string" && result.output.length > 0,
+    "List output must be a non-empty string",
+  );
+}
+
+export async function testMcpEnableUnknownPluginReturnsError() {
+  clearCommandCache();
+  const cmd = findCommand("mcp");
+  assert.ok(cmd !== null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (cmd as any).call(
+    "enable definitely-not-a-real-plugin",
+    defaultContext(),
+  );
+  assert.strictEqual(result.success, false);
+  assert.ok(
+    result.output.includes("not found"),
+    "Should explain that the plugin is unknown",
+  );
+}
+
+export async function testMcpEnableMissingArgReturnsUsage() {
+  clearCommandCache();
+  const cmd = findCommand("mcp");
+  assert.ok(cmd !== null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (cmd as any).call("enable", defaultContext());
+  assert.strictEqual(result.success, false);
+  assert.ok(
+    result.output.toLowerCase().includes("usage"),
+    "Should print usage",
+  );
+}
+
+export async function testMcpUnknownSubcommand() {
+  clearCommandCache();
+  const cmd = findCommand("mcp");
+  assert.ok(cmd !== null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (cmd as any).call(
+    "frobnicate something",
+    defaultContext(),
+  );
+  assert.strictEqual(result.success, false);
+  assert.ok(
+    result.output.toLowerCase().includes("unknown subcommand"),
+    "Should reject unknown subcommands",
+  );
+}
+
+export async function testMcpInstallNotYetImplemented() {
+  clearCommandCache();
+  const cmd = findCommand("mcp");
+  assert.ok(cmd !== null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (cmd as any).call("install some-slug", defaultContext());
+  assert.strictEqual(result.success, false);
+  assert.ok(
+    result.output.includes("not yet implemented"),
+    "Should signal installer is a follow-up",
+  );
+}

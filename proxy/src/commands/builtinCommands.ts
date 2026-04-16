@@ -32,6 +32,11 @@ import {
 } from "../services/compactService";
 import { getMemoryIndex, listMemories } from "../services/memoryService";
 import { getUserActiveTasks, getUserTasks } from "../services/taskService";
+import {
+  disablePlugin,
+  enablePlugin,
+  listPlugins,
+} from "../plugins/pluginLoader";
 
 // ── /doctor ────────────────────────────────────────────────────
 
@@ -957,6 +962,106 @@ const logoutCommand: ActionCommand = {
   },
 };
 
+// ── /mcp ────────────────────────────────────────────────────────
+//
+// Phase J.J3 (SECURITY_HARDENING_PLAN.md) — discoverable slash
+// command for MCP server management. Sub-commands:
+//   /mcp                  — list every loaded plugin and its MCP servers
+//   /mcp list             — alias for the above
+//   /mcp enable <name>    — enable a plugin (writes its MCP server config + reloads)
+//   /mcp disable <name>   — disable a plugin (removes the config)
+//   /mcp install <slug>   — install a bundled or remote plugin (NOT YET IMPLEMENTED)
+//
+// All MCP tool calls still route through `/v1/mcp/tools/call` so the
+// firewall's MCP Security Gateway scans every input/output regardless
+// of which server the agent is calling. This command only manages
+// which servers are available; it does not bypass the gateway.
+
+const mcpCommand: LocalCommand = {
+  name: "mcp",
+  description:
+    "Manage MCP servers (list / enable / disable / install). Every MCP tool call routes through the firewall's MCP Security Gateway.",
+  type: "local",
+  source: "builtin",
+
+  async call(args: string): Promise<LocalCommandResult> {
+    const tokens = args.trim().split(/\s+/).filter(Boolean);
+    const sub = (tokens[0] ?? "list").toLowerCase();
+    const target = tokens[1] ?? "";
+
+    if (sub === "list" || sub === "") {
+      const plugins = listPlugins();
+      if (plugins.length === 0) {
+        return {
+          success: true,
+          output:
+            "No plugins loaded. Bundled plugins live in `proxy/src/plugins/bundled/` " +
+            "and are auto-discovered at proxy start.",
+        };
+      }
+      const lines = plugins.map((p) => {
+        const status = p.enabled ? "enabled " : "disabled";
+        return `  [${status}] ${p.name}@${p.version}  —  ${p.description}`;
+      });
+      return {
+        success: true,
+        output:
+          `MCP-capable plugins (${plugins.length} loaded):\n` +
+          lines.join("\n") +
+          `\n\nUse '/mcp enable <name>' or '/mcp disable <name>' to toggle.`,
+        data: { plugins },
+      };
+    }
+
+    if (sub === "enable") {
+      if (!target) {
+        return {
+          success: false,
+          output: "Usage: /mcp enable <plugin-name>",
+        };
+      }
+      const ok = enablePlugin(target);
+      return {
+        success: ok,
+        output: ok
+          ? `Plugin '${target}' enabled. Its MCP server(s) will be available on the next chat.`
+          : `Plugin '${target}' not found. Run '/mcp list' to see loaded plugins.`,
+      };
+    }
+
+    if (sub === "disable") {
+      if (!target) {
+        return { success: false, output: "Usage: /mcp disable <plugin-name>" };
+      }
+      const ok = disablePlugin(target);
+      return {
+        success: ok,
+        output: ok
+          ? `Plugin '${target}' disabled. Its MCP server config has been removed.`
+          : `Plugin '${target}' not found. Run '/mcp list' to see loaded plugins.`,
+      };
+    }
+
+    if (sub === "install") {
+      // Phase J.J5 follow-up — installer wiring lives there.
+      return {
+        success: false,
+        output:
+          "/mcp install is not yet implemented. For now, drop a plugin.json into " +
+          "`proxy/src/plugins/bundled/<name>/` and restart the proxy. " +
+          "Tracked under SECURITY_HARDENING_PLAN.md Phase J.",
+      };
+    }
+
+    return {
+      success: false,
+      output:
+        `Unknown subcommand '${sub}'.\n` +
+        `Usage: /mcp [list | enable <name> | disable <name> | install <slug>]`,
+    };
+  },
+};
+
 // ── Export all built-in commands ────────────────────────────────
 
 export const BUILTIN_COMMANDS: readonly Command[] = [
@@ -975,4 +1080,5 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
   securityReviewCommand,
   loginCommand,
   logoutCommand,
+  mcpCommand,
 ];

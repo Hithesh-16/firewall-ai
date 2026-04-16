@@ -1,0 +1,21 @@
+{
+  "name": "chrome-devtools",
+  "version": "1.0.0",
+  "description": "Chrome DevTools MCP server. Gives the agent browser-automation tools (navigate, click, screenshot, console messages, network requests, performance traces) routed through the AI Firewall MCP Security Gateway. Runs Chromium in a controlled environment via the official Chrome DevTools Protocol MCP package.",
+  "author": "AI Firewall",
+  "enabled": false,
+  "mcpServers": {
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"],
+      "env": {}
+    }
+  },
+  "notes": [
+    "Disabled by default — enabling spawns a Chromium process which has a non-trivial resource footprint.",
+    "Enable from the proxy command: /mcp enable chrome-devtools",
+    "Or set `enabled: true` in this manifest and restart the proxy.",
+    "All browser tool calls (navigate, click, evaluate_script, take_screenshot, etc.) route through the MCP Security Gateway at /v1/mcp/tools/call — the firewall's scanner pipeline inspects every input/output before they reach the agent."
+  ]
+}

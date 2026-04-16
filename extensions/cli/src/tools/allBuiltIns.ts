@@ -4,7 +4,9 @@ import { askQuestionTool } from "./askQuestion.js";
 import { editTool } from "./edit.js";
 import { exitTool } from "./exit.js";
 import { fetchTool } from "./fetch.js";
+import { globSearchTool } from "./globSearch.js";
 import { listFilesTool } from "./listFiles.js";
+import { memoryTool } from "./memory.js";
 import { multiEditTool } from "./multiEdit.js";
 import { readFileTool } from "./readFile.js";
 import { reportFailureTool } from "./reportFailure.js";
@@ -23,7 +25,11 @@ export const ALL_BUILT_IN_TOOLS = [
   editTool,
   exitTool,
   fetchTool,
+  // Phase J.J4 — CLI parity with core/tools/implementations/globSearch.ts
+  globSearchTool,
   listFilesTool,
+  // Phase J.J4 — CLI parity with core/tools/implementations/memory.ts
+  memoryTool,
   multiEditTool,
   readFileTool,
   reportFailureTool,

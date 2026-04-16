@@ -28,6 +28,12 @@ import {
   queryMcpAudit,
   getMcpAuditStats,
 } from "../mcp/mcpAuditLogger";
+import {
+  clearDiscoveredBridge,
+  discoverMcpServers,
+  syncDiscoveredToCore,
+} from "../services/mcpDiscoveryService";
+import { evaluateTrust, setTrustDecision } from "../services/mcpTrustService";
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -48,6 +54,32 @@ const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(100),
   serverName: z.string().optional(),
   action: z.enum(["ALLOW", "BLOCK", "REDACT"]).optional(),
+});
+
+// Phase J.J1 — discovery query/body schemas.
+const discoverQuerySchema = z.object({
+  projectPath: z.string().min(1, "projectPath is required"),
+});
+
+const syncBodySchema = z.object({
+  projectPath: z.string().min(1, "projectPath is required"),
+  /**
+   * If true, skip the trust gate — assumes the caller has the
+   * `--trust-project-mcp` env flag set (CI scenario). Without this
+   * the gate refuses every source until the user has approved its
+   * fingerprint via /v1/mcp/trust.
+   */
+  trustAll: z.boolean().optional(),
+});
+
+// Phase J.J2 — trust decision body.
+const trustDecisionSchema = z.object({
+  projectPath: z.string().min(1),
+  sourcePath: z.string().min(1),
+  fingerprint: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/, "fingerprint must be SHA-256 hex"),
+  decision: z.enum(["trusted", "denied"]),
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -295,6 +327,210 @@ export async function registerMcpGatewayRoutes(
   app.get("/v1/mcp/audit/stats", { preHandler: requireAuth }, async () => {
     return getMcpAuditStats();
   });
+
+  /**
+   * GET /v1/mcp/discover — Phase J.J1 (SECURITY_HARDENING_PLAN.md)
+   *
+   * Pure read: returns the discovered `.mcp.json` sources for the
+   * supplied project path plus the merged effective server set
+   * (project precedence). Use from the GUI to preview before
+   * committing to sync.
+   *
+   * Query params: ?projectPath=/abs/path/to/project
+   */
+  app.get(
+    "/v1/mcp/discover",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const parsed = discoverQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid query",
+          details: parsed.error.flatten(),
+        });
+      }
+      const result = discoverMcpServers(parsed.data.projectPath);
+      return {
+        sources: result.sources.map((s) => ({
+          scope: s.scope,
+          path: s.path,
+          fingerprint: s.fingerprint,
+          serverCount: Object.keys(s.servers).length,
+          serverNames: Object.keys(s.servers),
+        })),
+        effective: result.effective,
+        effectiveCount: Object.keys(result.effective).length,
+      };
+    },
+  );
+
+  /**
+   * POST /v1/mcp/sync — Phase J.J1 + J.J2 (SECURITY_HARDENING_PLAN.md)
+   *
+   * Writes the merged effective server set into core's MCP config
+   * directory so it shows up on the next config refresh.
+   *
+   * Trust gate (J.J2): each discovered source must pass two layers
+   *   1. fingerprint trust (user previously approved this exact hash)
+   *   2. manifest scan (denylist + secret scanner against command/args/env)
+   * Servers that fail either layer are EXCLUDED from the synced set.
+   * The response itemises which sources were blocked and why so the
+   * caller can prompt the user.
+   *
+   * `trustAll: true` bypasses layer 1 (CI / `--trust-project-mcp` env
+   * flag scenario). Layer 2 still runs — denylist hits and secret-
+   * leaking manifests are NEVER spawned regardless of trustAll.
+   */
+  app.post(
+    "/v1/mcp/sync",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const parsed = syncBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid body",
+          details: parsed.error.flatten(),
+        });
+      }
+      const { projectPath, trustAll } = parsed.data;
+
+      const result = discoverMcpServers(projectPath);
+      if (result.sources.length === 0) {
+        clearDiscoveredBridge();
+        return { synced: 0, cleared: true, blocked: [], pendingTrust: [] };
+      }
+
+      // Apply the trust gate per source. We need to know which
+      // server names came from which source so the gate can reject
+      // a single bad source without removing legitimate servers
+      // declared elsewhere.
+      const allowedServers: Record<string, unknown> = {};
+      const blocked: Array<{
+        sourcePath: string;
+        scope: string;
+        reason: string;
+        details?: readonly string[];
+      }> = [];
+      const pendingTrust: Array<{
+        sourcePath: string;
+        scope: string;
+        fingerprint: string;
+      }> = [];
+
+      for (const source of result.sources) {
+        for (const [name, def] of Object.entries(source.servers)) {
+          if (trustAll) {
+            // Layer 2 still runs.
+            const { allowed, reasons } = (
+              await import("../services/mcpTrustService")
+            ).scanManifest(def);
+            if (!allowed) {
+              blocked.push({
+                sourcePath: source.path,
+                scope: source.scope,
+                reason: "manifest-blocked",
+                details: reasons,
+              });
+              continue;
+            }
+            allowedServers[name] = def;
+            continue;
+          }
+
+          const gate = evaluateTrust({
+            projectPath,
+            sourcePath: source.path,
+            fingerprint: source.fingerprint,
+            server: def,
+          });
+          if (gate.allowed) {
+            allowedServers[name] = def;
+            continue;
+          }
+          if (gate.reason.kind === "needs-prompt") {
+            pendingTrust.push({
+              sourcePath: source.path,
+              scope: source.scope,
+              fingerprint: source.fingerprint,
+            });
+          } else if (gate.reason.kind === "fingerprint-changed") {
+            blocked.push({
+              sourcePath: source.path,
+              scope: source.scope,
+              reason: `fingerprint-changed (previous decision: ${gate.reason.previousDecision})`,
+            });
+          } else if (gate.reason.kind === "denied-by-user") {
+            blocked.push({
+              sourcePath: source.path,
+              scope: source.scope,
+              reason: "denied-by-user",
+            });
+          } else if (gate.reason.kind === "manifest-blocked") {
+            blocked.push({
+              sourcePath: source.path,
+              scope: source.scope,
+              reason: "manifest-blocked",
+              details: gate.reason.reasons,
+            });
+          }
+        }
+      }
+
+      if (Object.keys(allowedServers).length === 0) {
+        clearDiscoveredBridge();
+        return {
+          synced: 0,
+          cleared: true,
+          blocked,
+          pendingTrust,
+        };
+      }
+      syncDiscoveredToCore(
+        allowedServers as Record<
+          string,
+          import("../services/mcpDiscoveryService").McpServerDef
+        >,
+      );
+      return {
+        synced: Object.keys(allowedServers).length,
+        servers: Object.keys(allowedServers),
+        blocked,
+        pendingTrust,
+      };
+    },
+  );
+
+  /**
+   * POST /v1/mcp/trust — Phase J.J2
+   *
+   * Records a user trust decision (`trusted` | `denied`) for a
+   * specific (projectPath, sourcePath, fingerprint) tuple. The next
+   * `/v1/mcp/sync` call will let the source through (or refuse it).
+   */
+  app.post(
+    "/v1/mcp/trust",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const parsed = trustDecisionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Invalid body",
+          details: parsed.error.flatten(),
+        });
+      }
+      const userId =
+        (request as unknown as { authContext?: { userId?: number } })
+          .authContext?.userId ?? null;
+      setTrustDecision({
+        projectPath: parsed.data.projectPath,
+        sourcePath: parsed.data.sourcePath,
+        fingerprint: parsed.data.fingerprint,
+        decision: parsed.data.decision,
+        userId,
+      });
+      return { ok: true };
+    },
+  );
 }
 
 // ── Internal Helpers ───────────────────────────────────────────────────────

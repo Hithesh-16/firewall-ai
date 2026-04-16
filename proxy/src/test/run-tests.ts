@@ -50,6 +50,12 @@ import * as responseScannerTests from "./responseScanner.test";
 // Phase A.A1 — Named-format LLM provider key patterns
 import * as secretPatternsTests from "./secretPatterns.test";
 
+// Phase J.J1 — MCP `.mcp.json` discovery service
+import * as mcpDiscoveryTests from "./mcpDiscovery.test";
+
+// Phase J.J2 — MCP project trust store
+import * as mcpTrustTests from "./mcpTrust.test";
+
 // Task Framework + Memory System + Tool Permissions tests
 import * as tasksTests from "./tasks.test";
 import * as toolPermTests from "./toolPermissions.test";
@@ -1387,6 +1393,81 @@ async function run() {
     [
       "cmd:mcpInstallNotImplemented",
       commandTests.testMcpInstallNotYetImplemented,
+    ],
+    // Phase J.J1 — MCP discovery service
+    [
+      "mcpDiscovery:claudeDesktopShape",
+      mcpDiscoveryTests.testDiscoverParsesClaudeDesktopShape,
+    ],
+    ["mcpDiscovery:flatShape", mcpDiscoveryTests.testDiscoverParsesFlatShape],
+    [
+      "mcpDiscovery:projectRootBeatsFirewall",
+      mcpDiscoveryTests.testDiscoverProjectRootBeatsFirewallScope,
+    ],
+    [
+      "mcpDiscovery:firewallBeatsUserHome",
+      mcpDiscoveryTests.testDiscoverFirewallScopeBeatsUserHome,
+    ],
+    ["mcpDiscovery:noFiles", mcpDiscoveryTests.testDiscoverNoFilesReturnsEmpty],
+    [
+      "mcpDiscovery:malformedSkipped",
+      mcpDiscoveryTests.testDiscoverMalformedJsonIsSilentlySkipped,
+    ],
+    [
+      "mcpDiscovery:fingerprintStable",
+      mcpDiscoveryTests.testDiscoverFingerprintIsStable,
+    ],
+    [
+      "mcpDiscovery:syncWritesBridge",
+      mcpDiscoveryTests.testSyncWritesBridgeFile,
+    ],
+    [
+      "mcpDiscovery:clearRemovesBridge",
+      mcpDiscoveryTests.testClearRemovesBridgeFile,
+    ],
+    ["mcpDiscovery:clearOnEmpty", mcpDiscoveryTests.testClearOnEmptyIsSafe],
+    // Phase J.J2 — MCP trust store
+    ["mcpTrust:scanSafeServer", mcpTrustTests.testScanManifestPassesSafeServer],
+    [
+      "mcpTrust:rejectsDenylistedPackage",
+      mcpTrustTests.testScanManifestRejectsDenylistedPackage,
+    ],
+    [
+      "mcpTrust:rejectsBackdoorKeyword",
+      mcpTrustTests.testScanManifestRejectsBackdoorKeyword,
+    ],
+    [
+      "mcpTrust:rejectsLeakedSecretInEnv",
+      mcpTrustTests.testScanManifestRejectsLeakedSecretInEnv,
+    ],
+    ["mcpTrust:setAndGetRecord", mcpTrustTests.testSetAndGetTrustRecord],
+    [
+      "mcpTrust:setIsIdempotent",
+      mcpTrustTests.testSetTrustDecisionIsIdempotent,
+    ],
+    [
+      "mcpTrust:lastDecisionNewest",
+      mcpTrustTests.testGetLastDecisionForSourceReturnsNewest,
+    ],
+    [
+      "mcpTrust:needsPromptOnFirst",
+      mcpTrustTests.testEvaluateTrustNeedsPromptOnFirstEncounter,
+    ],
+    [
+      "mcpTrust:allowsAfterTrusted",
+      mcpTrustTests.testEvaluateTrustAllowsAfterTrustedDecision,
+    ],
+    [
+      "mcpTrust:blocksDenied",
+      mcpTrustTests.testEvaluateTrustBlocksDeniedDecision,
+    ],
+    [
+      "mcpTrust:rejectsFingerprintChange",
+      mcpTrustTests.testEvaluateTrustRejectsFingerprintChange,
+    ],
+    [
+      "mcpTrust:manifestOverridesTrust",
+      mcpTrustTests.testEvaluateTrustManifestBlockOverridesTrust,
     ],
     // Coordinator + Worker Pool
     [

@@ -514,3 +514,18 @@ export const tasks = sqliteTable("tasks", {
   completedAt: integer("completed_at"),
   notified: integer("notified").default(0),
 });
+
+// Phase J.J2 (SECURITY_HARDENING_PLAN.md): MCP project trust store.
+// Tracks user trust decisions for each `.mcp.json` fingerprint so a
+// changed config invalidates the prior approval and re-prompts.
+export const mcpTrust = sqliteTable("mcp_trust", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectPath: text("project_path").notNull(),
+  sourcePath: text("source_path").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+  decision: text("decision").notNull().default("pending"),
+  decidedAt: integer("decided_at").notNull(),
+  decidedByUserId: integer("decided_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+});

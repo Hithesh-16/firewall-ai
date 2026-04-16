@@ -344,6 +344,24 @@ CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_started ON tasks(started_at);
+
+-- Phase J.J2 (SECURITY_HARDENING_PLAN.md): MCP project trust store.
+-- Tracks user trust decisions for each .mcp.json fingerprint so that
+-- changing a project config invalidates the prior approval and re-
+-- prompts the user. fingerprint is SHA-256 of the file contents.
+-- decision is one of: 'trusted' | 'denied' | 'pending'.
+CREATE TABLE IF NOT EXISTS mcp_trust (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_path TEXT NOT NULL,
+  source_path TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  decision TEXT NOT NULL DEFAULT 'pending' CHECK(decision IN ('trusted','denied','pending')),
+  decided_at INTEGER NOT NULL,
+  decided_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE(project_path, source_path, fingerprint)
+);
+CREATE INDEX IF NOT EXISTS idx_mcp_trust_project ON mcp_trust(project_path);
+CREATE INDEX IF NOT EXISTS idx_mcp_trust_fingerprint ON mcp_trust(fingerprint);
 `);
 
 // ─── Phase A + A.5: per-org / per-user providers and assistants ─────

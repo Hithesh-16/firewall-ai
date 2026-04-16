@@ -7,10 +7,8 @@ import {
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../api/client";
-import type {
-  SecurityAuditResult,
-  SecurityAuditFinding,
-} from "../../api/types";
+import { ENDPOINTS } from "../../api/endpoints";
+import type { SecurityAuditResult, SecurityAuditFinding } from "../../api/types";
 import { cn } from "../../utils/cn";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
@@ -28,10 +26,7 @@ interface AuditSettings {
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"] as const;
 
-const severityVariant: Record<
-  string,
-  "error" | "warning" | "info" | "default"
-> = {
+const severityVariant: Record<string, "error" | "warning" | "info" | "default"> = {
   critical: "error",
   high: "error",
   medium: "warning",
@@ -58,18 +53,15 @@ export function SecurityAuditPage() {
     setResult(null);
 
     try {
-      const data = await apiClient.post<SecurityAuditResult>(
-        "/api/security-audit",
-        {
-          projectPath: settings.projectPath.trim(),
-          maxFiles: settings.maxFiles,
-          maxFileSize: settings.maxFileSize,
-          skipDirs: settings.skipDirs
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-        },
-      );
+      const data = await apiClient.post<SecurityAuditResult>(ENDPOINTS.securityAudit, {
+        projectPath: settings.projectPath.trim(),
+        maxFiles: settings.maxFiles,
+        maxFileSize: settings.maxFileSize,
+        skipDirs: settings.skipDirs
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      });
       setResult(data);
     } catch (err: unknown) {
       if (err instanceof Error) setError(err.message);
@@ -83,18 +75,13 @@ export function SecurityAuditPage() {
     <div className="space-y-6 p-6">
       <h1 className="text-foreground text-2xl font-bold">Security Audit</h1>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       {/* Input Section */}
       <Card>
         <div className="space-y-4">
           <div>
-            <label
-              htmlFor="projectPath"
-              className="text-foreground mb-1 block text-sm font-medium"
-            >
+            <label htmlFor="projectPath" className="text-foreground mb-1 block text-sm font-medium">
               Project Path
             </label>
             <div className="flex gap-2">
@@ -104,17 +91,12 @@ export function SecurityAuditPage() {
                   id="projectPath"
                   type="text"
                   value={settings.projectPath}
-                  onChange={(e) =>
-                    setSettings({ ...settings, projectPath: e.target.value })
-                  }
+                  onChange={(e) => setSettings({ ...settings, projectPath: e.target.value })}
                   placeholder="/path/to/project"
                   className="border-input-border bg-input text-input-foreground placeholder:text-input-placeholder focus:border-border-focus focus:ring-border-focus w-full rounded-md border py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1"
                 />
               </div>
-              <Button
-                onClick={runAudit}
-                disabled={loading || !settings.projectPath.trim()}
-              >
+              <Button onClick={runAudit} disabled={loading || !settings.projectPath.trim()}>
                 <PlayIcon className="h-4 w-4" />
                 Run Audit
               </Button>
@@ -124,27 +106,19 @@ export function SecurityAuditPage() {
           {/* Optional settings */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <label
-                htmlFor="maxFiles"
-                className="text-description mb-1 block text-xs"
-              >
+              <label htmlFor="maxFiles" className="text-description mb-1 block text-xs">
                 Max Files
               </label>
               <input
                 id="maxFiles"
                 type="number"
                 value={settings.maxFiles}
-                onChange={(e) =>
-                  setSettings({ ...settings, maxFiles: Number(e.target.value) })
-                }
+                onChange={(e) => setSettings({ ...settings, maxFiles: Number(e.target.value) })}
                 className="border-input-border bg-input text-input-foreground focus:border-border-focus focus:ring-border-focus w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1"
               />
             </div>
             <div>
-              <label
-                htmlFor="maxFileSize"
-                className="text-description mb-1 block text-xs"
-              >
+              <label htmlFor="maxFileSize" className="text-description mb-1 block text-xs">
                 Max File Size (bytes)
               </label>
               <input
@@ -161,19 +135,14 @@ export function SecurityAuditPage() {
               />
             </div>
             <div>
-              <label
-                htmlFor="skipDirs"
-                className="text-description mb-1 block text-xs"
-              >
+              <label htmlFor="skipDirs" className="text-description mb-1 block text-xs">
                 Skip Directories (comma-separated)
               </label>
               <input
                 id="skipDirs"
                 type="text"
                 value={settings.skipDirs}
-                onChange={(e) =>
-                  setSettings({ ...settings, skipDirs: e.target.value })
-                }
+                onChange={(e) => setSettings({ ...settings, skipDirs: e.target.value })}
                 className="border-input-border bg-input text-input-foreground focus:border-border-focus focus:ring-border-focus w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1"
               />
             </div>
@@ -207,31 +176,21 @@ function AuditResults({ result }: { result: SecurityAuditResult }) {
       {/* Header row */}
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
         <Card className="flex items-center gap-6">
-          <RiskGauge
-            score={summary.riskScore}
-            grade={summary.grade}
-            size={100}
-          />
+          <RiskGauge score={summary.riskScore} grade={summary.grade} size={100} />
           <div>
             <p className="text-description text-sm">Risk Score</p>
-            <p className="text-foreground text-2xl font-bold">
-              {summary.riskScore}
-            </p>
+            <p className="text-foreground text-2xl font-bold">{summary.riskScore}</p>
           </div>
         </Card>
 
         <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-3">
           <Card>
             <p className="text-description text-xs">Files Scanned</p>
-            <p className="text-foreground text-lg font-semibold">
-              {result.filesScanned}
-            </p>
+            <p className="text-foreground text-lg font-semibold">{result.filesScanned}</p>
           </Card>
           <Card>
             <p className="text-description text-xs">Total Findings</p>
-            <p className="text-foreground text-lg font-semibold">
-              {summary.totalFindings}
-            </p>
+            <p className="text-foreground text-lg font-semibold">{summary.totalFindings}</p>
           </Card>
           <Card>
             <p className="text-description text-xs">Duration</p>
@@ -245,9 +204,7 @@ function AuditResults({ result }: { result: SecurityAuditResult }) {
       {/* Tech stack chips */}
       {techStack.length > 0 && (
         <Card>
-          <h3 className="text-foreground mb-2 text-sm font-semibold">
-            Detected Technologies
-          </h3>
+          <h3 className="text-foreground mb-2 text-sm font-semibold">Detected Technologies</h3>
           <div className="flex flex-wrap gap-2">
             {techStack.map((tech) => (
               <Badge key={tech} variant="info">
@@ -261,9 +218,7 @@ function AuditResults({ result }: { result: SecurityAuditResult }) {
       {/* Summary by category */}
       {Object.keys(summary.byCategory).length > 0 && (
         <Card>
-          <h3 className="text-foreground mb-3 text-sm font-semibold">
-            Findings by Category
-          </h3>
+          <h3 className="text-foreground mb-3 text-sm font-semibold">Findings by Category</h3>
           <div className="space-y-2">
             {Object.entries(summary.byCategory)
               .sort(([, a], [, b]) => b - a)
@@ -294,13 +249,7 @@ function AuditResults({ result }: { result: SecurityAuditResult }) {
       {SEVERITY_ORDER.map((severity) => {
         const sevFindings = findings.filter((f) => f.severity === severity);
         if (sevFindings.length === 0) return null;
-        return (
-          <FindingSeverityGroup
-            key={severity}
-            severity={severity}
-            findings={sevFindings}
-          />
-        );
+        return <FindingSeverityGroup key={severity} severity={severity} findings={sevFindings} />;
       })}
     </div>
   );
@@ -315,9 +264,7 @@ function FindingSeverityGroup({
   severity: string;
   findings: readonly SecurityAuditFinding[];
 }) {
-  const [expanded, setExpanded] = useState(
-    severity === "critical" || severity === "high",
-  );
+  const [expanded, setExpanded] = useState(severity === "critical" || severity === "high");
 
   return (
     <Card padding={false}>
@@ -330,9 +277,7 @@ function FindingSeverityGroup({
         ) : (
           <ChevronRightIcon className="text-description h-4 w-4" />
         )}
-        <Badge variant={severityVariant[severity] ?? "default"}>
-          {severity.toUpperCase()}
-        </Badge>
+        <Badge variant={severityVariant[severity] ?? "default"}>{severity.toUpperCase()}</Badge>
         <span className="text-foreground text-sm font-medium">
           {findings.length} finding{findings.length !== 1 ? "s" : ""}
         </span>
@@ -341,10 +286,7 @@ function FindingSeverityGroup({
       {expanded && (
         <div className="divide-border border-border divide-y border-t">
           {findings.map((f, i) => (
-            <FindingItem
-              key={`${f.filePath}-${f.lineNumber}-${i}`}
-              finding={f}
-            />
+            <FindingItem key={`${f.filePath}-${f.lineNumber}-${i}`} finding={f} />
           ))}
         </div>
       )}
@@ -375,9 +317,7 @@ function FindingItem({ finding }: { finding: SecurityAuditFinding }) {
             {finding.lineNumber != null && `:${finding.lineNumber}`}
           </p>
           <p className="text-description mt-1 text-xs">{finding.description}</p>
-          {finding.cweName && (
-            <p className="text-info mt-1 text-xs">{finding.cweName}</p>
-          )}
+          {finding.cweName && <p className="text-info mt-1 text-xs">{finding.cweName}</p>}
           {finding.recommendation && (
             <p className="bg-success/5 text-success mt-2 rounded px-2 py-1 text-xs">
               {finding.recommendation}

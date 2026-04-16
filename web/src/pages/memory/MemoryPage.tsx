@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -17,13 +18,7 @@ import {
 } from "@heroicons/react/24/outline";
 import type { Memory } from "../../api/types";
 
-const MEMORY_TYPES = [
-  "all",
-  "user",
-  "feedback",
-  "project",
-  "reference",
-] as const;
+const MEMORY_TYPES = ["all", "user", "feedback", "project", "reference"] as const;
 
 const TYPE_COLORS: Record<string, "info" | "success" | "warning" | "error"> = {
   user: "info",
@@ -51,7 +46,7 @@ export function MemoryPage() {
   const fetchMemories = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get<{ memories: Memory[] }>("/api/memory");
+      const res = await apiClient.get<{ memories: Memory[] }>(ENDPOINTS.memory.list);
       setMemories(res.memories ?? []);
       setError(null);
     } catch (e: unknown) {
@@ -65,10 +60,7 @@ export function MemoryPage() {
     fetchMemories();
   }, [fetchMemories]);
 
-  const filtered =
-    activeType === "all"
-      ? memories
-      : memories.filter((m) => m.type === activeType);
+  const filtered = activeType === "all" ? memories : memories.filter((m) => m.type === activeType);
 
   const openCreate = () => {
     setEditingMemory(null);
@@ -91,7 +83,7 @@ export function MemoryPage() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      await apiClient.post("/api/memory", {
+      await apiClient.post(ENDPOINTS.memory.list, {
         name: formName,
         description: formDesc,
         type: formType,
@@ -110,7 +102,7 @@ export function MemoryPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await apiClient.del(`/api/memory/${deleteTarget.fileName}`);
+      await apiClient.del(ENDPOINTS.memory.one(deleteTarget.fileName));
       setDeleteTarget(null);
       fetchMemories();
     } catch (e: unknown) {
@@ -141,9 +133,7 @@ export function MemoryPage() {
             />
           </div>
           <div>
-            <label className="text-description mb-1 block text-sm">
-              Description
-            </label>
+            <label className="text-description mb-1 block text-sm">Description</label>
             <input
               value={formDesc}
               onChange={(e) => setFormDesc(e.target.value)}
@@ -201,9 +191,7 @@ export function MemoryPage() {
         </Button>
       </div>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       <UnderlineTabs
         tabs={MEMORY_TYPES.map((t) => ({
@@ -230,25 +218,14 @@ export function MemoryPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map((m) => (
-              <Card
-                key={m.fileName}
-                className="flex items-start justify-between gap-4"
-              >
+              <Card key={m.fileName} className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-foreground font-medium">
-                      {m.name}
-                    </span>
-                    <Badge variant={TYPE_COLORS[m.type] ?? "info"}>
-                      {m.type}
-                    </Badge>
+                    <span className="text-foreground font-medium">{m.name}</span>
+                    <Badge variant={TYPE_COLORS[m.type] ?? "info"}>{m.type}</Badge>
                   </div>
-                  <p className="text-description mt-1 text-sm">
-                    {m.description}
-                  </p>
-                  <p className="text-description-muted mt-1 line-clamp-2 text-xs">
-                    {m.body}
-                  </p>
+                  <p className="text-description mt-1 text-sm">{m.description}</p>
+                  <p className="text-description-muted mt-1 line-clamp-2 text-xs">{m.body}</p>
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <button

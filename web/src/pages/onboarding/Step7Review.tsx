@@ -1,10 +1,8 @@
 import { useState } from "react";
-import {
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-} from "@heroicons/react/24/outline";
+import { CheckCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { setCredentials } from "../../store/slices/authSlice";
 import { getToken } from "../../utils/storage";
 import type { User } from "../../api/types";
@@ -23,13 +21,7 @@ import { WizardCard, WizardError, WizardNav } from "./_shared";
  *      file is refreshed with the now-complete onboarding flag.
  *   4. Delegates to onFinish() which navigates to /dashboard.
  */
-export function Step7Review({
-  onFinish,
-  onBack,
-}: {
-  onFinish: () => void;
-  onBack: () => void;
-}) {
+export function Step7Review({ onFinish, onBack }: { onFinish: () => void; onBack: () => void }) {
   const dispatch = useAppDispatch();
   const wizard = useAppSelector((s) => s.onboarding);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +80,7 @@ export function Step7Review({
       const resp = await apiClient.post<{
         ok: boolean;
         user: User;
-      }>("/api/users/me/onboarding/complete");
+      }>(ENDPOINTS.me.onboardingComplete);
 
       // Step 2: refresh Redux auth state with the new user
       const token = getToken();
@@ -98,16 +90,14 @@ export function Step7Review({
 
       // Step 3: re-run handoff so the shared file picks up the new flag
       try {
-        await apiClient.post("/api/auth/handoff", { source: "web" });
+        await apiClient.post(ENDPOINTS.auth.handoff, { source: "web" });
       } catch {
         /* best-effort */
       }
 
       onFinish();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to finish setup",
-      );
+      setError(err instanceof Error ? err.message : "Failed to finish setup");
     } finally {
       setBusy(false);
     }
@@ -120,10 +110,7 @@ export function Step7Review({
     >
       <dl className="divide-y divide-slate-800 rounded-xl border border-slate-800 bg-slate-950/40">
         {summary.map((row) => (
-          <div
-            key={row.label}
-            className="flex items-center justify-between px-4 py-3"
-          >
+          <div key={row.label} className="flex items-center justify-between px-4 py-3">
             <dt className="text-sm text-slate-400">{row.label}</dt>
             <dd
               className={`flex items-center gap-2 text-sm font-medium ${
@@ -143,19 +130,14 @@ export function Step7Review({
 
       {wizard.providers.length === 0 && (
         <p className="mt-3 text-xs text-amber-400/80">
-          You haven't added any LLM providers yet. The chat won't work until
-          you add one — we'll remind you on the dashboard.
+          You haven't added any LLM providers yet. The chat won't work until you add one — we'll
+          remind you on the dashboard.
         </p>
       )}
 
       <WizardError message={error} />
 
-      <WizardNav
-        onBack={onBack}
-        onNext={handleFinish}
-        nextLabel="Finish setup"
-        busy={busy}
-      />
+      <WizardNav onBack={onBack} onNext={handleFinish} nextLabel="Finish setup" busy={busy} />
     </WizardCard>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Toggle } from "../../components/ui/Toggle";
@@ -25,7 +26,7 @@ export function PluginsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiClient.get<{ plugins: Plugin[] }>("/api/plugins");
+        const res = await apiClient.get<{ plugins: Plugin[] }>(ENDPOINTS.plugins.list);
         setPlugins(res.plugins ?? []);
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Failed to load plugins");
@@ -39,13 +40,11 @@ export function PluginsPage() {
     try {
       setToggling(plugin.id);
       const endpoint = plugin.enabled
-        ? `/api/plugins/${plugin.id}/disable`
-        : `/api/plugins/${plugin.id}/enable`;
+        ? ENDPOINTS.plugins.disable(plugin.id)
+        : ENDPOINTS.plugins.enable(plugin.id);
       await apiClient.post(endpoint);
       setPlugins((prev) =>
-        prev.map((p) =>
-          p.id === plugin.id ? { ...p, enabled: !p.enabled } : p,
-        ),
+        prev.map((p) => (p.id === plugin.id ? { ...p, enabled: !p.enabled } : p)),
       );
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to toggle plugin");
@@ -67,9 +66,7 @@ export function PluginsPage() {
         </h1>
       </div>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -84,16 +81,11 @@ export function PluginsPage() {
       ) : (
         <div className="space-y-3">
           {plugins.map((p) => (
-            <Card
-              key={p.id}
-              className="flex items-center justify-between gap-4"
-            >
+            <Card key={p.id} className="flex items-center justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-foreground font-medium">{p.name}</span>
-                  <span className="text-description-muted text-xs">
-                    v{p.version}
-                  </span>
+                  <span className="text-description-muted text-xs">v{p.version}</span>
                   <Badge variant={p.enabled ? "success" : "default"}>
                     {p.enabled ? "Enabled" : "Disabled"}
                   </Badge>

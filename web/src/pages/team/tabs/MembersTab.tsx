@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { UsersIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { apiClient } from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 import { useAppDispatch } from "../../../store/hooks";
 import { showToast } from "../../../store/slices/uiSlice";
 import type { User } from "../../../api/types";
@@ -37,7 +38,7 @@ export function MembersTab() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiClient.get<{ users: User[] } | User[]>("/api/admin/users");
+      const data = await apiClient.get<{ users: User[] } | User[]>(ENDPOINTS.admin.users);
       setMembers(Array.isArray(data) ? data : data.users);
     } catch (err: unknown) {
       if (err instanceof Error) setError(err.message);
@@ -49,7 +50,7 @@ export function MembersTab() {
 
   async function changeRole(userId: string, role: string) {
     try {
-      await apiClient.put(`/api/admin/users/${userId}/role`, { role });
+      await apiClient.put(ENDPOINTS.admin.userRole(String(userId)), { role });
       setMembers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role: role as User["role"] } : u)),
       );
@@ -68,7 +69,7 @@ export function MembersTab() {
 
   async function handleRemove(user: User) {
     try {
-      await apiClient.del(`/api/admin/users/${user.id}`);
+      await apiClient.del(ENDPOINTS.admin.user(String(user.id)));
       setMembers((prev) => prev.filter((u) => u.id !== user.id));
       dispatch(
         showToast({

@@ -8,6 +8,7 @@ import {
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 import { useAppDispatch } from "../../../store/hooks";
 import { ROUTES } from "../../../utils/routes";
 import { showToast } from "../../../store/slices/uiSlice";
@@ -49,7 +50,7 @@ export function ProvidersTab() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiClient.get<ProviderWithModels[]>("/api/providers");
+      const data = await apiClient.get<ProviderWithModels[]>(ENDPOINTS.providers.root);
       setProviders(data);
     } catch (err: unknown) {
       if (err instanceof Error) setError(err.message);
@@ -61,7 +62,7 @@ export function ProvidersTab() {
 
   async function handleDelete(provider: ProviderWithModels) {
     try {
-      await apiClient.del(`/api/providers/${provider.id}`);
+      await apiClient.del(ENDPOINTS.providers.one(String(provider.id)));
       setProviders((prev) => prev.filter((p) => p.id !== provider.id));
       dispatch(
         showToast({

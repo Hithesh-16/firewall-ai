@@ -2,14 +2,16 @@ import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeftIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { cn } from "../../utils/cn";
-import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { useAppDispatch } from "../../store/hooks";
 import { setCredentials, setLoading } from "../../store/slices/authSlice";
 import { fetchUserPermissions } from "../../store/slices/permissionsSlice";
 import { apiClient } from "../../api/client";
-import { getToken, setToken } from "../../utils/storage";
+import { ENDPOINTS } from "../../api/endpoints";
+import { setToken } from "../../utils/storage";
 import { ROUTES } from "../../utils/routes";
-import type { AuthResponse, User } from "../../api/types";
+import type { AuthResponse } from "../../api/types";
 import { config } from "../../config/env";
+import { useDocumentHead } from "../../hooks/useDocumentHead";
 import AnimatedBackdrop from "../../components/brand/AnimatedBackdrop";
 import BrandShield from "../../components/brand/BrandShield";
 
@@ -131,7 +133,6 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
-  const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
 
   const [tab, setTab] = useState<AuthTab>(
     location.pathname === ROUTES.REGISTER ? "register" : "login",
@@ -144,42 +145,22 @@ export function LoginPage() {
   const [loading, setLoadingLocal] = useState(false);
   const [ssoProviders, setSsoProviders] = useState<string[]>([]);
 
-  // ── Auth guard: redirect to dashboard if already signed in ──
-  // Check both Redux state (in-memory) and localStorage token (page
-  // refresh). If token exists but Redux is empty, validate via
-  // /api/auth/me and rehydrate — so a user who navigates directly
-  // to /login while already signed in gets bounced immediately.
-  useEffect(() => {
-    // Skip the guard when LoginPage is opened from an extension
-    // sign-in flow (?from=extension) — the user MUST complete sign-in
-    // on this page so the token bounces back to VS Code / CLI.
-    const params = new URLSearchParams(location.search);
-    if (params.get("from") === "extension") return;
+  // Auth-guard redirection is owned by the `PublicOnly` route wrapper
+  // (see src/routes/PublicOnly.tsx). It reads the token synchronously
+  // from localStorage and bounces authenticated users to `?next` or
+  // the dashboard — no flicker, and no duplicate /api/auth/me call.
 
-    if (isAuthenticated) {
-      navigate(ROUTES.CHAT, { replace: true });
-      return;
-    }
-    const token = getToken();
-    if (token) {
-      apiClient
-        .get<{ user: User }>("/api/auth/me")
-        .then((res) => {
-          dispatch(setCredentials({ user: res.user, token }));
-          dispatch(fetchUserPermissions());
-          navigate(ROUTES.CHAT, { replace: true });
-        })
-        .catch(() => {
-          // Token invalid/expired — stay on login page
-        });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+  // Crawlers must never index auth surfaces (`noindex`).
+  useDocumentHead({
+    title: tab === "register" ? "Create account" : "Sign in",
+    description: "Sign in to the AI Firewall dashboard to manage policies, scans, and audit logs.",
+    index: false,
+  });
 
   // Fetch available SSO providers on mount
   useEffect(() => {
     apiClient
-      .get<SSOConfigResponse>("/api/auth/sso/config")
+      .get<SSOConfigResponse>(ENDPOINTS.auth.ssoConfig)
       .then((data) => {
         if (data.enabled && data.providers.length > 0) {
           setSsoProviders(data.providers);
@@ -215,7 +196,7 @@ export function LoginPage() {
 
     // Best-effort handoff to local extensions
     try {
-      await apiClient.post("/api/auth/handoff", { source: "web" });
+      await apiClient.post(ENDPOINTS.auth.handoff, { source: "web" });
     } catch (handoffErr) {
       console.warn(
         "[LoginPage] Local handoff failed (remote proxy?):",
@@ -262,12 +243,15 @@ export function LoginPage() {
       }
     }
 
-    // Step 4: route based on onboarding status
+    // Step 4: route based on onboarding status, honoring `?next=` if
+    // the login was reached via a private-route redirect.
     if (user.onboardingComplete === false) {
-      navigate("/onboarding");
-    } else {
-      navigate(ROUTES.CHAT);
+      navigate(ROUTES.ONBOARDING, { replace: true });
+      return;
     }
+    const nextParam = new URLSearchParams(location.search).get("next");
+    const destination = nextParam && nextParam.startsWith("/") ? nextParam : ROUTES.DASHBOARD;
+    navigate(destination, { replace: true });
   }
 
   // Listen for SSO callback postMessage
@@ -279,7 +263,7 @@ export function LoginPage() {
 
       setToken(token);
       apiClient
-        .get<{ user: AuthResponse["user"] }>("/api/auth/me")
+        .get<{ user: AuthResponse["user"] }>(ENDPOINTS.auth.me)
         .then((data) => finishSignIn(data.user, token))
         .catch(() => {
           setError("SSO login succeeded but token validation failed");
@@ -311,12 +295,12 @@ export function LoginPage() {
     try {
       let response: AuthResponse;
       if (tab === "login") {
-        response = await apiClient.post<AuthResponse>("/api/auth/login", {
+        response = await apiClient.post<AuthResponse>(ENDPOINTS.auth.login, {
           email,
           password,
         });
       } else {
-        response = await apiClient.post<AuthResponse>("/api/auth/register", {
+        response = await apiClient.post<AuthResponse>(ENDPOINTS.auth.register, {
           name,
           email,
           password,

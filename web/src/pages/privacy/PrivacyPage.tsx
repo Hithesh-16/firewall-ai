@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Toggle } from "../../components/ui/Toggle";
@@ -37,7 +38,7 @@ export function PrivacyPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiClient.get<PrivacySettings>("/api/privacy/settings");
+        const res = await apiClient.get<PrivacySettings>(ENDPOINTS.privacy.settings);
         setSettings(res);
       } catch {
         // Use defaults
@@ -49,7 +50,7 @@ export function PrivacyPage() {
 
   const handleSave = async () => {
     try {
-      await apiClient.post("/api/privacy/settings", settings);
+      await apiClient.post(ENDPOINTS.privacy.settings, settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: unknown) {
@@ -59,7 +60,7 @@ export function PrivacyPage() {
 
   const handleExport = async (format: "json" | "csv") => {
     try {
-      const blob = await apiClient.download(`/api/export/${format}`);
+      const blob = await apiClient.download(ENDPOINTS.privacy.export(format));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -74,7 +75,7 @@ export function PrivacyPage() {
   const handleDeleteAll = async () => {
     try {
       setDeleting(true);
-      await apiClient.del("/api/privacy/data");
+      await apiClient.del(ENDPOINTS.privacy.data);
       setShowDelete(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Delete failed");

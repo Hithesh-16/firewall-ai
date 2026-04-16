@@ -9,13 +9,8 @@ import {
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { onboardingActions } from "../../store/slices/onboardingSlice";
 import { apiClient } from "../../api/client";
-import {
-  WizardCard,
-  WizardError,
-  WizardNav,
-  slugify,
-  tinyId,
-} from "./_shared";
+import { ENDPOINTS } from "../../api/endpoints";
+import { WizardCard, WizardError, WizardNav, slugify, tinyId } from "./_shared";
 
 type Role = "admin" | "security_lead" | "developer" | "auditor";
 const ROLES: Role[] = ["admin", "security_lead", "developer", "auditor"];
@@ -48,13 +43,7 @@ interface CreateInviteResponse {
  *
  * Individual workspaces never see this step (the wizard router skips it).
  */
-export function Step3Teams({
-  onNext,
-  onBack,
-}: {
-  onNext: () => void;
-  onBack: () => void;
-}) {
+export function Step3Teams({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const dispatch = useAppDispatch();
   const wizard = useAppSelector((s) => s.onboarding);
   const orgId = wizard.org.id;
@@ -80,7 +69,7 @@ export function Step3Teams({
       // Note: the proxy POST /api/teams endpoint derives orgId from the
       // authenticated user — it intentionally ignores any orgId in the
       // body. We just need name + slug.
-      const resp = await apiClient.post<CreateTeamResponse>("/api/teams", {
+      const resp = await apiClient.post<CreateTeamResponse>(ENDPOINTS.teams, {
         name: teamDraft.name.trim(),
         slug: teamDraft.slug.trim() || slugify(teamDraft.name),
       });
@@ -107,7 +96,7 @@ export function Step3Teams({
     setBusy(true);
     try {
       const resp = await apiClient.post<CreateInviteResponse>(
-        `/api/orgs/${orgId}/invites`,
+        ENDPOINTS.orgs.invites(String(orgId)),
         {
           email: inviteDraft.email.trim().toLowerCase(),
           role: inviteDraft.role,
@@ -122,9 +111,7 @@ export function Step3Teams({
       );
       setInviteDraft({ email: "", role: "developer" });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create invite",
-      );
+      setError(err instanceof Error ? err.message : "Failed to create invite");
     } finally {
       setBusy(false);
     }
@@ -159,9 +146,7 @@ export function Step3Teams({
               >
                 <div>
                   <span className="text-slate-100">{t.name}</span>
-                  <span className="ml-2 text-xs text-slate-500">
-                    /{t.slug}
-                  </span>
+                  <span className="ml-2 text-xs text-slate-500">/{t.slug}</span>
                 </div>
                 <button
                   onClick={() => dispatch(onboardingActions.removeTeam(t.localId))}
@@ -247,9 +232,7 @@ export function Step3Teams({
             <input
               type="email"
               value={inviteDraft.email}
-              onChange={(e) =>
-                setInviteDraft({ ...inviteDraft, email: e.target.value })
-              }
+              onChange={(e) => setInviteDraft({ ...inviteDraft, email: e.target.value })}
               placeholder="teammate@example.com"
               className="flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500/60 focus:outline-none"
             />
@@ -281,8 +264,8 @@ export function Step3Teams({
           </div>
         </div>
         <p className="mt-3 text-xs text-slate-500">
-          Invites are generated as signed URLs you can share via email, Slack, or wherever.
-          Each link expires in 14 days.
+          Invites are generated as signed URLs you can share via email, Slack, or wherever. Each
+          link expires in 14 days.
         </p>
       </div>
 

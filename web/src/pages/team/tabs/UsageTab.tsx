@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChartBarIcon } from "@heroicons/react/24/outline";
 import { apiClient } from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 import { Card } from "../../../components/ui/Card";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Badge } from "../../../components/ui/Badge";
@@ -50,8 +51,8 @@ export function UsageTab() {
       setError(null);
       try {
         const [usageRes, scanRes] = await Promise.allSettled([
-          apiClient.get<{ byUser: UserUsage[] } | UserUsage[]>("/api/usage/by-user"),
-          apiClient.get<{ users: UserScanStats[] }>("/api/stats/per-user"),
+          apiClient.get<{ byUser: UserUsage[] } | UserUsage[]>(ENDPOINTS.usageByUser),
+          apiClient.get<{ users: UserScanStats[] }>(ENDPOINTS.statsPerUser),
         ]);
 
         const usageData: UserUsage[] =

@@ -1,15 +1,12 @@
 import { useState } from "react";
-import {
-  PlusIcon,
-  XMarkIcon,
-  CheckCircleIcon,
-} from "@heroicons/react/24/outline";
+import { PlusIcon, XMarkIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
   onboardingActions,
   type OnboardingProviderDraft,
 } from "../../store/slices/onboardingSlice";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { cn } from "../../utils/cn";
 import { WizardCard, WizardError, WizardNav, tinyId } from "./_shared";
 
@@ -92,13 +89,7 @@ interface CreatedProviderResponse {
   slug: string;
 }
 
-export function Step5Providers({
-  onNext,
-  onBack,
-}: {
-  onNext: () => void;
-  onBack: () => void;
-}) {
+export function Step5Providers({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const dispatch = useAppDispatch();
   const wizard = useAppSelector((s) => s.onboarding);
 
@@ -137,16 +128,13 @@ export function Step5Providers({
 
     setBusy(true);
     try {
-      const resp = await apiClient.post<CreatedProviderResponse>(
-        "/api/providers",
-        {
-          kind: draft.kind,
-          name: draft.name || meta.label,
-          apiKey: draft.apiKey,
-          baseUrl: draft.baseUrl || undefined,
-          deploymentName: draft.deploymentName || undefined,
-        },
-      );
+      const resp = await apiClient.post<CreatedProviderResponse>(ENDPOINTS.providers.root, {
+        kind: draft.kind,
+        name: draft.name || meta.label,
+        apiKey: draft.apiKey,
+        baseUrl: draft.baseUrl || undefined,
+        deploymentName: draft.deploymentName || undefined,
+      });
 
       dispatch(
         onboardingActions.addProvider({
@@ -194,14 +182,10 @@ export function Step5Providers({
                 <div className="flex items-center gap-2">
                   <CheckCircleIcon className="h-4 w-4 text-emerald-400" />
                   <span className="text-slate-100">{p.name}</span>
-                  <span className="text-xs text-slate-500">
-                    · {PROVIDER_META[p.kind].label}
-                  </span>
+                  <span className="text-xs text-slate-500">· {PROVIDER_META[p.kind].label}</span>
                 </div>
                 <button
-                  onClick={() =>
-                    dispatch(onboardingActions.removeProvider(p.localId))
-                  }
+                  onClick={() => dispatch(onboardingActions.removeProvider(p.localId))}
                   className="text-slate-500 hover:text-red-400"
                 >
                   <XMarkIcon className="h-4 w-4" />
@@ -261,9 +245,7 @@ export function Step5Providers({
             <input
               type="text"
               value={draft.deploymentName}
-              onChange={(e) =>
-                setDraft({ ...draft, deploymentName: e.target.value })
-              }
+              onChange={(e) => setDraft({ ...draft, deploymentName: e.target.value })}
               placeholder="Deployment name (Azure)"
               className="w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500/60 focus:outline-none"
             />
@@ -289,12 +271,7 @@ export function Step5Providers({
         </p>
       )}
 
-      <WizardNav
-        onBack={onBack}
-        onNext={onNext}
-        nextDisabled={!canContinue}
-        busy={busy}
-      />
+      <WizardNav onBack={onBack} onNext={onNext} nextDisabled={!canContinue} busy={busy} />
     </WizardCard>
   );
 }

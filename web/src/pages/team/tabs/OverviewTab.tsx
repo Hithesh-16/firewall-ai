@@ -10,6 +10,7 @@ import {
   FingerPrintIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 import type { User } from "../../../api/types";
 import { StatCard } from "../../../components/ui/StatCard";
 import { Card } from "../../../components/ui/Card";
@@ -44,9 +45,9 @@ export function OverviewTab() {
     async function load() {
       setLoading(true);
       const [m, s, u] = await Promise.allSettled([
-        apiClient.get<User[]>("/api/admin/users"),
-        apiClient.get<TeamStats>("/api/stats"),
-        apiClient.get<UsageSummary>("/api/usage/summary"),
+        apiClient.get<User[]>(ENDPOINTS.admin.users),
+        apiClient.get<TeamStats>(ENDPOINTS.stats),
+        apiClient.get<UsageSummary>(ENDPOINTS.usageSummary),
       ]);
       if (m.status === "fulfilled") {
         const val = m.value;

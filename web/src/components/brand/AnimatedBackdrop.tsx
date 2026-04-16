@@ -1,13 +1,22 @@
 /**
  * AnimatedBackdrop — the AI Firewall brand background.
  *
- * - Dark slate base
- * - Two drifting emerald/cyan aurora blobs (CSS keyframe animations)
- * - Subtle noise grain overlay for depth
- * - A faint grid for the "firewall / grid" vibe
+ * Performance notes:
+ *   - The previous version ran THREE ~60rem blurred blobs at 60-80px
+ *     blur radii plus a `background-position` keyframe on a fullscreen
+ *     grid layer. That pegged the GPU on weaker devices and caused the
+ *     "lag" reported on the public pages — the entire viewport had to
+ *     repaint/composite every animation frame.
  *
- * Used as a fixed-position backdrop on pre-auth pages (Landing, Login,
- * Register) so they all feel like one cohesive product surface.
+ *   - This rewrite keeps the brand vibe (aurora glow + faint grid)
+ *     but: drops to TWO blobs, halves the blur radius, removes the
+ *     repainting grid pan in favor of a static grid, and adds
+ *     `will-change: transform` so the browser can keep each blob on
+ *     its own GPU layer. The grid is a static SVG-style background —
+ *     no animation, no per-frame paint.
+ *
+ *   - Honors `prefers-reduced-motion`: the blobs hold a static pose
+ *     for users who've opted out of motion.
  */
 export default function AnimatedBackdrop() {
   return (
@@ -15,23 +24,14 @@ export default function AnimatedBackdrop() {
       {/* Keyframes are inlined so this component is drop-in. */}
       <style>{`
         @keyframes afw-aurora-a {
-          0%   { transform: translate3d(-10%, -10%, 0) scale(1);   opacity: 0.55; }
-          50%  { transform: translate3d(10%,  5%,  0) scale(1.15); opacity: 0.75; }
-          100% { transform: translate3d(-10%, -10%, 0) scale(1);   opacity: 0.55; }
+          0%   { transform: translate3d(-6%, -4%, 0) scale(1); }
+          50%  { transform: translate3d(4%,  2%, 0) scale(1.05); }
+          100% { transform: translate3d(-6%, -4%, 0) scale(1); }
         }
         @keyframes afw-aurora-b {
-          0%   { transform: translate3d(5%,  15%, 0) scale(1);    opacity: 0.45; }
-          50%  { transform: translate3d(-8%, -5%, 0) scale(1.1);  opacity: 0.7;  }
-          100% { transform: translate3d(5%,  15%, 0) scale(1);    opacity: 0.45; }
-        }
-        @keyframes afw-aurora-c {
-          0%   { transform: translate3d(0, 0, 0) scale(1);       opacity: 0.3; }
-          50%  { transform: translate3d(12%, -12%, 0) scale(1.2); opacity: 0.55; }
-          100% { transform: translate3d(0, 0, 0) scale(1);       opacity: 0.3; }
-        }
-        @keyframes afw-grid-pan {
-          0%   { background-position: 0px 0px; }
-          100% { background-position: 80px 80px; }
+          0%   { transform: translate3d(3%,  6%, 0) scale(1); }
+          50%  { transform: translate3d(-4%, -2%, 0) scale(1.04); }
+          100% { transform: translate3d(3%,  6%, 0) scale(1); }
         }
         @keyframes afw-fade-up {
           0%   { opacity: 0; transform: translateY(12px); }
@@ -39,14 +39,25 @@ export default function AnimatedBackdrop() {
         }
         @keyframes afw-pulse-ring {
           0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
-          70%  { box-shadow: 0 0 0 18px rgba(16, 185, 129, 0);  }
-          100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);     }
+          70%  { box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
         .afw-animate-fade-up { animation: afw-fade-up 0.7s ease-out both; }
         .afw-animate-fade-up-delay-1 { animation: afw-fade-up 0.7s ease-out 0.1s both; }
         .afw-animate-fade-up-delay-2 { animation: afw-fade-up 0.7s ease-out 0.2s both; }
         .afw-animate-fade-up-delay-3 { animation: afw-fade-up 0.7s ease-out 0.3s both; }
         .afw-animate-pulse-ring { animation: afw-pulse-ring 2.4s ease-out infinite; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .afw-aurora,
+          .afw-animate-pulse-ring,
+          .afw-animate-fade-up,
+          .afw-animate-fade-up-delay-1,
+          .afw-animate-fade-up-delay-2,
+          .afw-animate-fade-up-delay-3 {
+            animation: none !important;
+          }
+        }
       `}</style>
 
       <div
@@ -58,66 +69,53 @@ export default function AnimatedBackdrop() {
             "radial-gradient(ellipse at top, rgba(16, 185, 129, 0.08), transparent 55%), radial-gradient(ellipse at bottom, rgba(6, 182, 212, 0.06), transparent 55%)",
         }}
       >
-        {/* Grid overlay */}
+        {/* Static grid overlay — no animation = no per-frame paint. */}
         <div
-          className="absolute inset-0 opacity-[0.07]"
+          className="absolute inset-0 opacity-[0.06]"
           style={{
             backgroundImage:
               "linear-gradient(rgba(148, 163, 184, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.5) 1px, transparent 1px)",
             backgroundSize: "80px 80px",
-            animation: "afw-grid-pan 30s linear infinite",
           }}
         />
 
-        {/* Aurora blob A (emerald) */}
+        {/* Aurora A (emerald) — half the blur, smaller footprint, GPU-promoted. */}
         <div
-          className="absolute"
+          className="afw-aurora absolute"
           style={{
-            top: "-20%",
+            top: "-15%",
             left: "-10%",
-            width: "60rem",
-            height: "60rem",
+            width: "36rem",
+            height: "36rem",
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(16, 185, 129, 0.35) 0%, rgba(16, 185, 129, 0) 60%)",
-            filter: "blur(60px)",
-            animation: "afw-aurora-a 18s ease-in-out infinite",
+              "radial-gradient(circle, rgba(16, 185, 129, 0.32) 0%, rgba(16, 185, 129, 0) 60%)",
+            filter: "blur(40px)",
+            opacity: 0.65,
+            willChange: "transform",
+            animation: "afw-aurora-a 22s ease-in-out infinite",
           }}
         />
 
-        {/* Aurora blob B (cyan) */}
+        {/* Aurora B (cyan) */}
         <div
-          className="absolute"
+          className="afw-aurora absolute"
           style={{
-            bottom: "-25%",
-            right: "-15%",
-            width: "55rem",
-            height: "55rem",
+            bottom: "-20%",
+            right: "-12%",
+            width: "32rem",
+            height: "32rem",
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(6, 182, 212, 0.3) 0%, rgba(6, 182, 212, 0) 60%)",
-            filter: "blur(70px)",
-            animation: "afw-aurora-b 22s ease-in-out infinite",
+              "radial-gradient(circle, rgba(6, 182, 212, 0.28) 0%, rgba(6, 182, 212, 0) 60%)",
+            filter: "blur(40px)",
+            opacity: 0.6,
+            willChange: "transform",
+            animation: "afw-aurora-b 26s ease-in-out infinite",
           }}
         />
 
-        {/* Aurora blob C (violet accent) */}
-        <div
-          className="absolute"
-          style={{
-            top: "35%",
-            left: "45%",
-            width: "40rem",
-            height: "40rem",
-            borderRadius: "50%",
-            background:
-              "radial-gradient(circle, rgba(139, 92, 246, 0.18) 0%, rgba(139, 92, 246, 0) 60%)",
-            filter: "blur(80px)",
-            animation: "afw-aurora-c 25s ease-in-out infinite",
-          }}
-        />
-
-        {/* Vignette */}
+        {/* Vignette — purely decorative, no animation. */}
         <div
           className="absolute inset-0"
           style={{

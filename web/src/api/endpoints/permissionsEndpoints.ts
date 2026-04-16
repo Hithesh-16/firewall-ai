@@ -1,12 +1,11 @@
 /**
- * Central endpoint constants for permission-related API calls.
+ * Legacy re-export kept for backward compatibility with call sites that
+ * import `PERMISSIONS_ENDPOINTS` directly.
  *
- * Rule: NEVER hardcode an endpoint path at a call site. Import from
- * here. Adding a new permission-related endpoint means adding a
- * constant here AND a method in `permissionsApi.ts`.
+ * New call sites should import `ENDPOINTS` from `../endpoints` instead.
  */
+import { ENDPOINTS } from "../endpoints";
 
 export const PERMISSIONS_ENDPOINTS = {
-  /** Flat list of the current user's effective permission atoms. */
-  MY_PERMISSIONS: "/api/me/permissions",
+  MY_PERMISSIONS: ENDPOINTS.me.permissions,
 } as const;

@@ -2,12 +2,110 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Firewall Dashboard</title>
+    <meta name="theme-color" content="#05070d" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!--
+      ─────────────────────────────────────────────────────────────────
+      SEO / social-card defaults.
+
+      These meta tags are the authoritative ones for crawlers that do
+      not run JavaScript (Slack/Twitter/LinkedIn link-preview fetchers,
+      most non-Google bots). For users who DO have JS, `useDocumentHead`
+      overrides these per page (e.g. /login adds `noindex` and a
+      sign-in-specific title).
+
+      The defaults below describe the LANDING page because:
+        - / is the only page with public, indexable content
+        - /login and /register are auth surfaces and carry `noindex`
+          via the runtime hook anyway
+        - so a crawler hitting any URL and getting these defaults
+          still produces a sensible link preview
+      ─────────────────────────────────────────────────────────────────
+    -->
+    <title>AI Firewall — open-source security layer for every AI request</title>
+    <meta
+      name="description"
+      content="Scan every prompt for secrets, PII, and prompt injection before it reaches OpenAI, Anthropic, Gemini, or any local LLM. Token intelligence, MCP gateway, encrypted vault, and full audit trail — self-hosted and open source."
+    />
+    <meta
+      name="keywords"
+      content="AI firewall, prompt injection, PII redaction, LLM security, MCP gateway, prompt scanning, secret detection, AI security proxy, OpenAI proxy, Anthropic proxy"
+    />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://ai-firewall.dev/" />
+
+    <!-- Open Graph (Facebook, LinkedIn, Slack) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AI Firewall" />
+    <meta property="og:url" content="https://ai-firewall.dev/" />
+    <meta
+      property="og:title"
+      content="AI Firewall — open-source security layer for every AI request"
+    />
+    <meta
+      property="og:description"
+      content="Scan every prompt for secrets, PII, and prompt injection before it reaches OpenAI, Anthropic, Gemini, or any local LLM."
+    />
+    <meta property="og:image" content="https://ai-firewall.dev/og-image.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AI Firewall — open-source security layer for every AI request" />
+    <meta
+      name="twitter:description"
+      content="Scan every prompt for secrets, PII, and prompt injection before it reaches OpenAI, Anthropic, Gemini, or any local LLM."
+    />
+    <meta name="twitter:image" content="https://ai-firewall.dev/og-image.png" />
+
+    <!--
+      JSON-LD structured data so search engines can render rich
+      results. SoftwareApplication schema is the right type here
+      because the product is a self-hostable security tool.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "AI Firewall",
+        "applicationCategory": "SecurityApplication",
+        "operatingSystem": "macOS, Windows, Linux",
+        "description": "Open-source security firewall for LLM applications. Scans prompts and responses for secrets, PII, and prompt injection before they reach any AI provider.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "url": "https://ai-firewall.dev/"
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Static fallback content rendered for crawlers and JS-disabled
+        browsers. The React app replaces this on mount. Keep it short
+        and keyword-rich — Googlebot does run JS but treats this as a
+        signal of intent if the JS render is delayed.
+      -->
+      <noscript>
+        <main style="font-family: system-ui, sans-serif; padding: 2rem; max-width: 720px; margin: 0 auto; color: #e2e8f0; background: #05070d; min-height: 100vh;">
+          <h1>AI Firewall</h1>
+          <p>
+            Open-source security firewall for AI applications. Scan every
+            prompt for secrets, PII, and prompt injection before it reaches
+            OpenAI, Anthropic, Gemini, or any local LLM.
+          </p>
+          <p>
+            <strong>This dashboard requires JavaScript.</strong> Enable JS
+            to sign in, configure scanners, and review audit logs. Visit
+            <a href="https://github.com/ai-firewall" style="color: #34d399;">github.com/ai-firewall</a>
+            for source and self-hosted setup.
+          </p>
+        </main>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -14,6 +14,7 @@ import { ModelPicker } from "./ModelPicker";
 import { QuickActionChips } from "./QuickActionChips";
 import { getToken } from "../../utils/storage";
 import { store } from "../../store";
+import { ENDPOINTS } from "../../api/endpoints";
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -59,9 +60,7 @@ export function ChatInput({ className }: ChatInputProps) {
       convId = currentState.chat.activeConversationId ?? undefined;
       if (!convId) return;
 
-      const activeConv = currentState.chat.conversations.find(
-        (c) => c.id === convId,
-      );
+      const activeConv = currentState.chat.conversations.find((c) => c.id === convId);
 
       // Add user message
       const userMsg = {
@@ -99,7 +98,7 @@ export function ChatInput({ className }: ChatInputProps) {
 
       try {
         const token = getToken();
-        const response = await fetch("/v1/chat/completions", {
+        const response = await fetch(ENDPOINTS.chat.completions, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -208,8 +207,7 @@ export function ChatInput({ className }: ChatInputProps) {
           }),
         );
       } catch (err: unknown) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to get response";
+        const errorMessage = err instanceof Error ? err.message : "Failed to get response";
         dispatch(
           updateMessage({
             convId: convId!,
@@ -240,16 +238,9 @@ export function ChatInput({ className }: ChatInputProps) {
   }
 
   return (
-    <div
-      className={cn(
-        "border-border bg-background border-t px-4 pb-4 pt-3",
-        className,
-      )}
-    >
+    <div className={cn("border-border bg-background border-t px-4 pb-4 pt-3", className)}>
       {/* Quick action chips when conversation is empty */}
-      {isEmpty && (
-        <QuickActionChips onSelect={handleQuickAction} className="mb-4" />
-      )}
+      {isEmpty && <QuickActionChips onSelect={handleQuickAction} className="mb-4" />}
 
       {/* Model picker row */}
       <div className="mb-2 flex items-center">
@@ -301,8 +292,7 @@ export function ChatInput({ className }: ChatInputProps) {
 
       {/* Disclaimer */}
       <p className="text-description-muted mt-2 text-center text-[11px]">
-        All messages are scanned by AI Firewall before being sent to the
-        provider.
+        All messages are scanned by AI Firewall before being sent to the provider.
       </p>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -31,7 +32,7 @@ export function SkillsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiClient.get<{ skills: Skill[] }>("/api/skills");
+        const res = await apiClient.get<{ skills: Skill[] }>(ENDPOINTS.skills.list);
         setSkills(res.skills ?? []);
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Failed to load skills");
@@ -53,10 +54,10 @@ export function SkillsPage() {
   const handleInvoke = async (name: string) => {
     try {
       setInvokeResult(null);
-      const res = await apiClient.post<{ prompt: string }>(
-        "/api/skills/invoke",
-        { name, args: invokeArgs },
-      );
+      const res = await apiClient.post<{ prompt: string }>(ENDPOINTS.skills.invoke, {
+        name,
+        args: invokeArgs,
+      });
       setInvokeResult(res.prompt ?? "Skill invoked successfully");
     } catch (e: unknown) {
       setInvokeResult(`Error: ${e instanceof Error ? e.message : "Failed"}`);
@@ -67,16 +68,11 @@ export function SkillsPage() {
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-foreground text-xl font-semibold">
-          Skills{" "}
-          <span className="text-description text-sm font-normal">
-            ({skills.length})
-          </span>
+          Skills <span className="text-description text-sm font-normal">({skills.length})</span>
         </h1>
       </div>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <UnderlineTabs
@@ -113,18 +109,10 @@ export function SkillsPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-foreground font-mono font-medium">
-                      /{s.name}
-                    </span>
-                    <Badge
-                      variant={s.source === "bundled" ? "info" : "success"}
-                    >
-                      {s.source}
-                    </Badge>
+                    <span className="text-foreground font-mono font-medium">/{s.name}</span>
+                    <Badge variant={s.source === "bundled" ? "info" : "success"}>{s.source}</Badge>
                   </div>
-                  <p className="text-description mt-1 text-sm">
-                    {s.description}
-                  </p>
+                  <p className="text-description mt-1 text-sm">{s.description}</p>
                   {s.tags && s.tags.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {s.tags.map((t) => (
@@ -141,9 +129,7 @@ export function SkillsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    setInvoking(invoking === s.name ? null : s.name)
-                  }
+                  onClick={() => setInvoking(invoking === s.name ? null : s.name)}
                 >
                   <PlayIcon className="mr-1 h-3.5 w-3.5" /> Invoke
                 </Button>
@@ -157,11 +143,7 @@ export function SkillsPage() {
                       placeholder="Arguments (optional)"
                       className="border-input-border bg-input text-input-foreground flex-1 rounded border px-3 py-1.5 text-sm"
                     />
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleInvoke(s.name)}
-                    >
+                    <Button variant="primary" size="sm" onClick={() => handleInvoke(s.name)}>
                       Run
                     </Button>
                   </div>

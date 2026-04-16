@@ -5,6 +5,7 @@ import { cn } from "../../utils/cn";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { setSelectedModel } from "../../store/slices/chatSlice";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { formatTokens, formatCost } from "../../utils/format";
 import type { Provider, Model } from "../../api/types";
 
@@ -24,15 +25,13 @@ export function ModelPicker() {
 
     async function fetchModels() {
       try {
-        const providers = await apiClient.get<Provider[]>("/api/providers");
+        const providers = await apiClient.get<Provider[]>(ENDPOINTS.providers.root);
         const result: ProviderWithModels[] = [];
 
         for (const provider of providers) {
           if (!provider.enabled) continue;
           try {
-            const models = await apiClient.get<Model[]>(
-              `/api/providers/${provider.id}/models`,
-            );
+            const models = await apiClient.get<Model[]>(ENDPOINTS.providers.models(provider.id));
             if (models.length > 0) {
               result.push({
                 provider,
@@ -128,9 +127,7 @@ export function ModelPicker() {
                           <span
                             className={cn(
                               "text-sm",
-                              selected
-                                ? "text-foreground font-medium"
-                                : "text-foreground",
+                              selected ? "text-foreground font-medium" : "text-foreground",
                             )}
                           >
                             {model.displayName}
@@ -140,15 +137,12 @@ export function ModelPicker() {
                             {model.inputCostPer1k > 0 && (
                               <>
                                 {" "}
-                                {"\u00B7"} {formatCost(model.inputCostPer1k)}/1k
-                                in
+                                {"\u00B7"} {formatCost(model.inputCostPer1k)}/1k in
                               </>
                             )}
                           </span>
                         </div>
-                        {selected && (
-                          <CheckIcon className="text-primary h-4 w-4 shrink-0" />
-                        )}
+                        {selected && <CheckIcon className="text-primary h-4 w-4 shrink-0" />}
                       </>
                     )}
                   </Listbox.Option>

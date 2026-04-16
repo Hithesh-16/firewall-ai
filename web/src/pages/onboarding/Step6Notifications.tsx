@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { onboardingActions } from "../../store/slices/onboardingSlice";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { WizardCard, WizardError, WizardNav } from "./_shared";
 
 /**
@@ -12,26 +13,14 @@ import { WizardCard, WizardError, WizardNav } from "./_shared";
  * Skipped entirely for individual workspaces.
  */
 
-export function Step6Notifications({
-  onNext,
-  onBack,
-}: {
-  onNext: () => void;
-  onBack: () => void;
-}) {
+export function Step6Notifications({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const dispatch = useAppDispatch();
   const wizard = useAppSelector((s) => s.onboarding);
 
-  const [webhookUrl, setWebhookUrl] = useState(
-    wizard.notifications.webhookUrl || "",
-  );
-  const [slackUrl, setSlackUrl] = useState(
-    wizard.notifications.slackWebhookUrl || "",
-  );
+  const [webhookUrl, setWebhookUrl] = useState(wizard.notifications.webhookUrl || "");
+  const [slackUrl, setSlackUrl] = useState(wizard.notifications.slackWebhookUrl || "");
   const [email, setEmail] = useState(wizard.notifications.email || "");
-  const [webPush, setWebPush] = useState(
-    wizard.notifications.webPushEnabled,
-  );
+  const [webPush, setWebPush] = useState(wizard.notifications.webPushEnabled);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -40,7 +29,7 @@ export function Step6Notifications({
     config: Record<string, unknown>,
   ) {
     try {
-      await apiClient.post("/api/notifications/channels", {
+      await apiClient.post(ENDPOINTS.notifications.channels, {
         channelType,
         config,
       });
@@ -78,9 +67,7 @@ export function Step6Notifications({
       );
       onNext();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save channels",
-      );
+      setError(err instanceof Error ? err.message : "Failed to save channels");
     } finally {
       setBusy(false);
     }
@@ -133,9 +120,7 @@ export function Step6Notifications({
 
         <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-3">
           <div>
-            <p className="text-sm font-medium text-slate-100">
-              Browser push notifications
-            </p>
+            <p className="text-sm font-medium text-slate-100">Browser push notifications</p>
             <p className="text-xs text-slate-500">
               Get an OS-level alert when an approval is needed.
             </p>

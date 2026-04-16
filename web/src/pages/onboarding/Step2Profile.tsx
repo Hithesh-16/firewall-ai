@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { onboardingActions } from "../../store/slices/onboardingSlice";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { setCredentials } from "../../store/slices/authSlice";
 import { getToken } from "../../utils/storage";
 import type { User } from "../../api/types";
@@ -25,13 +26,7 @@ function detectTimezone(): string {
   }
 }
 
-export function Step2Profile({
-  onNext,
-  onBack,
-}: {
-  onNext: () => void;
-  onBack: () => void;
-}) {
+export function Step2Profile({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const dispatch = useAppDispatch();
   const wizard = useAppSelector((s) => s.onboarding);
   const user = useAppSelector((s) => s.auth.user);
@@ -40,9 +35,7 @@ export function Step2Profile({
   const [orgName, setOrgName] = useState(wizard.org.name);
   const [orgSlug, setOrgSlug] = useState(wizard.org.slug);
   const [industry, setIndustry] = useState(wizard.profile.industry || "");
-  const [timezone, setTimezone] = useState(
-    wizard.profile.timezone || detectTimezone(),
-  );
+  const [timezone, setTimezone] = useState(wizard.profile.timezone || detectTimezone());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -64,7 +57,7 @@ export function Step2Profile({
       // 1. Update user display name + timezone in one PUT.
       //    Both fields are optional on the backend — we always send
       //    whatever the form holds so the user never has to save twice.
-      const updated = await apiClient.put<{ user: User }>("/api/users/me", {
+      const updated = await apiClient.put<{ user: User }>(ENDPOINTS.me.profile, {
         name: name.trim(),
         timezone: timezone.trim() || null,
       });
@@ -83,7 +76,7 @@ export function Step2Profile({
         const slugChanged = nextSlug !== wizard.org.slug;
         const industryChanged = industry.trim() !== "";
         if (nameChanged || slugChanged || industryChanged) {
-          await apiClient.put(`/api/orgs/${wizard.org.id}`, {
+          await apiClient.put(ENDPOINTS.orgs.one(String(wizard.org.id)), {
             name: orgName.trim(),
             slug: nextSlug,
             industry: industry.trim() || null,
@@ -120,9 +113,7 @@ export function Step2Profile({
     >
       <div className="space-y-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-200">
-            Your name
-          </label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-200">Your name</label>
           <input
             type="text"
             value={name}
@@ -159,9 +150,7 @@ export function Step2Profile({
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-200">
-              URL slug
-            </label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-200">URL slug</label>
             <div className="flex items-center overflow-hidden rounded-lg border border-slate-700 bg-slate-950/60 focus-within:border-emerald-500/60 focus-within:ring-2 focus-within:ring-emerald-500/20">
               <span className="border-r border-slate-700 bg-slate-900/60 px-3 py-3 text-xs text-slate-500">
                 firewall/
@@ -170,11 +159,7 @@ export function Step2Profile({
                 type="text"
                 value={orgSlug}
                 onChange={(e) =>
-                  setOrgSlug(
-                    e.target.value
-                      .toLowerCase()
-                      .replace(/[^a-z0-9-]/g, ""),
-                  )
+                  setOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
                 }
                 placeholder="my-workspace"
                 className="flex-1 bg-transparent px-3 py-3 text-slate-100 placeholder:text-slate-500 focus:outline-none"
@@ -197,9 +182,7 @@ export function Step2Profile({
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-200">
-              Timezone
-            </label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-200">Timezone</label>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}

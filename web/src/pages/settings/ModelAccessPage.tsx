@@ -2,6 +2,7 @@ import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { usePermission } from "../../hooks/usePermission";
 import {
   CatalogueModel,
@@ -76,7 +77,7 @@ export default function ModelAccessPage() {
     setError(null);
     try {
       // Step 1: who am I? Used to scope every org-level call.
-      const me = await apiClient.get<{ user: { orgId?: number } }>("/api/auth/me");
+      const me = await apiClient.get<{ user: { orgId?: number } }>(ENDPOINTS.auth.me);
       const resolvedOrgId = me.user?.orgId ?? null;
       if (!resolvedOrgId) {
         setError("You're not a member of an organization.");
@@ -87,8 +88,8 @@ export default function ModelAccessPage() {
 
       // Step 2: parallel fetch users + existing grants.
       const [usersRes, grantsRes] = await Promise.all([
-        apiClient.get<{ users: OrgUser[] }>("/api/users"),
-        apiClient.get<{ grants: Grant[] }>(`/api/orgs/${resolvedOrgId}/model-grants`),
+        apiClient.get<{ users: OrgUser[] }>(ENDPOINTS.users.list),
+        apiClient.get<{ grants: Grant[] }>(ENDPOINTS.orgs.modelGrants(String(resolvedOrgId))),
       ]);
       setUsers(usersRes.users ?? []);
       const g = grantsRes.grants ?? [];
@@ -196,12 +197,12 @@ export default function ModelAccessPage() {
       // Parallel: one bulk POST + N DELETEs. Keep the DELETEs
       // sequential so a mid-loop error doesn't leave partial state.
       if (toAdd.length > 0) {
-        await apiClient.post(`/api/orgs/${orgId}/model-grants/bulk`, {
+        await apiClient.post(ENDPOINTS.orgs.modelGrantsBulk(String(orgId)), {
           grants: toAdd,
         });
       }
       for (const id of toDeleteIds) {
-        await apiClient.del(`/api/orgs/${orgId}/model-grants/${id}`);
+        await apiClient.del(ENDPOINTS.orgs.modelGrant(String(orgId), String(id)));
       }
 
       setBanner(

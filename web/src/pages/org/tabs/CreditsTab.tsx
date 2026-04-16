@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 import { cn } from "../../../utils/cn";
 import { Card } from "../../../components/ui/Card";
 import { StatCard } from "../../../components/ui/StatCard";
@@ -31,8 +32,8 @@ export function CreditsTab() {
     async function load() {
       setLoading(true);
       const [u, c] = await Promise.allSettled([
-        apiClient.get<UsageSummary>("/api/usage/summary"),
-        apiClient.get<CreditLimit[]>("/api/credits"),
+        apiClient.get<UsageSummary>(ENDPOINTS.usageSummary),
+        apiClient.get<CreditLimit[]>(ENDPOINTS.credits),
       ]);
       if (u.status === "fulfilled") setUsage(u.value);
       if (c.status === "fulfilled") setCredits(c.value);

@@ -14,6 +14,7 @@ import {
   EyeIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { useAppDispatch } from "../../store/hooks";
 import { showToast } from "../../store/slices/uiSlice";
 import { Card } from "../../components/ui/Card";
@@ -138,8 +139,8 @@ export function RolePoliciesPage() {
     setLoadError(null);
     try {
       const [rolesRes, policyRes] = await Promise.allSettled([
-        apiClient.get<{ roles: RoleRow[] }>("/api/policies/roles"),
-        apiClient.get<PartialPolicy>("/api/policy"),
+        apiClient.get<{ roles: RoleRow[] }>(ENDPOINTS.policy.roles),
+        apiClient.get<PartialPolicy>(ENDPOINTS.policy.global),
       ]);
       if (rolesRes.status === "fulfilled") setRoles(rolesRes.value.roles);
       if (policyRes.status === "fulfilled") setGlobalPolicy(policyRes.value);
@@ -415,7 +416,7 @@ function RolePolicyEditor({
   const [globalPolicy, setGlobalPolicy] = useState<PartialPolicy | null>(null);
   useEffect(() => {
     apiClient
-      .get<PartialPolicy>("/api/policy")
+      .get<PartialPolicy>(ENDPOINTS.policy.global)
       .then(setGlobalPolicy)
       .catch(() => setGlobalPolicy(null));
   }, []);
@@ -460,7 +461,7 @@ function RolePolicyEditor({
     setSaving(true);
     setSaveError(null);
     try {
-      await apiClient.put(`/api/policies/role/${row.role}`, policy);
+      await apiClient.put(ENDPOINTS.policy.role(row.role), policy);
       await onSaved();
       onClose();
     } catch (err) {
@@ -474,7 +475,7 @@ function RolePolicyEditor({
     setSaving(true);
     setSaveError(null);
     try {
-      await apiClient.del(`/api/policies/role/${row.role}`);
+      await apiClient.del(ENDPOINTS.policy.role(row.role));
       await onDeleted();
       onClose();
     } catch (err) {

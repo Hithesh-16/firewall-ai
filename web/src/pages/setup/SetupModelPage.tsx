@@ -9,6 +9,8 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
+import { ROUTES } from "../../utils/routes";
 import {
   type CatalogueModel,
   type CatalogueProvider,
@@ -242,10 +244,10 @@ export default function SetupModelPage() {
   // configured (race with the gate), skip straight to the dashboard.
   useEffect(() => {
     apiClient
-      .get<ModelsResponse>("/api/me/models")
+      .get<ModelsResponse>(ENDPOINTS.me.models)
       .then((res) => {
         if (res.hasAny) {
-          navigate("/dashboard", { replace: true });
+          navigate(ROUTES.DASHBOARD, { replace: true });
           return;
         }
         setCanAddPersonal(res.canAddPersonal);
@@ -292,7 +294,7 @@ export default function SetupModelPage() {
       // adding a SECOND provider later (e.g. switching from Gemini
       // to Groq) also updates the assistant, instead of leaving
       // the old provider's model stuck in the YAML forever.
-      await apiClient.put(`/api/me/providers/${provider.slug}`, {
+      await apiClient.put(ENDPOINTS.me.provider(provider.slug), {
         apiKey: !provider.requiresApiKey && !apiKey ? "no-key-needed" : apiKey,
         baseUrl: baseUrl || provider.defaultBaseUrl || undefined,
         model: model.model,
@@ -301,9 +303,9 @@ export default function SetupModelPage() {
 
       // Step 3: confirm we're out of the "no models" state and
       // bounce the user into the dashboard.
-      const fresh = await apiClient.get<ModelsResponse>("/api/me/models");
+      const fresh = await apiClient.get<ModelsResponse>(ENDPOINTS.me.models);
       if (fresh.hasAny) {
-        navigate("/dashboard", { replace: true });
+        navigate(ROUTES.DASHBOARD, { replace: true });
       } else {
         // If grants are scoped and the admin hasn't granted this
         // model yet, hasAny stays false. Tell the user the exact

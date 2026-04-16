@@ -11,6 +11,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { cn } from "../../utils/cn";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
+import { ROUTES } from "../../utils/routes";
 import { useAppDispatch } from "../../store/hooks";
 import { showToast } from "../../store/slices/uiSlice";
 import { Card } from "../../components/ui/Card";
@@ -63,7 +65,7 @@ export function AddProviderPage() {
       setStep("select-provider");
       setSelectedProvider(null);
     } else {
-      navigate("/org");
+      navigate(ROUTES.ORG);
     }
   }
 
@@ -83,7 +85,7 @@ export function AddProviderPage() {
     setSaving(true);
     try {
       // Create the provider
-      const provider = await apiClient.post<{ id: number }>("/api/providers", {
+      const provider = await apiClient.post<{ id: number }>(ENDPOINTS.providers.root, {
         name: selectedProvider.name,
         apiKey: selectedProvider.requiresApiKey ? apiKey : "local",
         baseUrl: baseUrl || selectedProvider.baseUrl,
@@ -94,7 +96,7 @@ export function AddProviderPage() {
 
       for (const model of modelsToAdd) {
         try {
-          await apiClient.post(`/api/providers/${provider.id}/models`, {
+          await apiClient.post(ENDPOINTS.providers.models(String(provider.id)), {
             modelName: model.id,
             displayName: model.name,
             inputCostPer1k: model.inputCostPer1k ?? 0,
@@ -113,7 +115,7 @@ export function AddProviderPage() {
           message: `${selectedProvider.name} added with ${modelsToAdd.length} model(s)`,
         }),
       );
-      navigate("/org");
+      navigate(ROUTES.ORG);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to add provider";
       dispatch(

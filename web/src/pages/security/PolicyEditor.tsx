@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { useAppDispatch } from "../../store/hooks";
 import { showToast } from "../../store/slices/uiSlice";
 import { Card } from "../../components/ui/Card";
@@ -32,8 +33,7 @@ const RULES: PolicyRule[] = [
   {
     key: "block_db_urls",
     label: "Block Database URLs",
-    description:
-      "Block requests containing database connection strings with credentials",
+    description: "Block requests containing database connection strings with credentials",
     category: "blocking",
   },
   {
@@ -64,8 +64,7 @@ const RULES: PolicyRule[] = [
   {
     key: "redact_generic_api_keys",
     label: "Redact Generic API Keys",
-    description:
-      "Replace detected API keys with placeholders before forwarding",
+    description: "Replace detected API keys with placeholders before forwarding",
     category: "redaction",
   },
   // General
@@ -94,9 +93,7 @@ const CATEGORIES = ["blocking", "redaction", "general"] as const;
 export function PolicyEditor() {
   const dispatch = useAppDispatch();
   const [policy, setPolicy] = useState<Record<string, boolean>>({});
-  const [originalPolicy, setOriginalPolicy] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [originalPolicy, setOriginalPolicy] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,8 +103,7 @@ export function PolicyEditor() {
       setLoading(true);
       setError(null);
       try {
-        const data =
-          await apiClient.get<Record<string, unknown>>("/api/policy");
+        const data = await apiClient.get<Record<string, unknown>>(ENDPOINTS.policy.global);
         const boolValues: Record<string, boolean> = {};
         for (const rule of RULES) {
           boolValues[rule.key] = data[rule.key] === true;
@@ -128,14 +124,12 @@ export function PolicyEditor() {
     setPolicy((prev) => ({ ...prev, [key]: value }));
   }
 
-  const hasChanges = Object.keys(policy).some(
-    (k) => policy[k] !== originalPolicy[k],
-  );
+  const hasChanges = Object.keys(policy).some((k) => policy[k] !== originalPolicy[k]);
 
   async function handleSave() {
     setSaving(true);
     try {
-      await apiClient.put("/api/policy", policy);
+      await apiClient.put(ENDPOINTS.policy.global, policy);
       setOriginalPolicy({ ...policy });
       dispatch(
         showToast({
@@ -181,17 +175,10 @@ export function PolicyEditor() {
             </h3>
             <div className="space-y-4">
               {rules.map((rule) => (
-                <div
-                  key={rule.key}
-                  className="flex items-start justify-between gap-4"
-                >
+                <div key={rule.key} className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-foreground text-sm font-medium">
-                      {rule.label}
-                    </p>
-                    <p className="text-description text-xs">
-                      {rule.description}
-                    </p>
+                    <p className="text-foreground text-sm font-medium">{rule.label}</p>
+                    <p className="text-description text-xs">{rule.description}</p>
                   </div>
                   <Toggle
                     enabled={policy[rule.key] ?? false}
@@ -206,11 +193,7 @@ export function PolicyEditor() {
 
       {hasChanges && (
         <div className="border-border bg-editor sticky bottom-4 flex items-center justify-end gap-3 rounded-lg border p-4 shadow-lg">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPolicy({ ...originalPolicy })}
-          >
+          <Button variant="ghost" size="sm" onClick={() => setPolicy({ ...originalPolicy })}>
             Discard
           </Button>
           <Button size="sm" loading={saving} onClick={handleSave}>

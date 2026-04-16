@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -45,7 +46,7 @@ export function CronPage() {
   const fetchJobs = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get<{ jobs: CronJob[] }>("/api/cron");
+      const res = await apiClient.get<{ jobs: CronJob[] }>(ENDPOINTS.cron.list);
       setJobs(res.jobs ?? []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -61,12 +62,10 @@ export function CronPage() {
   const handleToggle = async (job: CronJob) => {
     try {
       const endpoint = job.enabled
-        ? `/api/cron/${job.id}/disable`
-        : `/api/cron/${job.id}/enable`;
+        ? ENDPOINTS.cron.disable(String(job.id))
+        : ENDPOINTS.cron.enable(String(job.id));
       await apiClient.post(endpoint);
-      setJobs((prev) =>
-        prev.map((j) => (j.id === job.id ? { ...j, enabled: !j.enabled } : j)),
-      );
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, enabled: !j.enabled } : j)));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to toggle");
     }
@@ -75,7 +74,7 @@ export function CronPage() {
   const handleCreate = async () => {
     try {
       setCreating(true);
-      await apiClient.post("/api/cron", {
+      await apiClient.post(ENDPOINTS.cron.list, {
         name: formName,
         schedule: formSchedule,
         agentConfig: { description: formDesc, prompt: formPrompt },
@@ -95,7 +94,7 @@ export function CronPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await apiClient.del(`/api/cron/${deleteTarget.id}`);
+      await apiClient.del(ENDPOINTS.cron.one(String(deleteTarget.id)));
       setDeleteTarget(null);
       fetchJobs();
     } catch (e: unknown) {
@@ -106,29 +105,21 @@ export function CronPage() {
   return (
     <div className="mx-auto max-w-3xl p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-foreground text-xl font-semibold">
-          Scheduled Jobs
-        </h1>
+        <h1 className="text-foreground text-xl font-semibold">Scheduled Jobs</h1>
         <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
           <PlusIcon className="mr-1 h-4 w-4" /> Create Job
         </Button>
       </div>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       {showCreate && (
         <Card className="mb-6">
-          <h2 className="text-foreground mb-4 font-medium">
-            New Scheduled Job
-          </h2>
+          <h2 className="text-foreground mb-4 font-medium">New Scheduled Job</h2>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-description mb-1 block text-sm">
-                  Name
-                </label>
+                <label className="text-description mb-1 block text-sm">Name</label>
                 <input
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
@@ -137,9 +128,7 @@ export function CronPage() {
                 />
               </div>
               <div>
-                <label className="text-description mb-1 block text-sm">
-                  Schedule
-                </label>
+                <label className="text-description mb-1 block text-sm">Schedule</label>
                 <select
                   value={formSchedule}
                   onChange={(e) => setFormSchedule(e.target.value)}
@@ -154,9 +143,7 @@ export function CronPage() {
               </div>
             </div>
             <div>
-              <label className="text-description mb-1 block text-sm">
-                Description
-              </label>
+              <label className="text-description mb-1 block text-sm">Description</label>
               <input
                 value={formDesc}
                 onChange={(e) => setFormDesc(e.target.value)}
@@ -165,9 +152,7 @@ export function CronPage() {
               />
             </div>
             <div>
-              <label className="text-description mb-1 block text-sm">
-                Agent Prompt
-              </label>
+              <label className="text-description mb-1 block text-sm">Agent Prompt</label>
               <textarea
                 value={formPrompt}
                 onChange={(e) => setFormPrompt(e.target.value)}
@@ -186,11 +171,7 @@ export function CronPage() {
               >
                 Create
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowCreate(false)}
-              >
+              <Button variant="secondary" size="sm" onClick={() => setShowCreate(false)}>
                 Cancel
               </Button>
             </div>
@@ -213,24 +194,17 @@ export function CronPage() {
       ) : (
         <div className="space-y-3">
           {jobs.map((j) => (
-            <Card
-              key={j.id}
-              className="flex items-center justify-between gap-4"
-            >
+            <Card key={j.id} className="flex items-center justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-foreground font-medium">{j.name}</span>
                   <Badge variant={j.enabled ? "success" : "default"}>
                     {j.enabled ? "Active" : "Paused"}
                   </Badge>
-                  <span className="text-description-muted text-xs">
-                    {j.schedule}
-                  </span>
+                  <span className="text-description-muted text-xs">{j.schedule}</span>
                 </div>
                 {j.agentConfig && (
-                  <p className="text-description mt-1 text-sm">
-                    {j.agentConfig.description}
-                  </p>
+                  <p className="text-description mt-1 text-sm">{j.agentConfig.description}</p>
                 )}
                 {j.lastRunAt && (
                   <p className="text-description-muted mt-1 text-xs">

@@ -5,6 +5,7 @@ import {
   FunnelIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 import { cn } from "../../../utils/cn";
 import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
@@ -56,7 +57,7 @@ export function AuditTab() {
       if (modelFilter.trim()) params.set("model", modelFilter.trim());
 
       const data = await apiClient.get<{ logs: AuditLogEntry[]; total: number }>(
-        `/api/logs?${params.toString()}`,
+        `${ENDPOINTS.logs}?${params.toString()}`,
       );
       setLogs(data.logs ?? []);
       setTotal(data.total ?? 0);
@@ -76,7 +77,7 @@ export function AuditTab() {
 
   async function handleExport(format: "json" | "csv") {
     try {
-      const blob = await apiClient.download(`/api/export/${format}`);
+      const blob = await apiClient.download(ENDPOINTS.privacy.export(format));
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -33,9 +34,7 @@ export function NotificationsPage() {
   const fetchChannels = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get<{ channels: Channel[] }>(
-        "/api/notifications/channels",
-      );
+      const res = await apiClient.get<{ channels: Channel[] }>(ENDPOINTS.notifications.channels);
       setChannels(res.channels ?? []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -54,7 +53,7 @@ export function NotificationsPage() {
       const config: Record<string, string> = {};
       if (addType === "webhook" || addType === "slack") config.url = addUrl;
       if (addType === "email") config.email = addEmail;
-      await apiClient.post("/api/notifications/channels", {
+      await apiClient.post(ENDPOINTS.notifications.channels, {
         channelType: addType,
         config,
       });
@@ -72,7 +71,7 @@ export function NotificationsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await apiClient.del(`/api/notifications/channels/${deleteTarget.id}`);
+      await apiClient.del(ENDPOINTS.notifications.channel(String(deleteTarget.id)));
       setDeleteTarget(null);
       fetchChannels();
     } catch (e: unknown) {
@@ -83,7 +82,7 @@ export function NotificationsPage() {
   const handleTest = async () => {
     try {
       setTesting(true);
-      await apiClient.post("/api/notifications/test");
+      await apiClient.post(ENDPOINTS.notifications.test);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Test failed");
     } finally {
@@ -94,16 +93,9 @@ export function NotificationsPage() {
   return (
     <div className="mx-auto max-w-2xl p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-foreground text-xl font-semibold">
-          Notification Channels
-        </h1>
+        <h1 className="text-foreground text-xl font-semibold">Notification Channels</h1>
         <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleTest}
-            loading={testing}
-          >
+          <Button variant="secondary" size="sm" onClick={handleTest} loading={testing}>
             Test All
           </Button>
           <Button variant="primary" size="sm" onClick={() => setShowAdd(true)}>
@@ -112,9 +104,7 @@ export function NotificationsPage() {
         </div>
       </div>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -131,10 +121,7 @@ export function NotificationsPage() {
       ) : (
         <div className="space-y-3">
           {channels.map((ch) => (
-            <Card
-              key={ch.id}
-              className="flex items-center justify-between gap-4"
-            >
+            <Card key={ch.id} className="flex items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <Badge variant="info">{ch.channelType}</Badge>
@@ -159,14 +146,10 @@ export function NotificationsPage() {
           <h2 className="text-foreground mb-4 font-medium">Add Channel</h2>
           <div className="space-y-3">
             <div>
-              <label className="text-description mb-1 block text-sm">
-                Type
-              </label>
+              <label className="text-description mb-1 block text-sm">Type</label>
               <select
                 value={addType}
-                onChange={(e) =>
-                  setAddType(e.target.value as Channel["channelType"])
-                }
+                onChange={(e) => setAddType(e.target.value as Channel["channelType"])}
                 className="border-input-border bg-input text-input-foreground w-full rounded-lg border px-3 py-2"
               >
                 {CHANNEL_TYPES.map((t) => (
@@ -178,9 +161,7 @@ export function NotificationsPage() {
             </div>
             {(addType === "webhook" || addType === "slack") && (
               <div>
-                <label className="text-description mb-1 block text-sm">
-                  URL
-                </label>
+                <label className="text-description mb-1 block text-sm">URL</label>
                 <input
                   value={addUrl}
                   onChange={(e) => setAddUrl(e.target.value)}
@@ -191,9 +172,7 @@ export function NotificationsPage() {
             )}
             {addType === "email" && (
               <div>
-                <label className="text-description mb-1 block text-sm">
-                  Email
-                </label>
+                <label className="text-description mb-1 block text-sm">Email</label>
                 <input
                   value={addEmail}
                   onChange={(e) => setAddEmail(e.target.value)}
@@ -203,19 +182,10 @@ export function NotificationsPage() {
               </div>
             )}
             <div className="flex gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleAdd}
-                loading={saving}
-              >
+              <Button variant="primary" size="sm" onClick={handleAdd} loading={saving}>
                 Add
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowAdd(false)}
-              >
+              <Button variant="secondary" size="sm" onClick={() => setShowAdd(false)}>
                 Cancel
               </Button>
             </div>

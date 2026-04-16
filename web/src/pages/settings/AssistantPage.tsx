@@ -11,6 +11,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { usePermission } from "../../hooks/usePermission";
 import { PermissionGate } from "../../components/shared/guard/PermissionGate";
 
@@ -110,8 +111,8 @@ export default function AssistantPage() {
     setError(null);
     try {
       const [a, m] = await Promise.all([
-        apiClient.get<GetAssistantResponse>("/api/me/assistant").catch(() => null),
-        apiClient.get<ModelsResponse>("/api/me/models").catch(() => null),
+        apiClient.get<GetAssistantResponse>(ENDPOINTS.me.assistant).catch(() => null),
+        apiClient.get<ModelsResponse>(ENDPOINTS.me.models).catch(() => null),
       ]);
       setModelStatus(m);
       if (a?.assistant) {
@@ -158,7 +159,7 @@ export default function AssistantPage() {
     setError(null);
     setBanner(null);
     try {
-      await apiClient.put("/api/me/assistants/default", {
+      await apiClient.put(ENDPOINTS.me.defaultAssistant, {
         name: assistant?.name ?? "Personal assistant",
         yaml,
         isDefault: true,
@@ -192,7 +193,7 @@ export default function AssistantPage() {
       orgId = assistant.owner.id;
     } else {
       try {
-        const me = await apiClient.get<{ user?: { orgId?: number } }>("/api/auth/me");
+        const me = await apiClient.get<{ user?: { orgId?: number } }>(ENDPOINTS.auth.me);
         orgId = me.user?.orgId ?? null;
       } catch {
         /* ignore — handled below */
@@ -207,7 +208,7 @@ export default function AssistantPage() {
     setError(null);
     setBanner(null);
     try {
-      await apiClient.put(`/api/orgs/${orgId}/assistants/default`, {
+      await apiClient.put(ENDPOINTS.orgs.defaultAssistant(String(orgId)), {
         name: assistant?.name ?? "Org default assistant",
         yaml,
         isDefault: true,
@@ -234,7 +235,7 @@ export default function AssistantPage() {
     setError(null);
     setBanner(null);
     try {
-      await apiClient.put("/api/me/assistants/default", {
+      await apiClient.put(ENDPOINTS.me.defaultAssistant, {
         name: "Forked from org default",
         yaml,
         isDefault: true,
@@ -254,7 +255,7 @@ export default function AssistantPage() {
     setError(null);
     setBanner(null);
     try {
-      await apiClient.del("/api/me/assistants/default");
+      await apiClient.del(ENDPOINTS.me.defaultAssistant);
       setBanner("Personal assistant deleted. Using org default.");
       await loadAssistant();
     } catch (err) {

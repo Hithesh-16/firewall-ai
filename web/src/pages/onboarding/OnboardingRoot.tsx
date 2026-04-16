@@ -6,6 +6,7 @@ import AnimatedBackdrop from "../../components/brand/AnimatedBackdrop";
 import BrandShield from "../../components/brand/BrandShield";
 import { LoadingSpinner } from "../../components/ui/LoadingSpinner";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { ROUTES } from "../../utils/routes";
 import { Step1WorkspaceType } from "./Step1WorkspaceType";
 import { Step2Profile } from "./Step2Profile";
@@ -110,7 +111,7 @@ export function OnboardingRoot() {
         //    invite-accept flow where the orgId may have just changed.
         const me = await apiClient.get<{
           user: { id: number; orgId: number | null; name: string };
-        }>("/api/auth/me");
+        }>(ENDPOINTS.auth.me);
         const orgId = me.user.orgId;
         if (cancelled || !orgId) {
           setHydrating(false);
@@ -119,7 +120,7 @@ export function OnboardingRoot() {
 
         // 2. Fetch org info. GET /api/orgs returns { organizations: [...] }.
         const orgsResp = await apiClient
-          .get<{ organizations: OrgSnapshot[] }>("/api/orgs")
+          .get<{ organizations: OrgSnapshot[] }>(ENDPOINTS.orgs.root)
           .catch(() => ({ organizations: [] as OrgSnapshot[] }));
         const mine = (orgsResp.organizations || []).find((o) => o.id === orgId);
         if (cancelled) return;
@@ -145,7 +146,7 @@ export function OnboardingRoot() {
         // 3. Teams — GET /api/teams returns { teams: [...] } scoped
         //    to the caller's own org automatically.
         const teamsResp = await apiClient
-          .get<{ teams: TeamSnapshot[] }>("/api/teams")
+          .get<{ teams: TeamSnapshot[] }>(ENDPOINTS.teams)
           .catch(() => ({ teams: [] as TeamSnapshot[] }));
         const teams = teamsResp.teams ?? [];
         if (cancelled) return;
@@ -164,7 +165,7 @@ export function OnboardingRoot() {
 
         // 4. Providers
         const providers = await apiClient
-          .get<ProviderSnapshot[]>("/api/providers")
+          .get<ProviderSnapshot[]>(ENDPOINTS.providers.root)
           .catch(() => [] as ProviderSnapshot[]);
         if (cancelled) return;
         for (const p of providers) {
@@ -183,7 +184,7 @@ export function OnboardingRoot() {
 
         // 5. Policy (wizard-shaped)
         const policy = await apiClient
-          .get<WizardPolicySnapshot>("/api/policy/wizard")
+          .get<WizardPolicySnapshot>(ENDPOINTS.policy.wizard)
           .catch(() => null);
         if (cancelled) return;
         if (policy) {
@@ -327,8 +328,7 @@ function inferKindFromBaseUrl(
   const u = (baseUrl || "").toLowerCase();
   if (u.includes("openai.com")) return "openai";
   if (u.includes("anthropic.com")) return "anthropic";
-  if (u.includes("googleapis.com") || u.includes("generativelanguage"))
-    return "gemini";
+  if (u.includes("googleapis.com") || u.includes("generativelanguage")) return "gemini";
   if (u.includes("mistral")) return "mistral";
   if (u.includes("azure") || u.includes("cognitiveservices")) return "azure";
   if (u.includes("11434") || u.includes("ollama")) return "ollama";

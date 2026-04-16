@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -33,9 +34,7 @@ export function CommandsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiClient.get<{ commands: Command[] }>(
-          "/api/commands",
-        );
+        const res = await apiClient.get<{ commands: Command[] }>(ENDPOINTS.commands.list);
         setCommands(res.commands ?? []);
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Failed to load commands");
@@ -59,7 +58,7 @@ export function CommandsPage() {
       const res = await apiClient.post<{
         result?: { output: string; success: boolean };
         prompt?: string;
-      }>("/api/commands/execute", { input: execInput });
+      }>(ENDPOINTS.commands.execute, { input: execInput });
       setExecResult(
         res.result ?? {
           output: res.prompt ?? "Command executed",
@@ -80,10 +79,7 @@ export function CommandsPage() {
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-foreground text-xl font-semibold">
-          Commands{" "}
-          <span className="text-description text-sm font-normal">
-            ({commands.length})
-          </span>
+          Commands <span className="text-description text-sm font-normal">({commands.length})</span>
         </h1>
         <SearchInput
           placeholder="Search commands..."
@@ -93,9 +89,7 @@ export function CommandsPage() {
         />
       </div>
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -114,21 +108,15 @@ export function CommandsPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-foreground font-mono font-medium">
-                      /{c.name}
-                    </span>
-                    <Badge variant={c.type === "action" ? "info" : "success"}>
-                      {c.type}
-                    </Badge>
+                    <span className="text-foreground font-mono font-medium">/{c.name}</span>
+                    <Badge variant={c.type === "action" ? "info" : "success"}>{c.type}</Badge>
                     {c.aliases?.map((a) => (
                       <span key={a} className="text-description-muted text-xs">
                         /{a}
                       </span>
                     ))}
                   </div>
-                  <p className="text-description mt-1 text-sm">
-                    {c.description}
-                  </p>
+                  <p className="text-description mt-1 text-sm">{c.description}</p>
                 </div>
                 <Button
                   variant="outline"

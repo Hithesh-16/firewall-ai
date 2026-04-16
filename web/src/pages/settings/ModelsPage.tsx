@@ -10,6 +10,7 @@ import {
 import { Fragment, useCallback, useEffect, useState } from "react";
 
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import {
   type CatalogueModel,
   type CatalogueProvider,
@@ -235,7 +236,7 @@ export default function ModelsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiClient.get<ListResponse>("/api/me/models/list");
+      const res = await apiClient.get<ListResponse>(ENDPOINTS.me.modelsList);
       setModels(res.models);
       // Show the add form automatically if no models exist
       if (res.models.length === 0) setShowForm(true);
@@ -256,7 +257,7 @@ export default function ModelsPage() {
     setBanner(null);
     setSubmitting(true);
     try {
-      await apiClient.post("/api/me/models/add", {
+      await apiClient.post(ENDPOINTS.me.modelsAdd, {
         providerSlug: provider.slug,
         modelSlug: model.model,
         displayName: model.displayName,
@@ -279,7 +280,7 @@ export default function ModelsPage() {
     setError(null);
     setBanner(null);
     try {
-      await apiClient.del(`/api/me/models/${m.id}`);
+      await apiClient.del(ENDPOINTS.me.model(String(m.id)));
       setBanner(`Removed ${m.displayName || m.modelSlug}`);
       await loadModels();
     } catch (err) {

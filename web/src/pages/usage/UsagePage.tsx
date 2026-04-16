@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
 import { StatCard } from "../../components/ui/StatCard";
 import { LoadingSpinner } from "../../components/ui/LoadingSpinner";
@@ -43,8 +44,8 @@ export function UsagePage() {
     (async () => {
       try {
         const [usageRes, creditRes] = await Promise.allSettled([
-          apiClient.get<UsageSummary>("/api/usage/summary"),
-          apiClient.get<{ credits: CreditLimit[] } | CreditLimit[]>("/api/credits"),
+          apiClient.get<UsageSummary>(ENDPOINTS.usageSummary),
+          apiClient.get<{ credits: CreditLimit[] } | CreditLimit[]>(ENDPOINTS.credits),
         ]);
         if (usageRes.status === "fulfilled") setSummary(usageRes.value);
         if (creditRes.status === "fulfilled") {

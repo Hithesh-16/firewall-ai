@@ -1,15 +1,12 @@
 import { useState, useEffect } from "react";
-import {
-  ShieldCheckIcon,
-  SignalIcon,
-  SignalSlashIcon,
-} from "@heroicons/react/24/outline";
+import { ShieldCheckIcon, SignalIcon, SignalSlashIcon } from "@heroicons/react/24/outline";
 import { useAppSelector } from "../../store/hooks";
 import { selectActiveMessages } from "../../store/slices/chatSlice";
 import { ChatMessageList } from "../../components/chat/ChatMessageList";
 import { ChatInput } from "../../components/chat/ChatInput";
 import { ArtifactPanel } from "../../components/chat/ArtifactPanel";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { Badge } from "../../components/ui/Badge";
 import { formatCost } from "../../utils/format";
 
@@ -37,9 +34,7 @@ function SecurityStatusBar() {
 
     async function checkHealth() {
       try {
-        const data = await apiClient.get<{ status: string; version?: string }>(
-          "/health",
-        );
+        const data = await apiClient.get<{ status: string; version?: string }>(ENDPOINTS.health);
         if (!cancelled) {
           setHealth({ connected: data.status === "ok", version: data.version });
         }
@@ -54,7 +49,7 @@ function SecurityStatusBar() {
           totalRequests?: number;
           blockedRequests?: number;
           totalCost?: number;
-        }>("/api/stats");
+        }>(ENDPOINTS.stats);
         if (!cancelled) {
           setStats({
             scanned: data.totalRequests ?? 0,
@@ -103,12 +98,8 @@ function SecurityStatusBar() {
           <ShieldCheckIcon className="h-3.5 w-3.5" />
           {stats.scanned} scanned
         </span>
-        {stats.blocked > 0 && (
-          <Badge variant="error">{stats.blocked} blocked</Badge>
-        )}
-        {stats.totalCost > 0 && (
-          <span>{formatCost(stats.totalCost)} spent</span>
-        )}
+        {stats.blocked > 0 && <Badge variant="error">{stats.blocked} blocked</Badge>}
+        {stats.totalCost > 0 && <span>{formatCost(stats.totalCost)} spent</span>}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { UsersIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { apiClient } from "../../../api/client";
+import { ENDPOINTS } from "../../../api/endpoints";
 import { useAppDispatch } from "../../../store/hooks";
 import { showToast } from "../../../store/slices/uiSlice";
 import type { User } from "../../../api/types";
@@ -43,7 +44,7 @@ export function UsersTab() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiClient.get<{ users: User[] } | User[]>("/api/admin/users");
+      const data = await apiClient.get<{ users: User[] } | User[]>(ENDPOINTS.admin.users);
       setUsers(Array.isArray(data) ? data : data.users);
     } catch (err: unknown) {
       if (err instanceof Error) setError(err.message);
@@ -55,7 +56,7 @@ export function UsersTab() {
 
   async function changeRole(userId: string, role: string) {
     try {
-      await apiClient.put(`/api/admin/users/${userId}/role`, { role });
+      await apiClient.put(ENDPOINTS.admin.userRole(String(userId)), { role });
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role: role as User["role"] } : u)),
       );
@@ -82,7 +83,7 @@ export function UsersTab() {
     if (!inviteForm.email || !inviteForm.name || !inviteForm.password) return;
     setInviting(true);
     try {
-      await apiClient.post("/api/auth/register", inviteForm);
+      await apiClient.post(ENDPOINTS.auth.register, inviteForm);
       dispatch(
         showToast({
           id: `invite-${Date.now()}`,

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   ShieldCheckIcon,
   LockClosedIcon,
@@ -10,9 +10,8 @@ import {
   CommandLineIcon,
   DocumentTextIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect } from "react";
 import { ROUTES } from "../../utils/routes";
-import { useAppSelector } from "../../store/hooks";
+import { useDocumentHead } from "../../hooks/useDocumentHead";
 import AnimatedBackdrop from "../../components/brand/AnimatedBackdrop";
 import BrandShield from "../../components/brand/BrandShield";
 
@@ -57,15 +56,16 @@ const EXTENSIONS = [
 ];
 
 export function LandingPage() {
-  const navigate = useNavigate();
-  const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
-
-  // If already signed in, skip landing and go straight to the dashboard.
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate(ROUTES.CHAT, { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
+  // Authenticated-user redirect is handled synchronously by the
+  // `PublicOnly` route guard — no in-component effect needed.
+  useDocumentHead({
+    title: "Open-source AI security firewall",
+    description:
+      "Scan every prompt for secrets, PII, and prompt injection before it reaches OpenAI, Anthropic, Gemini, or any local LLM. Token intelligence, MCP gateway, encrypted vault, and full audit trail — self-hosted and open source.",
+    keywords:
+      "AI firewall, prompt injection, PII redaction, LLM security, MCP gateway, prompt scanning, secret detection, AI security proxy",
+    canonical: "https://ai-firewall.dev/",
+  });
 
   return (
     <div className="relative min-h-screen text-slate-100">

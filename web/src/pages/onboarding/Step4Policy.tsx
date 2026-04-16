@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { onboardingActions } from "../../store/slices/onboardingSlice";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { cn } from "../../utils/cn";
 import { WizardCard, WizardError, WizardNav } from "./_shared";
 
@@ -20,17 +21,9 @@ import { WizardCard, WizardError, WizardNav } from "./_shared";
  * a partial policy and merges it with the existing one.
  */
 
-type ScannerKey =
-  | "secrets"
-  | "pii"
-  | "promptInjection"
-  | "entropy"
-  | "unicode";
+type ScannerKey = "secrets" | "pii" | "promptInjection" | "entropy" | "unicode";
 
-const SCANNER_META: Record<
-  ScannerKey,
-  { label: string; description: string }
-> = {
+const SCANNER_META: Record<ScannerKey, { label: string; description: string }> = {
   secrets: {
     label: "Secrets",
     description: "API keys, tokens, private keys, DB URLs, JWTs.",
@@ -41,8 +34,7 @@ const SCANNER_META: Record<
   },
   promptInjection: {
     label: "Prompt Injection",
-    description:
-      "Jailbreak attempts, instruction override, role-play attacks.",
+    description: "Jailbreak attempts, instruction override, role-play attacks.",
   },
   entropy: {
     label: "Entropy Analysis",
@@ -69,10 +61,7 @@ function Slider({
   max?: number;
   color: "red" | "amber";
 }) {
-  const trackColor =
-    color === "red"
-      ? "accent-red-500"
-      : "accent-amber-500";
+  const trackColor = color === "red" ? "accent-red-500" : "accent-amber-500";
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-xs">
@@ -91,13 +80,7 @@ function Slider({
   );
 }
 
-export function Step4Policy({
-  onNext,
-  onBack,
-}: {
-  onNext: () => void;
-  onBack: () => void;
-}) {
+export function Step4Policy({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const dispatch = useAppDispatch();
   const wizard = useAppSelector((s) => s.onboarding);
   const [policy, setPolicy] = useState(wizard.policy);
@@ -123,7 +106,7 @@ export function Step4Policy({
     try {
       // Wizard-shaped endpoint: the proxy translates this into the
       // real PolicyConfig fields and merges with the existing file.
-      await apiClient.post("/api/policy/wizard", {
+      await apiClient.post(ENDPOINTS.policy.wizard, {
         scanners: policy.scanners,
         responseScanning: policy.responseScanning,
         mcpGateway: policy.mcpGateway,
@@ -137,9 +120,7 @@ export function Step4Policy({
       dispatch(onboardingActions.setPolicy(policy));
       onNext();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save policy",
-      );
+      setError(err instanceof Error ? err.message : "Failed to save policy");
     } finally {
       setBusy(false);
     }
@@ -165,27 +146,19 @@ export function Step4Policy({
                   key={key}
                   className={cn(
                     "rounded-lg border bg-slate-950/40 p-3",
-                    s.enabled
-                      ? "border-slate-800"
-                      : "border-slate-900 opacity-50",
+                    s.enabled ? "border-slate-800" : "border-slate-900 opacity-50",
                   )}
                 >
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-slate-100">
-                        {meta.label}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {meta.description}
-                      </p>
+                      <p className="text-sm font-medium text-slate-100">{meta.label}</p>
+                      <p className="text-xs text-slate-500">{meta.description}</p>
                     </div>
                     <label className="relative inline-flex shrink-0 cursor-pointer items-center">
                       <input
                         type="checkbox"
                         checked={s.enabled}
-                        onChange={(e) =>
-                          updateScanner(key, { enabled: e.target.checked })
-                        }
+                        onChange={(e) => updateScanner(key, { enabled: e.target.checked })}
                         className="peer sr-only"
                       />
                       <div className="peer h-5 w-9 rounded-full bg-slate-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-emerald-500 peer-checked:after:translate-x-full" />
@@ -223,9 +196,7 @@ export function Step4Policy({
               label="Scan LLM responses"
               description="Also scan model output for leaked secrets and PII."
               checked={policy.responseScanning}
-              onChange={(v) =>
-                setPolicy({ ...policy, responseScanning: v })
-              }
+              onChange={(v) => setPolicy({ ...policy, responseScanning: v })}
             />
             <ToggleRow
               label="MCP gateway scanning"
@@ -252,9 +223,7 @@ export function Step4Policy({
             />
             {policy.costRouting.enabled && (
               <div className="ml-3 flex items-center gap-2 pt-1">
-                <span className="text-xs text-slate-400">
-                  Max USD per request
-                </span>
+                <span className="text-xs text-slate-400">Max USD per request</span>
                 <input
                   type="number"
                   step="0.01"
@@ -265,9 +234,7 @@ export function Step4Policy({
                       ...policy,
                       costRouting: {
                         ...policy.costRouting,
-                        perRequestUsdCap: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
+                        perRequestUsdCap: e.target.value ? Number(e.target.value) : undefined,
                       },
                     })
                   }

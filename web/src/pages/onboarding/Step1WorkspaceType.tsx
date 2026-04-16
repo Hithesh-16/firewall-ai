@@ -6,11 +6,9 @@ import {
   CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import {
-  onboardingActions,
-  type WorkspaceType,
-} from "../../store/slices/onboardingSlice";
+import { onboardingActions, type WorkspaceType } from "../../store/slices/onboardingSlice";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { setCredentials } from "../../store/slices/authSlice";
 import { getToken } from "../../utils/storage";
 import { cn } from "../../utils/cn";
@@ -58,11 +56,7 @@ const OPTIONS: {
     icon: BuildingOfficeIcon,
     title: "Organization",
     subtitle: "Multiple teams with separate policies",
-    features: [
-      "Multiple teams + leads",
-      "Per-team file restrictions",
-      "Role-based access control",
-    ],
+    features: ["Multiple teams + leads", "Per-team file restrictions", "Role-based access control"],
   },
 ];
 
@@ -96,7 +90,7 @@ export function Step1WorkspaceType({ onNext }: { onNext: () => void }) {
       if (!orgId) {
         // Create the org server-side now so the rest of the wizard
         // can attach things (teams, providers, policies) to it.
-        const created = await apiClient.post<OrgResponse>("/api/orgs", {
+        const created = await apiClient.post<OrgResponse>(ENDPOINTS.orgs.root, {
           name: orgName,
           slug: orgSlug,
         });
@@ -105,14 +99,14 @@ export function Step1WorkspaceType({ onNext }: { onNext: () => void }) {
         // Bind the current user to the new org so subsequent calls
         // pass org-membership checks.
         await apiClient
-          .post(`/api/orgs/${orgId}/members`, { userId: Number(user?.id) })
+          .post(ENDPOINTS.orgs.members(String(orgId)), { userId: Number(user?.id) })
           .catch(() => {
             /* user might already be assigned — ignore */
           });
 
         // Refresh /me so the orgId lands in Redux for the rest of the
         // wizard, and the auth gate stops considering us "no org".
-        const me = await apiClient.get<{ user: typeof user }>("/api/auth/me");
+        const me = await apiClient.get<{ user: typeof user }>(ENDPOINTS.auth.me);
         const token = getToken();
         if (me.user && token) {
           dispatch(setCredentials({ user: me.user, token }));
@@ -128,9 +122,7 @@ export function Step1WorkspaceType({ onNext }: { onNext: () => void }) {
       );
       onNext();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create workspace",
-      );
+      setError(err instanceof Error ? err.message : "Failed to create workspace");
     } finally {
       setBusy(false);
     }
@@ -148,9 +140,7 @@ export function Step1WorkspaceType({ onNext }: { onNext: () => void }) {
             <button
               key={id}
               type="button"
-              onClick={() =>
-                dispatch(onboardingActions.setWorkspaceType(id))
-              }
+              onClick={() => dispatch(onboardingActions.setWorkspaceType(id))}
               className={cn(
                 "relative flex flex-col items-start gap-3 rounded-xl border bg-slate-950/40 p-4 text-left transition-all",
                 "hover:-translate-y-0.5 hover:bg-slate-900/60",
@@ -198,12 +188,7 @@ export function Step1WorkspaceType({ onNext }: { onNext: () => void }) {
 
       <WizardError message={error} />
 
-      <WizardNav
-        onNext={handleContinue}
-        nextDisabled={!choice}
-        busy={busy}
-        hideBack
-      />
+      <WizardNav onNext={handleContinue} nextDisabled={!choice} busy={busy} hideBack />
     </WizardCard>
   );
 }

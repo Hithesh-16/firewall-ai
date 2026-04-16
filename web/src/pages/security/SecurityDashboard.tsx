@@ -10,6 +10,7 @@ import {
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { addScanResult, setRecentScans, setProxyHealthy } from "../../store/slices/securitySlice";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import type { ScanResult, Provider } from "../../api/types";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
 import { StatCard } from "../../components/ui/StatCard";
@@ -82,7 +83,7 @@ export function SecurityDashboard() {
       dispatch(addScanResult(scan));
       // Refresh stats on new scan event
       apiClient
-        .get<StatsData>("/api/stats")
+        .get<StatsData>(ENDPOINTS.stats)
         .then(setStats)
         .catch(() => {});
     },
@@ -97,11 +98,11 @@ export function SecurityDashboard() {
       setError(null);
       try {
         const [healthRes, statsRes, logsRes, creditsRes, usageRes] = await Promise.allSettled([
-          apiClient.get<{ status: string }>("/health"),
-          apiClient.get<StatsData>("/api/stats"),
-          apiClient.get<{ logs: ScanResult[] }>("/api/logs?limit=50"),
-          apiClient.get<CreditData[]>("/api/credits"),
-          apiClient.get<UsageSummary>("/api/usage/summary"),
+          apiClient.get<{ status: string }>(ENDPOINTS.health),
+          apiClient.get<StatsData>(ENDPOINTS.stats),
+          apiClient.get<{ logs: ScanResult[] }>(`${ENDPOINTS.logs}?limit=50`),
+          apiClient.get<CreditData[]>(ENDPOINTS.credits),
+          apiClient.get<UsageSummary>(ENDPOINTS.usageSummary),
         ]);
 
         dispatch(
@@ -142,7 +143,7 @@ export function SecurityDashboard() {
     }
     if (activeTab === "feed") {
       apiClient
-        .get<{ logs: ScanResult[] }>("/api/logs?limit=50")
+        .get<{ logs: ScanResult[] }>(`${ENDPOINTS.logs}?limit=50`)
         .then((res) => {
           dispatch(setRecentScans(res.logs ?? []));
         })
@@ -150,8 +151,8 @@ export function SecurityDashboard() {
     }
     if (activeTab === "credits") {
       Promise.allSettled([
-        apiClient.get<CreditData[]>("/api/credits"),
-        apiClient.get<UsageSummary>("/api/usage/summary"),
+        apiClient.get<CreditData[]>(ENDPOINTS.credits),
+        apiClient.get<UsageSummary>(ENDPOINTS.usageSummary),
       ]).then(([creditsRes, usageRes]) => {
         if (creditsRes.status === "fulfilled") setCredits(creditsRes.value);
         if (usageRes.status === "fulfilled") setUsage(usageRes.value);
@@ -159,7 +160,7 @@ export function SecurityDashboard() {
     }
     if (activeTab === "providers") {
       apiClient
-        .get<Provider[]>("/api/providers")
+        .get<Provider[]>(ENDPOINTS.providers.root)
         .then(setProviders)
         .catch(() => setProviders([]));
     }

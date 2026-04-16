@@ -6,12 +6,10 @@ import { MobileNav } from "./MobileNav";
 import { ToastContainer } from "../ui/Toast";
 import { useAppSelector, useAppDispatch } from "../../store/hooks";
 import { setCredentials, logout } from "../../store/slices/authSlice";
-import {
-  clearPermissions,
-  fetchUserPermissions,
-} from "../../store/slices/permissionsSlice";
+import { clearPermissions, fetchUserPermissions } from "../../store/slices/permissionsSlice";
 import { getToken } from "../../utils/storage";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { ROUTES } from "../../utils/routes";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 import type { User } from "../../api/types";
@@ -33,7 +31,7 @@ export function AppShell() {
     }
 
     apiClient
-      .get<{ user: User }>("/api/auth/me")
+      .get<{ user: User }>(ENDPOINTS.auth.me)
       .then((res) => {
         dispatch(setCredentials({ user: res.user, token }));
         // Page refresh: rehydrate the permission cache too so
@@ -68,9 +66,9 @@ export function AppShell() {
   // The /onboarding routes are themselves NOT inside this AppShell so the
   // redirect doesn't loop.
   const needsOnboarding = user?.onboardingComplete === false;
-  const onOnboardingRoute = location.pathname.startsWith("/onboarding");
+  const onOnboardingRoute = location.pathname.startsWith(ROUTES.ONBOARDING);
   if (needsOnboarding && !onOnboardingRoute) {
-    return <Navigate to="/onboarding" replace />;
+    return <Navigate to={ROUTES.ONBOARDING} replace />;
   }
 
   return (

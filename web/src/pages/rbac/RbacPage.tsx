@@ -9,6 +9,7 @@ import {
   CodeBracketIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { showToast } from "../../store/slices/uiSlice";
 import { Card } from "../../components/ui/Card";
@@ -109,9 +110,9 @@ export function RbacPage() {
     setLoadError(null);
     try {
       const [rolesResp, usersResp] = await Promise.all([
-        apiClient.get<{ roles: Role[] }>("/api/roles"),
+        apiClient.get<{ roles: Role[] }>(ENDPOINTS.rbac.roles),
         apiClient
-          .get<{ users: UserWithRole[] }>("/api/users")
+          .get<{ users: UserWithRole[] }>(ENDPOINTS.users.list)
           .catch(() => ({ users: [] as UserWithRole[] })),
       ]);
       setRoles(rolesResp.roles);
@@ -353,7 +354,7 @@ function RoleEditor({
     setSaveError(null);
     try {
       const atoms = matrixToAtoms(matrix, legacyAtoms);
-      await apiClient.put(`/api/roles/${role.id}`, { capabilities: atoms });
+      await apiClient.put(ENDPOINTS.rbac.role(String(role.id)), { capabilities: atoms });
       dispatch(
         showToast({
           id: `role-save-${Date.now()}`,
@@ -373,7 +374,9 @@ function RoleEditor({
     setSaving(true);
     setSaveError(null);
     try {
-      const countResp = await apiClient.get<{ count: number }>(`/api/roles/${role.id}/users-count`);
+      const countResp = await apiClient.get<{ count: number }>(
+        ENDPOINTS.rbac.roleUsersCount(String(role.id)),
+      );
       if (countResp.count > 0) {
         setUserCount(countResp.count);
         setSaveError(
@@ -382,7 +385,7 @@ function RoleEditor({
         setConfirmDelete(false);
         return;
       }
-      await apiClient.del(`/api/roles/${role.id}`);
+      await apiClient.del(ENDPOINTS.rbac.role(String(role.id)));
       dispatch(
         showToast({
           id: `role-del-${Date.now()}`,
@@ -718,7 +721,7 @@ function PolicyTab({ roleName }: { roleName: string }) {
         hasOverride: boolean;
         policy: WizardPolicyShape | null;
         updatedAt: number | null;
-      }>(`/api/policies/role/${roleName}`);
+      }>(ENDPOINTS.policy.role(roleName));
 
       setHasOverride(resp.hasOverride);
 
@@ -737,7 +740,7 @@ function PolicyTab({ roleName }: { roleName: string }) {
         // `{}` has no fields to lose — saving the template just
         // replaces the empty override with real values.
         try {
-          const tmpl = await apiClient.get<{ template: string }>("/api/policies/role-template");
+          const tmpl = await apiClient.get<{ template: string }>(ENDPOINTS.policy.roleTemplate);
           setJsonText(tmpl.template);
           setIsTemplate(true);
         } catch {
@@ -790,7 +793,7 @@ function PolicyTab({ roleName }: { roleName: string }) {
       // Strip comments then parse. Empty body is stored as {}.
       const stripped = stripJsonComments(jsonText || "{}").trim();
       const policy = stripped.length > 0 ? JSON.parse(stripped) : {};
-      await apiClient.put(`/api/policies/role/${roleName}`, policy);
+      await apiClient.put(ENDPOINTS.policy.role(roleName), policy);
       dispatch(
         showToast({
           id: `role-policy-save-${Date.now()}`,
@@ -815,7 +818,7 @@ function PolicyTab({ roleName }: { roleName: string }) {
   async function removeOverride() {
     setSaving(true);
     try {
-      await apiClient.del(`/api/policies/role/${roleName}`);
+      await apiClient.del(ENDPOINTS.policy.role(roleName));
       dispatch(
         showToast({
           id: `role-policy-del-${Date.now()}`,
@@ -933,7 +936,7 @@ function NewRoleButton({ roles, onCreated }: { roles: Role[]; onCreated: () => v
       const source = cloneFromId ? roles.find((r) => r.id === cloneFromId) : null;
       const caps = source?.capabilities.map((c) => c.capabilityName) ?? ["chat:view"];
 
-      await apiClient.post("/api/roles", {
+      await apiClient.post(ENDPOINTS.rbac.roles, {
         name: name.trim() || displayName.trim().toLowerCase(),
         displayName: displayName.trim(),
         description: description.trim(),

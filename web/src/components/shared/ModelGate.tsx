@@ -2,7 +2,9 @@ import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { getToken } from "../../utils/storage";
+import { ROUTES } from "../../utils/routes";
 import { LoadingSpinner } from "../ui/LoadingSpinner";
 
 /**
@@ -54,14 +56,14 @@ interface ModelsResponse {
   hasAssistant: boolean;
 }
 
-const BYPASS_PATHS = [
-  "/setup-model",
-  "/settings/models",
-  "/settings/assistant",
-  "/onboarding",
-  "/login",
-  "/register",
-  "/403",
+const BYPASS_PATHS: readonly string[] = [
+  ROUTES.SETUP_MODEL,
+  ROUTES.SETTINGS_MODELS,
+  ROUTES.SETTINGS_ASSISTANT,
+  ROUTES.ONBOARDING,
+  ROUTES.LOGIN,
+  ROUTES.REGISTER,
+  ROUTES.FORBIDDEN,
 ];
 
 function shouldBypass(pathname: string): boolean {
@@ -97,7 +99,7 @@ export function ModelGate({ children }: { children: ReactNode }) {
 
     setState({ kind: "loading" });
     apiClient
-      .get<ModelsResponse>("/api/me/models/list")
+      .get<ModelsResponse>(ENDPOINTS.me.modelsList)
       .then((res) => {
         if (res.hasAny) {
           setState({ kind: "ok" });
@@ -126,7 +128,7 @@ export function ModelGate({ children }: { children: ReactNode }) {
   }
 
   if (state.kind === "no-model") {
-    return <Navigate to="/settings/models" replace />;
+    return <Navigate to={ROUTES.SETTINGS_MODELS} replace />;
   }
 
   return <>{children}</>;

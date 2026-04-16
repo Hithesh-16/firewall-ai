@@ -9,6 +9,7 @@ import {
   ShieldExclamationIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { formatRelativeTime } from "../../utils/format";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
@@ -64,9 +65,7 @@ const TABS = [
 /*  Status helpers                                                    */
 /* ------------------------------------------------------------------ */
 
-function statusVariant(
-  status: string,
-): "success" | "warning" | "error" | "info" | "default" {
+function statusVariant(status: string): "success" | "warning" | "error" | "info" | "default" {
   switch (status) {
     case "running":
       return "success";
@@ -86,13 +85,7 @@ function statusVariant(
 /*  SpawnForm                                                         */
 /* ------------------------------------------------------------------ */
 
-function SpawnForm({
-  onSpawn,
-  onCancel,
-}: {
-  onSpawn: () => void;
-  onCancel: () => void;
-}) {
+function SpawnForm({ onSpawn, onCancel }: { onSpawn: () => void; onCancel: () => void }) {
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("gpt-4");
@@ -106,7 +99,7 @@ function SpawnForm({
     setSubmitting(true);
     setError(null);
     try {
-      await apiClient.post("/api/agents/spawn", {
+      await apiClient.post(ENDPOINTS.agents.spawn, {
         description: description.trim(),
         prompt: prompt.trim(),
         model,
@@ -124,9 +117,7 @@ function SpawnForm({
     <Card className="mb-4">
       <form onSubmit={handleSubmit} className="space-y-3">
         <h3 className="text-foreground text-sm font-semibold">Spawn Agent</h3>
-        {error && (
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
-        )}
+        {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
         <input
           type="text"
           placeholder="Description"
@@ -169,12 +160,7 @@ function SpawnForm({
           <Button variant="ghost" size="sm" type="button" onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            type="submit"
-            loading={submitting}
-          >
+          <Button variant="primary" size="sm" type="submit" loading={submitting}>
             Spawn
           </Button>
         </div>
@@ -187,13 +173,7 @@ function SpawnForm({
 /*  MessageForm                                                       */
 /* ------------------------------------------------------------------ */
 
-function MessageForm({
-  taskId,
-  onSent,
-}: {
-  taskId: string;
-  onSent: () => void;
-}) {
+function MessageForm({ taskId, onSent }: { taskId: string; onSent: () => void }) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -201,7 +181,7 @@ function MessageForm({
     if (!message.trim()) return;
     setSending(true);
     try {
-      await apiClient.post(`/api/agents/${taskId}/message`, {
+      await apiClient.post(ENDPOINTS.agents.message(String(taskId)), {
         message: message.trim(),
       });
       setMessage("");
@@ -223,12 +203,7 @@ function MessageForm({
         onKeyDown={(e) => e.key === "Enter" && handleSend()}
         className="border-input-border bg-input text-input-foreground placeholder:text-input-placeholder focus:border-border-focus flex-1 rounded-md border px-3 py-1 text-sm focus:outline-none"
       />
-      <Button
-        variant="icon"
-        onClick={handleSend}
-        disabled={sending}
-        aria-label="Send message"
-      >
+      <Button variant="icon" onClick={handleSend} disabled={sending} aria-label="Send message">
         <PaperAirplaneIcon className="h-4 w-4" />
       </Button>
     </div>
@@ -256,18 +231,18 @@ export function AgentManagerPage() {
     try {
       if (tab === "active") {
         const data = await apiClient.get<{ agents: Agent[] } | Agent[]>(
-          "/api/agents?active=true",
+          `${ENDPOINTS.agents.list}?active=true`,
         );
         setAgents(Array.isArray(data) ? data : (data.agents ?? []));
       } else if (tab === "approvals") {
-        const data = await apiClient.get<
-          { approvals: Approval[] } | Approval[]
-        >("/api/approvals/pending");
+        const data = await apiClient.get<{ approvals: Approval[] } | Approval[]>(
+          ENDPOINTS.approvals.pending,
+        );
         setApprovals(Array.isArray(data) ? data : (data.approvals ?? []));
       } else {
-        const data = await apiClient.get<
-          { history: ApprovalHistory[] } | ApprovalHistory[]
-        >("/api/approvals/history");
+        const data = await apiClient.get<{ history: ApprovalHistory[] } | ApprovalHistory[]>(
+          ENDPOINTS.approvals.history,
+        );
         setHistory(Array.isArray(data) ? data : (data.history ?? []));
       }
     } catch (err: unknown) {
@@ -283,7 +258,7 @@ export function AgentManagerPage() {
 
   async function handleKill(taskId: string) {
     try {
-      await apiClient.del(`/api/agents/${taskId}`);
+      await apiClient.del(ENDPOINTS.agents.one(String(taskId)));
       setKillTarget(null);
       fetchData();
     } catch (err: unknown) {
@@ -293,12 +268,10 @@ export function AgentManagerPage() {
 
   async function handleResolve(id: string, decision: string) {
     try {
-      await apiClient.post(`/api/approvals/${id}/resolve`, { decision });
+      await apiClient.post(ENDPOINTS.approvals.resolve(String(id)), { decision });
       fetchData();
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to resolve approval",
-      );
+      setError(err instanceof Error ? err.message : "Failed to resolve approval");
     }
   }
 
@@ -313,11 +286,7 @@ export function AgentManagerPage() {
           )}
         </div>
         {tab === "active" && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowSpawnForm(true)}
-          >
+          <Button variant="primary" size="sm" onClick={() => setShowSpawnForm(true)}>
             <PlusIcon className="h-4 w-4" />
             Spawn Agent
           </Button>
@@ -326,9 +295,7 @@ export function AgentManagerPage() {
 
       <UnderlineTabs tabs={TABS} activeTab={tab} onChange={setTab} />
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       {showSpawnForm && tab === "active" && (
         <SpawnForm
@@ -365,18 +332,13 @@ export function AgentManagerPage() {
                         <p className="text-foreground truncate text-sm font-medium">
                           {agent.description}
                         </p>
-                        <p className="text-description mt-0.5 text-xs">
-                          ID: {agent.taskId}
-                        </p>
+                        <p className="text-description mt-0.5 text-xs">ID: {agent.taskId}</p>
                       </div>
-                      <Badge variant={statusVariant(agent.status)}>
-                        {agent.status}
-                      </Badge>
+                      <Badge variant={statusVariant(agent.status)}>{agent.status}</Badge>
                     </div>
                     {agent.model && (
                       <p className="text-description text-xs">
-                        Model:{" "}
-                        <span className="text-foreground">{agent.model}</span>
+                        Model: <span className="text-foreground">{agent.model}</span>
                       </p>
                     )}
                     {typeof agent.progress === "number" && (
@@ -389,9 +351,7 @@ export function AgentManagerPage() {
                             }}
                           />
                         </div>
-                        <p className="text-description text-xs">
-                          {agent.progress}%
-                        </p>
+                        <p className="text-description text-xs">{agent.progress}%</p>
                       </div>
                     )}
                     {agent.startedAt && (
@@ -404,11 +364,7 @@ export function AgentManagerPage() {
                         variant="outline"
                         size="sm"
                         onClick={() =>
-                          setMessagingAgent(
-                            messagingAgent === agent.taskId
-                              ? null
-                              : agent.taskId,
-                          )
+                          setMessagingAgent(messagingAgent === agent.taskId ? null : agent.taskId)
                         }
                       >
                         <PaperAirplaneIcon className="h-3.5 w-3.5" />
@@ -445,20 +401,14 @@ export function AgentManagerPage() {
                   <Card key={a.id} className="space-y-2">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-foreground text-sm font-medium">
-                          {a.actionType}
-                        </p>
-                        <p className="text-description mt-0.5 text-xs">
-                          {a.resource}
-                        </p>
+                        <p className="text-foreground text-sm font-medium">{a.actionType}</p>
+                        <p className="text-description mt-0.5 text-xs">{a.resource}</p>
                       </div>
                       <span className="text-description-muted text-xs">
                         {formatRelativeTime(a.createdAt)}
                       </span>
                     </div>
-                    {a.context && (
-                      <p className="text-description text-xs">{a.context}</p>
-                    )}
+                    {a.context && <p className="text-description text-xs">{a.context}</p>}
                     <div className="flex flex-wrap gap-2 pt-1">
                       <Button
                         variant="primary"
@@ -475,11 +425,7 @@ export function AgentManagerPage() {
                       >
                         Allow Always
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleResolve(a.id, "deny")}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => handleResolve(a.id, "deny")}>
                         Deny
                       </Button>
                       <Button
@@ -512,13 +458,7 @@ export function AgentManagerPage() {
                     key: "decision",
                     label: "Decision",
                     render: (_value: unknown, row: Record<string, unknown>) => (
-                      <Badge
-                        variant={
-                          String(row.decision).includes("allow")
-                            ? "success"
-                            : "error"
-                        }
-                      >
+                      <Badge variant={String(row.decision).includes("allow") ? "success" : "error"}>
                         {String(row.decision)}
                       </Badge>
                     ),

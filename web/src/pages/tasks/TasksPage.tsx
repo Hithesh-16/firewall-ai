@@ -7,6 +7,7 @@ import {
   ChevronUpIcon,
 } from "@heroicons/react/24/outline";
 import { apiClient } from "../../api/client";
+import { ENDPOINTS } from "../../api/endpoints";
 import { formatRelativeTime, formatTokens } from "../../utils/format";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
@@ -50,9 +51,7 @@ const FILTER_TABS = [
   { id: "failed", label: "Failed" },
 ];
 
-function statusVariant(
-  status: string,
-): "success" | "warning" | "error" | "info" | "default" {
+function statusVariant(status: string): "success" | "warning" | "error" | "info" | "default" {
   switch (status) {
     case "running":
       return "success";
@@ -99,7 +98,7 @@ export function TasksPage() {
     setLoading(true);
     setError(null);
     try {
-      let url = "/api/tasks?limit=50";
+      let url = `${ENDPOINTS.tasks.list}?limit=50`;
       if (filter === "active") url += "&active=true";
       else if (filter === "completed") url += "&status=completed";
       else if (filter === "failed") url += "&status=failed";
@@ -120,9 +119,7 @@ export function TasksPage() {
   // Auto-refresh for active tasks
   useEffect(() => {
     if (filter !== "all" && filter !== "active") return;
-    const hasActive = tasks.some(
-      (t) => t.status === "running" || t.status === "pending",
-    );
+    const hasActive = tasks.some((t) => t.status === "running" || t.status === "pending");
     if (!hasActive) return;
     const interval = setInterval(fetchTasks, 5000);
     return () => clearInterval(interval);
@@ -130,7 +127,7 @@ export function TasksPage() {
 
   async function handleKill(id: string) {
     try {
-      await apiClient.del(`/api/tasks/${id}`);
+      await apiClient.del(ENDPOINTS.tasks.one(id));
       setKillTarget(null);
       fetchTasks();
     } catch (err: unknown) {
@@ -140,18 +137,14 @@ export function TasksPage() {
 
   async function handleAck(id: string) {
     try {
-      await apiClient.post(`/api/tasks/${id}/ack`);
+      await apiClient.post(ENDPOINTS.tasks.ack(id));
       fetchTasks();
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to acknowledge task",
-      );
+      setError(err instanceof Error ? err.message : "Failed to acknowledge task");
     }
   }
 
-  const activeCount = tasks.filter(
-    (t) => t.status === "running" || t.status === "pending",
-  ).length;
+  const activeCount = tasks.filter((t) => t.status === "running" || t.status === "pending").length;
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
@@ -161,15 +154,9 @@ export function TasksPage() {
         {activeCount > 0 && <Badge variant="info">{activeCount} active</Badge>}
       </div>
 
-      <UnderlineTabs
-        tabs={FILTER_TABS}
-        activeTab={filter}
-        onChange={setFilter}
-      />
+      <UnderlineTabs tabs={FILTER_TABS} activeTab={filter} onChange={setFilter} />
 
-      {error && (
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      )}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -180,19 +167,15 @@ export function TasksPage() {
           icon={<QueueListIcon className="h-10 w-10" />}
           title="No Tasks"
           description={
-            filter === "all"
-              ? "No tasks have been created yet."
-              : `No ${filter} tasks found.`
+            filter === "all" ? "No tasks have been created yet." : `No ${filter} tasks found.`
           }
         />
       ) : (
         <div className="space-y-3">
           {tasks.map((task) => {
             const isExpanded = expanded === task.id;
-            const isRunning =
-              task.status === "running" || task.status === "pending";
-            const isDone =
-              task.status === "completed" || task.status === "failed";
+            const isRunning = task.status === "running" || task.status === "pending";
+            const isDone = task.status === "completed" || task.status === "failed";
 
             return (
               <Card key={task.id} className="space-y-2">
@@ -203,9 +186,7 @@ export function TasksPage() {
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={typeColor(task.type)}>{task.type}</Badge>
-                      <Badge variant={statusVariant(task.status)}>
-                        {task.status}
-                      </Badge>
+                      <Badge variant={statusVariant(task.status)}>{task.status}</Badge>
                     </div>
                     <p className="text-foreground truncate text-sm font-medium">
                       {task.description}
@@ -256,41 +237,31 @@ export function TasksPage() {
                 </div>
 
                 {/* Progress bar */}
-                {isRunning &&
-                  task.progress &&
-                  typeof task.progress.tokens === "number" && (
-                    <div className="bg-secondary h-1.5 w-full rounded-full">
-                      <div
-                        className="bg-primary h-1.5 rounded-full transition-all"
-                        style={{
-                          width: `${Math.min(
-                            ((task.progress.toolUseCount ?? 0) / 20) * 100,
-                            100,
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  )}
+                {isRunning && task.progress && typeof task.progress.tokens === "number" && (
+                  <div className="bg-secondary h-1.5 w-full rounded-full">
+                    <div
+                      className="bg-primary h-1.5 rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(((task.progress.toolUseCount ?? 0) / 20) * 100, 100)}%`,
+                      }}
+                    />
+                  </div>
+                )}
 
                 {/* Expanded detail */}
                 {isExpanded && (
                   <div className="border-border mt-2 space-y-2 border-t pt-2">
                     {task.model && (
                       <p className="text-description text-xs">
-                        Model:{" "}
-                        <span className="text-foreground">{task.model}</span>
+                        Model: <span className="text-foreground">{task.model}</span>
                       </p>
                     )}
                     {task.progress && (
                       <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
                         {typeof task.progress.toolUseCount === "number" && (
                           <div>
-                            <span className="text-description">
-                              Tool calls:
-                            </span>{" "}
-                            <span className="text-foreground">
-                              {task.progress.toolUseCount}
-                            </span>
+                            <span className="text-description">Tool calls:</span>{" "}
+                            <span className="text-foreground">{task.progress.toolUseCount}</span>
                           </div>
                         )}
                         {typeof task.progress.tokens === "number" && (
@@ -303,17 +274,16 @@ export function TasksPage() {
                         )}
                       </div>
                     )}
-                    {task.progress?.activities &&
-                      task.progress.activities.length > 0 && (
-                        <div className="text-xs">
-                          <p className="text-description">Recent activity:</p>
-                          <ul className="text-foreground mt-1 list-inside list-disc space-y-0.5">
-                            {task.progress.activities.slice(-5).map((a, i) => (
-                              <li key={i}>{a}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                    {task.progress?.activities && task.progress.activities.length > 0 && (
+                      <div className="text-xs">
+                        <p className="text-description">Recent activity:</p>
+                        <ul className="text-foreground mt-1 list-inside list-disc space-y-0.5">
+                          {task.progress.activities.slice(-5).map((a, i) => (
+                            <li key={i}>{a}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     {task.error && (
                       <div className="bg-error/10 text-error rounded-md px-3 py-2 text-xs">
                         {task.error}

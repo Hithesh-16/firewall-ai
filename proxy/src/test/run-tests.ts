@@ -113,6 +113,12 @@ function makePolicy(): PolicyConfig {
 // --- Policy Engine tests ---
 
 function testBlockOnPrivateKey() {
+  // Per consent-first principle (2026-04-17), private keys in user
+  // prompts are now REDACTED rather than hard-blocked. The redactor
+  // replaces the key with `[REDACTED_PRIVATE_KEY]` and the request
+  // proceeds; the GUI banner shows the finding so the user can edit
+  // and re-send if they did NOT mean to share that text. Hard BLOCK
+  // is reserved for file-scope path-blocklist violations.
   const policy = makePolicy();
   const secretResult = {
     hasSecrets: true,
@@ -128,7 +134,17 @@ function testBlockOnPrivateKey() {
   } as any;
   const piiResult = { hasPII: false, pii: [] } as any;
   const decision = evaluatePolicy(secretResult, piiResult, policy, []);
-  assert.strictEqual(decision.action, "BLOCK", "Private key should be blocked");
+  assert.strictEqual(
+    decision.action,
+    "REDACT",
+    "Private key in content scan should REDACT (consent-first), not BLOCK",
+  );
+  assert.ok(
+    decision.reasons.some((r: string) =>
+      r.toLowerCase().includes("private key"),
+    ),
+    "Reason should mention private key",
+  );
 }
 
 function testRedactOnHighRisk() {

@@ -136,7 +136,8 @@ cd extensions/cli && npm run build
 2. **Loosely coupled** — every feature is independently toggleable via `policy.json`
 3. **Never truncate or limit tokens automatically** — return `X-AF-Context-Overflow` warning headers, let the CLIENT prompt the user to decide
 4. **Scan, don't manage** — proxy scans content, it doesn't store/manage files or tool I/O
-5. **SOLID everywhere** — SRP per module, OCP via patterns/config, ISP via `@ai-firewall/scanner`, DIP via interfaces
+5. **Consent-first, never silent block on content scan** — user-typed content that contains a detected secret/PII is **REDACTED with `[REDACTED_<TYPE>]` tokens and forwarded**, and the findings are surfaced via the `X-AF-Findings` header so the user can see what was sanitized and override. Hard `BLOCK` is reserved for two narrow cases: (a) file-scope path-blocklist violations (the path itself is the signal; redaction is meaningless) and (b) detected prompt-injection attacks (adversarial input, not the user's own accidental paste).
+6. **SOLID everywhere** — SRP per module, OCP via patterns/config, ISP via `@ai-firewall/scanner`, DIP via interfaces
 
 ## Key Patterns
 

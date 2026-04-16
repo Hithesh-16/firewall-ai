@@ -54,23 +54,35 @@ function computeRiskScore(
   secrets: SecretScanResult,
   pii: PiiScanResult,
   entropyCount: number,
-  injectionScore: number
+  injectionScore: number,
 ): number {
   let score = 0;
 
   for (const s of secrets.secrets) {
     switch (s.severity) {
-      case "critical": score += 40; break;
-      case "high": score += 25; break;
-      case "medium": score += 10; break;
+      case "critical":
+        score += 40;
+        break;
+      case "high":
+        score += 25;
+        break;
+      case "medium":
+        score += 10;
+        break;
     }
   }
 
   for (const p of pii.pii) {
     switch (p.severity) {
-      case "critical": score += 30; break;
-      case "high": score += 20; break;
-      case "medium": score += 8; break;
+      case "critical":
+        score += 30;
+        break;
+      case "high":
+        score += 20;
+        break;
+      case "medium":
+        score += 8;
+        break;
     }
   }
 
@@ -83,13 +95,20 @@ function computeRiskScore(
 /**
  * Determine action from risk score.
  * Simplified version — proxy's policyEngine uses policy rules for full decision.
+ *
+ * Consent-first (2026-04-17, CLAUDE.md principle #5): MCP tool
+ * inputs/outputs containing detected secrets REDACT (inline token
+ * replacement) instead of hard-blocking. The tool still runs with
+ * the sanitised payload and the caller can inspect the findings via
+ * `X-AF-MCP-Findings`. Hard BLOCK stays reserved for prompt-injection
+ * signals on tool OUTPUTS (adversarial MCP servers trying to hijack
+ * the agent) — that's a different threat class.
  */
 function determineAction(
   riskScore: number,
-  hasCritical: boolean
+  hasCritical: boolean,
 ): "ALLOW" | "BLOCK" | "REDACT" {
-  if (hasCritical || riskScore >= 70) return "BLOCK";
-  if (riskScore >= 30) return "REDACT";
+  if (hasCritical || riskScore >= 30) return "REDACT";
   return "ALLOW";
 }
 
@@ -105,7 +124,7 @@ function determineAction(
  */
 export function scanMcpContent(
   text: string,
-  options: McpScanOptions
+  options: McpScanOptions,
 ): McpScanResult {
   const startTime = Date.now();
 
@@ -127,7 +146,7 @@ export function scanMcpContent(
   // Prompt injection (primarily for inputs, but also check outputs for indirect injection)
   const piResult = scanPromptInjection(
     normalizedText,
-    options.injectionThreshold ?? 60
+    options.injectionThreshold ?? 60,
   );
 
   // Compute risk
@@ -135,11 +154,11 @@ export function scanMcpContent(
     secretResult,
     piiResult,
     entropyMatches.length,
-    piResult.isInjection ? piResult.score : 0
+    piResult.isInjection ? piResult.score : 0,
   );
 
   const hasCritical = secretResult.secrets.some(
-    (s) => s.severity === "critical"
+    (s) => s.severity === "critical",
   );
   const action = determineAction(riskScore, hasCritical);
 
@@ -188,7 +207,7 @@ export function scanMcpContent(
 function redactText(
   text: string,
   secrets: SecretMatch[],
-  pii: Array<{ type: string; value: string }>
+  pii: Array<{ type: string; value: string }>,
 ): string {
   let redacted = text;
   const allMatches = [

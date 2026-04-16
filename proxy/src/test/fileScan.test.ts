@@ -10,7 +10,11 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { scanFileContent, isScanError } from "../scanner/fileScanService";
-import { getCachedScan, cacheScanResult, invalidateCache } from "../scanner/fileScanCache";
+import {
+  getCachedScan,
+  cacheScanResult,
+  invalidateCache,
+} from "../scanner/fileScanCache";
 import type { PolicyConfig, FileScanResult } from "../types";
 
 function makeTestPolicy(): PolicyConfig {
@@ -63,7 +67,7 @@ function cleanupTempFile(filePath: string): void {
 export function testScanCleanFile() {
   const filePath = createTempFile(
     "function add(a, b) { return a + b; }",
-    "clean.ts"
+    "clean.ts",
   );
   try {
     const result = scanFileContent(filePath, makeTestPolicy());
@@ -83,13 +87,20 @@ export function testScanCleanFile() {
 export function testScanFileWithSecrets() {
   const filePath = createTempFile(
     'const key = "AKIAIOSFODNN7EXAMPLE";\nconst db = "postgres://user:pass@host/db";',
-    "secrets.ts"
+    "secrets.ts",
   );
   try {
     const result = scanFileContent(filePath, makeTestPolicy());
     assert.ok(!isScanError(result), "Should scan successfully");
     const scan = result as FileScanResult;
-    assert.strictEqual(scan.action, "BLOCK", "File with critical secrets should be BLOCK");
+    // Consent-first (2026-04-17): file-content scan of critical
+    // secrets now REDACTs rather than hard-blocks (the file itself
+    // isn't path-blocklisted). User is informed via findings header.
+    assert.strictEqual(
+      scan.action,
+      "REDACT",
+      "File with critical secrets should REDACT (consent-first), not BLOCK",
+    );
     assert.ok(scan.secretsFound > 0, "Should find secrets");
     assert.ok(scan.riskScore > 0, "Risk score should be > 0");
   } finally {
@@ -100,17 +111,19 @@ export function testScanFileWithSecrets() {
 export function testScanFileWithPII() {
   const filePath = createTempFile(
     "Contact us at admin@example.com or call +12025551234",
-    "contact.txt"
+    "contact.txt",
   );
   try {
-    const result = scanFileContent(filePath, makeTestPolicy(), { includeRedacted: true });
+    const result = scanFileContent(filePath, makeTestPolicy(), {
+      includeRedacted: true,
+    });
     assert.ok(!isScanError(result), "Should scan successfully");
     const scan = result as FileScanResult;
     assert.ok(scan.piiFound > 0, "Should find PII (email, phone)");
     if (scan.action === "REDACT" && scan.redactedContent) {
       assert.ok(
         scan.redactedContent.includes("[REDACTED_"),
-        "Redacted content should contain redaction tokens"
+        "Redacted content should contain redaction tokens",
       );
     }
   } finally {
@@ -184,7 +197,11 @@ export function testCacheWriteAndRead() {
   const cached = getCachedScan(testPath, testHash);
   assert.ok(cached !== null, "Should find cached result");
   assert.strictEqual(cached!.action, "ALLOW");
-  assert.strictEqual(cached!.cached, true, "Cached result should have cached=true");
+  assert.strictEqual(
+    cached!.cached,
+    true,
+    "Cached result should have cached=true",
+  );
   assert.strictEqual(cached!.filePath, testPath);
 
   // Different hash should miss
@@ -218,5 +235,9 @@ export function testCacheInvalidate() {
 
   const cleared = invalidateCache(testPath);
   assert.ok(cleared > 0, "Should clear at least 1 entry");
-  assert.strictEqual(getCachedScan(testPath, "hash123"), null, "Should be cleared");
+  assert.strictEqual(
+    getCachedScan(testPath, "hash123"),
+    null,
+    "Should be cleared",
+  );
 }

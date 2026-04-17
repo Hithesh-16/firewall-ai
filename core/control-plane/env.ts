@@ -58,9 +58,10 @@ const NONE_ENV: ControlPlaneEnv = {
   APP_URL: "http://localhost:8080/",
 };
 
-export async function enableHubContinueDev() {
-  return true;
-}
+// `enableHubContinueDev` removed 2026-04-17 (Phase H.H1b of
+// SECURITY_HARDENING_PLAN.md). Was a hardcoded stub returning `true`
+// with zero live callers — an artifact of the original Continue.dev
+// hub feature gating.
 
 export async function getControlPlaneEnv(
   ideSettingsPromise: Promise<IdeSettings>,

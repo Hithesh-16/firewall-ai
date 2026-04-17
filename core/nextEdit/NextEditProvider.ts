@@ -157,13 +157,8 @@ export class NextEditProvider {
     if (llm instanceof OpenAI) {
       llm.useLegacyCompletionsEndpoint = true;
     }
-    // TODO: Resolve import error with TRIAL_FIM_MODEL
-    // else if (
-    //   llm.providerName === "free-trial" &&
-    //   llm.model !== TRIAL_FIM_MODEL
-    // ) {
-    //   llm.model = TRIAL_FIM_MODEL;
-    // }
+    // (Phase H.H2 — removed dead `free-trial` FIM-model coercion
+    // block; the free-trial provider is no longer supported.)
 
     return llm;
   }

@@ -56,7 +56,10 @@ import SageMaker from "./SageMaker";
 import SambaNova from "./SambaNova";
 import Scaleway from "./Scaleway";
 import SiliconFlow from "./SiliconFlow";
-import ContinueProxy from "./stubs/ContinueProxy";
+// `ContinueProxy` stub deleted 2026-04-17 (Phase H.H2 of
+// SECURITY_HARDENING_PLAN.md). Was a free-trial gateway routing
+// requests through Continue.dev's hosted servers. We require BYOK
+// (vault-backed via Phase C) — no Continue-hosted fallback.
 import TARS from "./TARS";
 import TestLLM from "./Test";
 import TextGenWebUI from "./TextGenWebUI";
@@ -100,7 +103,6 @@ export const LLMClasses = [
   Groq,
   Fireworks,
   NCompass,
-  ContinueProxy,
   Cloudflare,
   Deepseek,
   Docker,

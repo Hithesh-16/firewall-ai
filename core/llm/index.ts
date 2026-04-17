@@ -248,12 +248,10 @@ export abstract class BaseLLM implements ILLM {
     };
 
     this.model = options.model;
-    // Use @ai-firewall/llm-info package to autodetect certain parameters
-    const modelSearchString =
-      this.providerName === "continue-proxy"
-        ? this.model?.split("/").pop() || this.model
-        : this.model;
-    const llmInfo = findLlmInfo(modelSearchString, this.underlyingProviderName);
+    // Use @ai-firewall/llm-info package to autodetect certain parameters.
+    // (Phase H.H2 — `continue-proxy` provider was removed; the special
+    // `model.split("/").pop()` slug-extraction path it used is gone too.)
+    const llmInfo = findLlmInfo(this.model, this.underlyingProviderName);
 
     const templateType =
       options.template ?? autodetectTemplateType(options.model);

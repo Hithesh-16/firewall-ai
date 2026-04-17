@@ -7,7 +7,6 @@
     "packages/config-yaml",
     "packages/llm-info",
     "packages/openai-adapters",
-    "packages/continue-sdk",
     "packages/hub",
     "packages/scanner",
     "packages/shared-auth",

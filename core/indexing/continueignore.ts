@@ -1,6 +1,6 @@
 import fs from "fs";
 import { IDE } from "..";
-import { getGlobalContinueIgnorePath } from "../util/paths";
+import { getGlobalAiFirewallIgnorePath } from "../util/paths";
 import { gitIgArrayFromFile } from "./ignore";
 
 export const getGlobalContinueIgArray = () => {
@@ -11,7 +11,7 @@ export const getGlobalContinueIgArray = () => {
   // value here. SECURITY_HARDENING_PLAN.md CH5: "Low risk but
   // violates the chokepoint invariant — same treatment or add a
   // `// scan-raw:` justification comment."
-  const contents = fs.readFileSync(getGlobalContinueIgnorePath(), "utf8");
+  const contents = fs.readFileSync(getGlobalAiFirewallIgnorePath(), "utf8");
   return gitIgArrayFromFile(contents);
 };
 

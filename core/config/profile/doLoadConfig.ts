@@ -27,7 +27,10 @@ import { ControlPlaneClient } from "../../control-plane/client.js";
 import { getControlPlaneEnv } from "../../control-plane/env.js";
 import { PolicySingleton } from "../../control-plane/PolicySingleton";
 import { TeamAnalytics } from "../../control-plane/TeamAnalytics.js";
-import ContinueProxy from "../../llm/llms/stubs/ContinueProxy";
+// `ContinueProxy` stub deleted in Phase H.H2 (2026-04-17). The
+// `injectControlPlaneProxyInfo` walker below previously cast models
+// with `providerName === "continue-proxy"` to that class; the
+// provider is gone and so is the cast.
 import { initSlashCommand } from "../../promptFiles/initPrompt";
 import { getConfigDependentToolDefinitions } from "../../tools";
 import { encodeMCPToolUri } from "../../tools/callTool";
@@ -449,31 +452,16 @@ export default async function doLoadConfig(options: {
   return { config: newConfig, errors, configLoadInterrupted: false };
 }
 
-// Pass ControlPlaneProxyInfo to objects that need it
+// Phase H.H2 (SECURITY_HARDENING_PLAN.md, 2026-04-17): the
+// `injectControlPlaneProxyInfo` walker that propagated the Continue
+// hosted-proxy connection info into `ContinueProxy` model instances
+// was removed alongside the stub class. We don't have a Continue-
+// hosted gateway to point models at — the function became a no-op.
+// Kept as an identity passthrough so callers don't have to be
+// rewired in the same PR.
 async function injectControlPlaneProxyInfo(
   config: ContinueConfig,
-  info: ControlPlaneProxyInfo,
+  _info: ControlPlaneProxyInfo,
 ): Promise<ContinueConfig> {
-  Object.keys(config.modelsByRole).forEach((key) => {
-    config.modelsByRole[key as ModelRole].forEach((model) => {
-      if (model.providerName === "continue-proxy") {
-        (model as ContinueProxy).controlPlaneProxyInfo = info;
-      }
-    });
-  });
-
-  Object.keys(config.selectedModelByRole).forEach((key) => {
-    const model = config.selectedModelByRole[key as ModelRole];
-    if (model?.providerName === "continue-proxy") {
-      (model as ContinueProxy).controlPlaneProxyInfo = info;
-    }
-  });
-
-  config.modelsByRole.chat.forEach((model) => {
-    if (model.providerName === "continue-proxy") {
-      (model as ContinueProxy).controlPlaneProxyInfo = info;
-    }
-  });
-
   return config;
 }

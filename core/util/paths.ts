@@ -44,10 +44,14 @@ export const DEFAULT_CONFIG_TS_CONTENTS = `export function modifyConfig(config: 
 }`;
 
 export function getChromiumPath(): string {
-  return path.join(getContinueUtilsPath(), ".chromium-browser-snapshots");
+  return path.join(getAiFirewallUtilsPath(), ".chromium-browser-snapshots");
 }
 
-export function getContinueUtilsPath(): string {
+// Phase H.H6a (SECURITY_HARDENING_PLAN.md, 2026-04-17) — renamed
+// from `getContinueUtilsPath`. Function body already returned the
+// `~/.ai-firewall/.utils` location; only the misleading "Continue"
+// in the symbol name remained.
+export function getAiFirewallUtilsPath(): string {
   const utilsPath = path.join(getAiFirewallGlobalPath(), ".utils");
   if (!fs.existsSync(utilsPath)) {
     fs.mkdirSync(utilsPath);
@@ -55,15 +59,15 @@ export function getContinueUtilsPath(): string {
   return utilsPath;
 }
 
-export function getGlobalContinueIgnorePath(): string {
-  const continueIgnorePath = path.join(
-    getAiFirewallGlobalPath(),
-    ".ai-firewallignore",
-  );
-  if (!fs.existsSync(continueIgnorePath)) {
-    fs.writeFileSync(continueIgnorePath, "");
+// Phase H.H6a — renamed from `getGlobalContinueIgnorePath`. Always
+// returned `~/.ai-firewall/.ai-firewallignore` already; symbol name
+// caught up.
+export function getGlobalAiFirewallIgnorePath(): string {
+  const ignorePath = path.join(getAiFirewallGlobalPath(), ".ai-firewallignore");
+  if (!fs.existsSync(ignorePath)) {
+    fs.writeFileSync(ignorePath, "");
   }
-  return continueIgnorePath;
+  return ignorePath;
 }
 
 export function getAiFirewallGlobalPath(): string {
@@ -472,11 +476,11 @@ export function readAllGlobalPromptFiles(
 }
 
 export function getRepoMapFilePath(): string {
-  return path.join(getContinueUtilsPath(), "repo_map.txt");
+  return path.join(getAiFirewallUtilsPath(), "repo_map.txt");
 }
 
 export function getEsbuildBinaryPath(): string {
-  return path.join(getContinueUtilsPath(), "esbuild");
+  return path.join(getAiFirewallUtilsPath(), "esbuild");
 }
 
 export function migrateV1DevDataFiles() {

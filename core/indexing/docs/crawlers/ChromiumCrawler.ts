@@ -10,8 +10,8 @@ import PCR from "puppeteer-chromium-resolver";
 import { ContinueConfig, IDE } from "../../..";
 import {
   editConfigFile,
+  getAiFirewallUtilsPath,
   getChromiumPath,
-  getContinueUtilsPath,
 } from "../../../util/paths";
 import { PageData } from "./DocsCrawler";
 
@@ -199,7 +199,7 @@ export class ChromiumCrawler {
 }
 
 export class ChromiumInstaller {
-  static PCR_CONFIG = { downloadPath: getContinueUtilsPath() };
+  static PCR_CONFIG = { downloadPath: getAiFirewallUtilsPath() };
 
   constructor(
     private readonly ide: IDE,

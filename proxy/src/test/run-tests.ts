@@ -56,6 +56,9 @@ import * as mcpDiscoveryTests from "./mcpDiscovery.test";
 // Phase J.J2 — MCP project trust store
 import * as mcpTrustTests from "./mcpTrust.test";
 
+// Phase I.I1 — provider:model-id resolver
+import * as modelResolverTests from "./modelResolver.test";
+
 // Task Framework + Memory System + Tool Permissions tests
 import * as tasksTests from "./tasks.test";
 import * as toolPermTests from "./toolPermissions.test";
@@ -1484,6 +1487,27 @@ async function run() {
     [
       "mcpTrust:manifestOverridesTrust",
       mcpTrustTests.testEvaluateTrustManifestBlockOverridesTrust,
+    ],
+    // Phase I.I1 — provider:model-id resolver
+    ["modelResolver:openai", modelResolverTests.testParseOpenAiGpt4o],
+    ["modelResolver:anthropic", modelResolverTests.testParseAnthropicClaude],
+    ["modelResolver:geminiAlias", modelResolverTests.testParseGeminiAlias],
+    ["modelResolver:ollamaTag", modelResolverTests.testParseOllamaModelTag],
+    [
+      "modelResolver:ollamaExplicit",
+      modelResolverTests.testParseOllamaExplicitPrefix,
+    ],
+    ["modelResolver:bareModel", modelResolverTests.testParseBareModel],
+    ["modelResolver:empty", modelResolverTests.testParseEmptyString],
+    ["modelResolver:groq", modelResolverTests.testParseGroqProvider],
+    ["modelResolver:deepseek", modelResolverTests.testParseDeepseek],
+    ["modelResolver:resolveDefault", modelResolverTests.testResolveWithDefault],
+    ["modelResolver:resolvePrefix", modelResolverTests.testResolveWithPrefix],
+    ["modelResolver:isPrefixedTrue", modelResolverTests.testIsPrefixedTrue],
+    ["modelResolver:isPrefixedFalse", modelResolverTests.testIsPrefixedFalse],
+    [
+      "modelResolver:listProviders",
+      modelResolverTests.testListKnownProvidersHasOpenai,
     ],
     // Coordinator + Worker Pool
     [

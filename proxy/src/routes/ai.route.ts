@@ -35,6 +35,7 @@ import { createPolicyEnforcerHook } from "../middleware/policyEnforcer";
 import type { ScanContext } from "../middleware/policyEnforcer";
 import { requireAuth } from "../auth/authMiddleware";
 import { createRateLimitHook } from "../middleware/rateLimiter";
+import { isProviderPrefixed, resolveModelId } from "../gateway/modelResolver";
 import { ChatCompletionRequest, SecretMatch, PiiMatch } from "../types";
 import {
   chatCompletionSchema,
@@ -141,6 +142,23 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
       const payload = parsed.data as unknown as ChatCompletionRequest & {
         metadata?: { projectRoot?: string };
       };
+
+      // Phase I.I1 (SECURITY_HARDENING_PLAN.md) — resolve
+      // `provider:model` identifiers (e.g. "openai:gpt-4o",
+      // "anthropic:claude-sonnet-4-6") so clients can use the
+      // deepagents-style unified format. If the model string is
+      // prefixed with a known provider, split it; otherwise pass
+      // through as a bare model name (existing behaviour).
+      if (isProviderPrefixed(payload.model)) {
+        const { provider, model } = resolveModelId(payload.model);
+        payload.model = model;
+        // Stash the resolved provider so the gateway router can
+        // use it when looking up the provider entry in the vault.
+        (payload as { _resolvedProvider?: string })._resolvedProvider =
+          provider;
+        reply.header("X-AF-Resolved-Provider", provider);
+        reply.header("X-AF-Resolved-Model", model);
+      }
 
       // Extract passthrough API key from client (for when no vault key is configured)
       const passthroughKey = extractPassthroughKey(request);

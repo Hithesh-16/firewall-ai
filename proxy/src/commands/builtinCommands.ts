@@ -37,6 +37,7 @@ import {
   enablePlugin,
   listPlugins,
 } from "../plugins/pluginLoader";
+import { migrateConfigKeys } from "../services/keyMigrationService";
 
 // ── /doctor ────────────────────────────────────────────────────
 
@@ -1062,6 +1063,75 @@ const mcpCommand: LocalCommand = {
   },
 };
 
+// ── /migrate-keys ───────────────────────────────────────────────
+//
+// Phase C follow-up — migrates plaintext `apiKey:` entries in
+// `~/.ai-firewall/config.yaml` to vault-backed `apiKeyRef: vault://`
+// references. Safe to run multiple times — already-migrated entries
+// are skipped. The keys are POSTed to `POST /api/providers` (the
+// same vault path the onboarding wizard uses) and the YAML file is
+// rewritten in place.
+
+const migrateKeysCommand: LocalCommand = {
+  name: "migrate-keys",
+  description:
+    "Migrate plaintext API keys in config.yaml to encrypted vault references",
+  type: "local",
+  source: "builtin",
+
+  async call(
+    _args: string,
+    context: CommandContext,
+  ): Promise<LocalCommandResult> {
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const configPath = path.join(os.homedir(), ".ai-firewall", "config.yaml");
+
+    const result = migrateConfigKeys(configPath);
+
+    if (result.errors.length > 0) {
+      return {
+        success: false,
+        output:
+          `Migration had ${result.errors.length} error(s):\n` +
+          result.errors.map((e) => `  - ${e}`).join("\n") +
+          `\n\nMigrated: ${result.migrated}, Skipped: ${result.skipped}`,
+        data: { ...result } as Record<string, unknown>,
+      };
+    }
+
+    if (result.migrated === 0) {
+      return {
+        success: true,
+        output:
+          "No plaintext API keys found — config.yaml is already clean. " +
+          `(${result.skipped} entries skipped)`,
+        data: { ...result } as Record<string, unknown>,
+      };
+    }
+
+    const detailLines = result.details
+      .filter((d) => d.action === "migrated")
+      .map(
+        (d) =>
+          `  ${d.modelName} (${d.provider}) → apiKeyRef: vault://${d.slug}` +
+          (d.reason ? ` (${d.reason})` : ""),
+      );
+
+    return {
+      success: true,
+      output:
+        `Migrated ${result.migrated} key(s) to vault:\n` +
+        detailLines.join("\n") +
+        `\nSkipped: ${result.skipped}` +
+        `\n\nConfig.yaml has been rewritten. Plaintext keys are gone from the file. ` +
+        `The vault stores them encrypted (AES-256-GCM). ` +
+        `Restart the IDE/CLI to pick up the new config.`,
+      data: { ...result } as Record<string, unknown>,
+    };
+  },
+};
+
 // ── Export all built-in commands ────────────────────────────────
 
 export const BUILTIN_COMMANDS: readonly Command[] = [
@@ -1081,4 +1151,5 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
   loginCommand,
   logoutCommand,
   mcpCommand,
+  migrateKeysCommand,
 ];

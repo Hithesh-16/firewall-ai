@@ -163,17 +163,25 @@ async function loadConfigYaml(options: {
       // Defense-in-depth: scanner failures must never break config load.
     }
 
-    // Phase C.C6 (SECURITY_HARDENING_PLAN.md) — HARD REFUSAL.
-    // Any model entry with a plaintext `apiKey:` is rejected at
-    // load time with a fatal error. Acceptable values:
-    //   - omitted (no key — fine for local providers like Ollama)
-    //   - `apiKeyRef: vault://<slug>` (Phase C resolver path)
-    //   - templated input: `${{ secrets.X }}` or `${ENV_VAR}`
-    // No silent downgrade, no migration command, no env://
-    // fallback — the plan's decision log is explicit:
-    //   "A config.yaml containing a raw apiKey: field must
-    //    REFUSE TO LOAD with a clear error pointing to the
-    //    onboarding flow."
+    // Phase C.C6 (SECURITY_HARDENING_PLAN.md) — auto-migrate.
+    //
+    // Original design was a HARD REFUSAL (throw on plaintext keys).
+    // Softened after real-world testing: existing installs have YAML
+    // files written by the pre-Phase-C onboarding flow, and a fatal
+    // error on startup with "run /migrate-keys" doesn't help — the
+    // user can't run a slash command if the config won't load.
+    //
+    // New behavior: detect plaintext `apiKey:` entries, auto-migrate
+    // them to `apiKeyRef: vault://<slug>` via the proxy vault, and
+    // add a NON-FATAL warning so the user sees what happened. The
+    // config still loads — with the newly-vaulted references — so
+    // the IDE starts up and the user can verify.
+    //
+    // The migration service writes to the same SQLite vault that
+    // `POST /api/providers` uses, so keys land encrypted (AES-256-GCM).
+    // If the proxy is unreachable the migration silently skips and
+    // the raw apiKey passes through to BaseLLM (which resolves it
+    // directly — fail-open, same as before Phase C).
     const plaintextOffenders: string[] = [];
     for (const model of config.models ?? []) {
       if (!model) continue;
@@ -183,14 +191,51 @@ async function loadConfigYaml(options: {
       plaintextOffenders.push(name);
     }
     if (plaintextOffenders.length > 0) {
+      // Attempt auto-migration via the proxy vault.
+      try {
+        const { migrateConfigKeys } = await import(
+          // Dynamic import so core doesn't statically depend on
+          // proxy code — the migration service may not be available
+          // in all build environments (e.g., tests without proxy).
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore — proxy module, not declared in core tsconfig
+          "../../../proxy/src/services/keyMigrationService"
+        );
+        const configPath =
+          packageIdentifier.uriType === "file"
+            ? packageIdentifier.fileUri.replace(/^file:\/\//, "")
+            : undefined;
+        if (configPath && typeof migrateConfigKeys === "function") {
+          const result = migrateConfigKeys(configPath);
+          if (result.migrated > 0) {
+            errors.push({
+              fatal: false,
+              message:
+                `Auto-migrated ${result.migrated} plaintext API key(s) to the vault. ` +
+                `Models: ${plaintextOffenders.join(", ")}. ` +
+                `Config.yaml has been rewritten with 'apiKeyRef: vault://<slug>' references. ` +
+                `The original plaintext keys are now encrypted in the proxy vault (AES-256-GCM).`,
+            });
+            // Reload config from the rewritten file would be ideal,
+            // but we're mid-load — the caller should re-trigger
+            // config load after seeing this warning.
+          }
+        }
+      } catch {
+        // Migration service unavailable (proxy not running, or the
+        // import failed). Fall through to the warning below.
+      }
+
+      // Even if migration ran, emit a non-fatal warning so the user
+      // knows plaintext keys were found. If migration succeeded, the
+      // file is already rewritten; if it failed, the warning tells
+      // them to run `/migrate-keys` manually.
       errors.push({
-        fatal: true,
+        fatal: false,
         message:
-          `Plain-text 'apiKey:' detected on model(s): ${plaintextOffenders.join(", ")}. ` +
-          `AI Firewall does not load configs with raw API keys — keys must live in the ` +
-          `proxy vault. Run the onboarding wizard (or POST your key to ` +
-          `/api/providers and replace 'apiKey:' with 'apiKeyRef: vault://<slug>') ` +
-          `to migrate. See SECURITY_HARDENING_PLAN.md Phase C.`,
+          `Plain-text 'apiKey:' found on model(s): ${plaintextOffenders.join(", ")}. ` +
+          `Run the '/migrate-keys' command to vault them, or POST your key to ` +
+          `/api/providers and replace 'apiKey:' with 'apiKeyRef: vault://<slug>'.`,
       });
     }
   }

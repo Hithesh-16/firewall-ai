@@ -65,6 +65,9 @@ import * as subagentRegistryTests from "./subagentRegistry.test";
 // Phase K.K1 — unified streaming event taxonomy
 import * as streamEventsTests from "./streamEvents.test";
 
+// Phase L.L1 — skill auto-match middleware
+import * as skillMatcherTests from "./skillMatcher.test";
+
 // Task Framework + Memory System + Tool Permissions tests
 import * as tasksTests from "./tasks.test";
 import * as toolPermTests from "./toolPermissions.test";
@@ -1567,6 +1570,32 @@ async function run() {
     [
       "streamEvents:isEventReqArray",
       streamEventsTests.testIsEventStreamRequestedArray,
+    ],
+    // Phase L.L1 — skill auto-match
+    [
+      "skillMatcher:findsHits",
+      skillMatcherTests.testMatchSkillFindsKeywordHits,
+    ],
+    [
+      "skillMatcher:noHitsNull",
+      skillMatcherTests.testMatchSkillReturnsNullWhenNoHits,
+    ],
+    [
+      "skillMatcher:emptyInput",
+      skillMatcherTests.testMatchSkillReturnsNullForEmptyInput,
+    ],
+    [
+      "skillMatcher:emptySkills",
+      skillMatcherTests.testMatchSkillReturnsNullForEmptySkills,
+    ],
+    ["skillMatcher:bestMatch", skillMatcherTests.testMatchSkillPicksBestMatch],
+    [
+      "skillMatcher:xmlWrapper",
+      skillMatcherTests.testBuildSkillSystemMessageWrapsInXML,
+    ],
+    [
+      "skillMatcher:truncate",
+      skillMatcherTests.testBuildSkillSystemMessageTruncatesLongBody,
     ],
     // Coordinator + Worker Pool
     [

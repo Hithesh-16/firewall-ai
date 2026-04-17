@@ -59,6 +59,9 @@ import * as mcpTrustTests from "./mcpTrust.test";
 // Phase I.I1 — provider:model-id resolver
 import * as modelResolverTests from "./modelResolver.test";
 
+// Phase I.I2 — declarative subagent registry
+import * as subagentRegistryTests from "./subagentRegistry.test";
+
 // Task Framework + Memory System + Tool Permissions tests
 import * as tasksTests from "./tasks.test";
 import * as toolPermTests from "./toolPermissions.test";
@@ -1508,6 +1511,34 @@ async function run() {
     [
       "modelResolver:listProviders",
       modelResolverTests.testListKnownProvidersHasOpenai,
+    ],
+    // Phase I.I2 — declarative subagent registry
+    [
+      "subagentReg:emptyProject",
+      subagentRegistryTests.testLoadEmptyProjectReturnsEmpty,
+    ],
+    ["subagentReg:loadProject", subagentRegistryTests.testLoadProjectSubagents],
+    [
+      "subagentReg:projectOverrides",
+      subagentRegistryTests.testProjectOverridesUserScope,
+    ],
+    [
+      "subagentReg:malformedYaml",
+      subagentRegistryTests.testMalformedYamlReturnsEmpty,
+    ],
+    [
+      "subagentReg:skipNoName",
+      subagentRegistryTests.testSkipsEntriesWithoutName,
+    ],
+    ["subagentReg:listNames", subagentRegistryTests.testListSubagentNames],
+    ["subagentReg:getDef", subagentRegistryTests.testGetSubagentDef],
+    [
+      "subagentReg:toolDefEmpty",
+      subagentRegistryTests.testBuildTaskToolDefinitionEmptyRegistryReturnsNull,
+    ],
+    [
+      "subagentReg:toolDefWithReg",
+      subagentRegistryTests.testBuildTaskToolDefinitionWithRegistry,
     ],
     // Coordinator + Worker Pool
     [

@@ -68,6 +68,9 @@ import * as streamEventsTests from "./streamEvents.test";
 // Phase L.L1 — skill auto-match middleware
 import * as skillMatcherTests from "./skillMatcher.test";
 
+// Phase I.I3 — async subagent state channel
+import * as asyncTaskTests from "./asyncTask.test";
+
 // Task Framework + Memory System + Tool Permissions tests
 import * as tasksTests from "./tasks.test";
 import * as toolPermTests from "./toolPermissions.test";
@@ -1597,6 +1600,25 @@ async function run() {
       "skillMatcher:truncate",
       skillMatcherTests.testBuildSkillSystemMessageTruncatesLongBody,
     ],
+    // Phase I.I3 — async subagent state channel
+    ["asyncTask:startCreates", asyncTaskTests.testStartCreatesTask],
+    ["asyncTask:checkUpdatesTs", asyncTaskTests.testCheckUpdatesLastCheckedAt],
+    ["asyncTask:checkNull", asyncTaskTests.testCheckNonexistentReturnsNull],
+    ["asyncTask:updateProgress", asyncTaskTests.testUpdateProgress],
+    ["asyncTask:updateCompleted", asyncTaskTests.testUpdateCompleted],
+    ["asyncTask:updateNull", asyncTaskTests.testUpdateNonexistentReturnsNull],
+    ["asyncTask:cancelPending", asyncTaskTests.testCancelPendingTask],
+    [
+      "asyncTask:cancelCompleted",
+      asyncTaskTests.testCancelCompletedTaskReturnsFalse,
+    ],
+    [
+      "asyncTask:cancelNonexistent",
+      asyncTaskTests.testCancelNonexistentReturnsFalse,
+    ],
+    ["asyncTask:listSession", asyncTaskTests.testListTasksForSession],
+    ["asyncTask:listEmpty", asyncTaskTests.testListEmptySessionReturnsEmpty],
+    ["asyncTask:persistence", asyncTaskTests.testTaskSurvivesReRead],
     // Coordinator + Worker Pool
     [
       "coord:findAgentGeneralPurpose",

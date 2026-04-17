@@ -529,3 +529,21 @@ export const mcpTrust = sqliteTable("mcp_trust", {
     onDelete: "set null",
   }),
 });
+
+// Phase I.I3 (SECURITY_HARDENING_PLAN.md): async subagent state channel.
+// Lives outside the message log so entries survive compaction + proxy restart.
+export const asyncTasks = sqliteTable("async_tasks", {
+  id: text("id").primaryKey(),
+  parentSession: text("parent_session").notNull(),
+  name: text("name"),
+  prompt: text("prompt").notNull(),
+  model: text("model"),
+  status: text("status").notNull().default("pending"),
+  progress: integer("progress").default(0),
+  resultJson: text("result_json"),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+  startedAt: integer("started_at"),
+  completedAt: integer("completed_at"),
+  lastCheckedAt: integer("last_checked_at"),
+});

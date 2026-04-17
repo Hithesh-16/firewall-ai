@@ -362,6 +362,29 @@ CREATE TABLE IF NOT EXISTS mcp_trust (
 );
 CREATE INDEX IF NOT EXISTS idx_mcp_trust_project ON mcp_trust(project_path);
 CREATE INDEX IF NOT EXISTS idx_mcp_trust_fingerprint ON mcp_trust(fingerprint);
+
+-- Phase I.I3 (SECURITY_HARDENING_PLAN.md): async subagent state channel.
+-- Persists background subagent task state OUTSIDE the message log so
+-- entries survive compaction + proxy restart. The parent agent can
+-- check/update/cancel these entries via 5 tools without re-reading
+-- the full conversation history.
+CREATE TABLE IF NOT EXISTS async_tasks (
+  id TEXT PRIMARY KEY,
+  parent_session TEXT NOT NULL,
+  name TEXT,
+  prompt TEXT NOT NULL,
+  model TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','running','completed','failed','cancelled')),
+  progress INTEGER DEFAULT 0,
+  result_json TEXT,
+  error TEXT,
+  created_at INTEGER NOT NULL,
+  started_at INTEGER,
+  completed_at INTEGER,
+  last_checked_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_async_tasks_session ON async_tasks(parent_session);
+CREATE INDEX IF NOT EXISTS idx_async_tasks_status ON async_tasks(status);
 `);
 
 // ─── Phase A + A.5: per-org / per-user providers and assistants ─────

@@ -1,6 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { dismissBanner } from "../../redux/slices/securitySlice";
+
+/**
+ * Auto-dismiss window for the banner. Set from the user request for a
+ * 5-second redaction toast above the chat.
+ */
+const BANNER_AUTO_DISMISS_MS = 5_000;
 
 /**
  * Scan Result Banner — compact inline tooltip that sits above the chat input.
@@ -56,12 +62,31 @@ export function ScanResultBanner() {
   const dispatch = useAppDispatch();
   const lastScan = useAppSelector((s) => s.security.lastScanResult);
   const showBanner = useAppSelector((s) => s.security.showBanner);
-  const [expanded, setExpanded] = useState(false);
+  // REDACT/BLOCK banners expand by default so the user sees which
+  // values were touched without an extra click. ALLOW banners collapse.
+  const [expanded, setExpanded] = useState(true);
 
   const onDismiss = useCallback(() => {
     dispatch(dismissBanner());
     setExpanded(false);
   }, [dispatch]);
+
+  // Auto-dismiss after the configured window — resets whenever a new
+  // scan arrives because `lastScan.timestamp` changes. Hovering pauses
+  // the timer so the user can read longer banners.
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (!lastScan || !showBanner || paused) return;
+    const handle = setTimeout(() => {
+      dispatch(dismissBanner());
+    }, BANNER_AUTO_DISMISS_MS);
+    return () => clearTimeout(handle);
+  }, [lastScan?.timestamp, showBanner, paused, dispatch]);
+
+  useEffect(() => {
+    // Re-expand when a new result arrives.
+    setExpanded(true);
+  }, [lastScan?.timestamp]);
 
   if (!lastScan || !showBanner) return null;
   if (lastScan.action === "ALLOW" && lastScan.riskScore === 0) return null;
@@ -91,6 +116,8 @@ export function ScanResultBanner() {
 
   return (
     <div
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
       className={`mx-2 mb-1.5 rounded-lg border ${cfg.border} ${cfg.bg} animate-in fade-in slide-in-from-bottom-1 duration-200`}
     >
       {/* Single-line header — always visible */}

@@ -13,6 +13,7 @@ import { cancelStream } from "../../../../redux/thunks/cancelStream";
 import { logToolUsage } from "../../../../redux/util";
 import { isJetBrains } from "../../../../util";
 import { useMainEditor } from "../../TipTapEditor";
+import { FirewallConsentCard } from "../../../security/FirewallConsentCard";
 import { BlockSettingsTopToolbar } from "./BlockSettingsTopToolbar";
 import { EditOutcomeToolbar } from "./EditOutcomeToolbar";
 import { EditToolbar } from "./EditToolbar";
@@ -54,6 +55,9 @@ export function LumpToolbar() {
   const jetbrains = isJetBrains();
   const pendingToolCalls = useAppSelector(selectPendingToolCalls);
   const firstPendingToolCall = useAppSelector(selectFirstPendingToolCall);
+  const pendingFirewallConsent = useAppSelector(
+    (s) => s.security.pendingFirewallConsent,
+  );
   const editApplyState = useAppSelector(
     (state) => state.editModeState.applyState,
   );
@@ -187,6 +191,13 @@ export function LumpToolbar() {
     return (
       <StreamingToolbar onStop={handleStopAction} displayText={stopText} />
     );
+  }
+
+  // Firewall consent takes precedence over streaming state — the
+  // stream thunk has already stopped and we're waiting for the user
+  // to pick bypass/redact/cancel before any further work happens.
+  if (pendingFirewallConsent) {
+    return <FirewallConsentCard />;
   }
 
   // Regular streaming (non-terminal)

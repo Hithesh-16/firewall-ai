@@ -50,6 +50,8 @@ export const getEmptyRootState: () => RootState = () => {
       preflightPending: false,
       firewallActivity: null,
       activityLog: [],
+      pendingFirewallOverride: null,
+      pendingFirewallConsent: null,
     },
     agent: {
       activeAgents: [],

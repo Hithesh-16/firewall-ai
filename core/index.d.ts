@@ -1986,6 +1986,16 @@ interface AddToChatPayloadItem {
 
 export interface MessageOption {
   precompiled: boolean;
+  /**
+   * User-granted override for the AI Firewall preflight scan.
+   *
+   * - "bypass" — skip scanning entirely, forward the original prompt.
+   * - "redact" — force the proxy to sanitise (downgrade BLOCK→REDACT).
+   *
+   * Set from the GUI consent dialog after the firewall flags a request.
+   * The override is one-shot — callers should clear it after use.
+   */
+  firewallOverride?: "bypass" | "redact";
 }
 
 /* LSP-specific interfaces. */

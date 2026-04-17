@@ -51,11 +51,7 @@ describe("ScanResultBanner", () => {
 
     // Header chip
     expect(screen.getByText("Redacted")).toBeInTheDocument();
-    // Expand button label
-    const expandBtn = screen.getByRole("button", { name: "1 found" });
-    expandBtn.click();
-
-    // After expanding, the file:line chip should appear
+    // Banner is expanded by default so findings render without a click
     expect(await screen.findByText("config.ts:12:4")).toBeInTheDocument();
     expect(screen.getByText("AWS_KEY")).toBeInTheDocument();
     expect(screen.getByText("AKIA****LE")).toBeInTheDocument();
@@ -83,7 +79,7 @@ describe("ScanResultBanner", () => {
       showBanner: true,
     });
 
-    screen.getByRole("button", { name: "1 found" }).click();
+    // Banner is expanded by default — findings visible without a click
     expect(await screen.findByText("HIGH_ENTROPY")).toBeInTheDocument();
     // No file:line chip rendered
     expect(screen.queryByText(/:1$/)).toBeNull();

@@ -1,16 +1,26 @@
 import type { ChatHistoryItem, ToolCallState, ToolStatus } from "core/index.js";
+import type { BlockDetail } from "core/llm/firewallScan.js";
 
 import { ALL_BUILT_IN_TOOLS } from "src/tools/allBuiltIns.js";
 import { logger } from "src/util/logger.js";
 
 import { services } from "../../services/index.js";
 import { getCurrentSession, updateSessionTitle } from "../../session.js";
+import type { FirewallConsentChoice } from "../../stream/streamChatResponse.types.js";
 
 import { generateSessionTitle } from "./useChat.helpers.js";
+
+export interface ActiveFirewallConsent {
+  detail: BlockDetail;
+  resolve: (choice: FirewallConsentChoice) => void;
+}
 
 interface CreateStreamCallbacksOptions {
   setChatHistory: React.Dispatch<React.SetStateAction<ChatHistoryItem[]>>;
   setActivePermissionRequest: React.Dispatch<React.SetStateAction<any>>;
+  setActiveFirewallConsent?: React.Dispatch<
+    React.SetStateAction<ActiveFirewallConsent | null>
+  >;
   llmApi?: any;
   model?: any;
 }
@@ -21,7 +31,13 @@ interface CreateStreamCallbacksOptions {
 export function createStreamCallbacks(
   options: CreateStreamCallbacksOptions,
 ): any {
-  const { setChatHistory, setActivePermissionRequest, llmApi, model } = options;
+  const {
+    setChatHistory,
+    setActivePermissionRequest,
+    setActiveFirewallConsent,
+    llmApi,
+    model,
+  } = options;
 
   return {
     onContent: (_: string) => {},
@@ -217,6 +233,23 @@ export function createStreamCallbacks(
       });
     },
 
+    onFirewallConsent: (detail: BlockDetail) =>
+      new Promise<FirewallConsentChoice>((resolve) => {
+        if (!setActiveFirewallConsent) {
+          // Non-interactive caller (tests, headless) — behave like the
+          // legacy flow and cancel. streamChatResponse then throws.
+          resolve("cancel");
+          return;
+        }
+        setActiveFirewallConsent({
+          detail,
+          resolve: (choice) => {
+            setActiveFirewallConsent(null);
+            resolve(choice);
+          },
+        });
+      }),
+
     onSystemMessage: (message: string) => {
       try {
         const svc = services.chatHistory;
@@ -261,9 +294,8 @@ export async function executeStreaming({
   currentCompactionIndex,
 }: ExecuteStreamingOptions): Promise<void> {
   const { getHistoryForLLM } = await import("../../compaction.js");
-  const { streamChatResponse } = await import(
-    "../../stream/streamChatResponse.js"
-  );
+  const { streamChatResponse } =
+    await import("../../stream/streamChatResponse.js");
 
   if (model && llmApi) {
     if (

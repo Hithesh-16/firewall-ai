@@ -26,6 +26,7 @@ import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import {
   setFirewallActivity,
   clearFirewallActivity,
+  setFirewallOverride,
   type FirewallActivityStep,
 } from "../slices/securitySlice";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
@@ -205,10 +206,6 @@ export const streamNormalInput = createAsyncThunk<
     await delay(150);
     emitActivity("counting_tokens");
 
-
-
-
-
     const precompiledRes = await extra.ideMessenger.request("llm/compileChat", {
       messages,
       options: completionOptions,
@@ -230,8 +227,14 @@ export const streamNormalInput = createAsyncThunk<
     dispatch(setIsPruned(didPrune));
     dispatch(setContextPercentage(contextPercentage));
 
-    
     emitActivity("forwarding", selectedChatModel.model);
+
+    // Consume any pending firewall override the user approved in the
+    // consent dialog — one-shot, so clear it immediately.
+    const firewallOverride = state.security.pendingFirewallOverride;
+    if (firewallOverride) {
+      dispatch(setFirewallOverride(null));
+    }
 
     const start = Date.now();
     const streamAborter = state.session.streamAborter;
@@ -242,7 +245,10 @@ export const streamNormalInput = createAsyncThunk<
           title: selectedChatModel.title,
           messages: compiledChatMessages,
           legacySlashCommandData,
-          messageOptions: { precompiled: true },
+          messageOptions: {
+            precompiled: true,
+            firewallOverride: firewallOverride ?? undefined,
+          },
         },
         streamAborter.signal,
       );

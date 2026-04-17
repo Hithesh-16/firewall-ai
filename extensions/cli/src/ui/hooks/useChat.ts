@@ -37,6 +37,7 @@ import { handleBashModeProcessing } from "./useChat.shellMode.js";
 import {
   createStreamCallbacks,
   executeStreaming,
+  type ActiveFirewallConsent,
 } from "./useChat.stream.helpers.js";
 import {
   ActivePermissionRequest,
@@ -169,6 +170,8 @@ export function useChat({
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [activePermissionRequest, setActivePermissionRequest] =
     useState<ActivePermissionRequest | null>(null);
+  const [activeFirewallConsent, setActiveFirewallConsent] =
+    useState<ActiveFirewallConsent | null>(null);
   const [activeQuizQuestion, setActiveQuizQuestion] =
     useState<ActiveQuizQuestion | null>(null);
   const [compactionIndex, setCompactionIndex] = useState<number | null>(() => {
@@ -312,6 +315,7 @@ export function useChat({
       const streamCallbacks = createStreamCallbacks({
         setChatHistory: setChatHistory,
         setActivePermissionRequest,
+        setActiveFirewallConsent,
         llmApi,
         model,
       });
@@ -418,15 +422,18 @@ export function useChat({
     // "Model: Loading..." with no way out. If the assistant config is
     // missing we pass an empty one so the built-in system commands
     // (which don't need any assistant-specific data) still dispatch.
-    const assistantForCommands = (assistant ??
-      ({ prompts: [], rules: [] } as unknown as NonNullable<
-        typeof assistant
-      >));
+    const assistantForCommands =
+      assistant ??
+      ({ prompts: [], rules: [] } as unknown as NonNullable<typeof assistant>);
 
-    const commandResult = await handleSlashCommands(message, assistantForCommands, {
-      remoteUrl,
-      isRemoteMode,
-    });
+    const commandResult = await handleSlashCommands(
+      message,
+      assistantForCommands,
+      {
+        remoteUrl,
+        isRemoteMode,
+      },
+    );
 
     if (!commandResult) {
       return message;
@@ -862,6 +869,13 @@ export function useChat({
     services.quiz.answerQuestion(requestId, answer);
   };
 
+  const handleFirewallConsentResponse = (
+    choice: "bypass" | "redact" | "cancel",
+  ) => {
+    // The resolver both clears state and resumes the paused stream.
+    activeFirewallConsent?.resolve(choice);
+  };
+
   return {
     chatHistory,
     setChatHistory: setChatHistory,
@@ -872,6 +886,7 @@ export function useChat({
     inputMode,
     attachedFiles,
     activePermissionRequest,
+    activeFirewallConsent,
     activeQuizQuestion,
     wasInterrupted,
     queuedMessages,
@@ -881,6 +896,7 @@ export function useChat({
     resetChatHistory,
     handleEditMessage,
     handleToolPermissionResponse,
+    handleFirewallConsentResponse,
     handleQuizAnswer,
   };
 }

@@ -69,10 +69,15 @@ export function isFirewallBlockedRequestError(
  * - REDACT -> returns finalBody with sanitised messages
  * - ALLOW  -> returns original body unchanged
  * - Proxy unreachable -> fail-open (returns original body)
+ *
+ * When `forceRedact` is set, the proxy is asked to downgrade any BLOCK
+ * decision to REDACT — used after the user explicitly consents to send
+ * a sanitised version of a previously-blocked prompt.
  */
 export async function firewallPreflightScan(
   body: string,
   model: string,
+  forceRedact = false,
 ): Promise<PreflightScanResult> {
   try {
     const parsed = JSON.parse(body);
@@ -99,6 +104,7 @@ export async function firewallPreflightScan(
                   : JSON.stringify(m.content),
             })),
             model: parsed.model || model,
+            forceRedact: forceRedact || undefined,
           }),
           signal: controller.signal,
         },

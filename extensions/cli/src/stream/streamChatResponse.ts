@@ -262,22 +262,21 @@ export async function processStreamingResponse(
   // core/llm/index.ts, so without this hook the chat-time scanner
   // never sees user messages and secrets/PII flow straight to the
   // provider untouched. Mirrors the call in core/llm/index.ts.
+  //
+  // When the TUI supplies `onFirewallConsent`, a BLOCK decision opens
+  // a consent prompt in-chat instead of terminating the turn:
+  //   bypass — user accepted the risk, skip scanning
+  //   redact — ask the proxy to sanitise + forward
+  //   cancel — abort (legacy "Blocked by AI Firewall" behaviour)
   try {
-    const scanBody = JSON.stringify({
-      messages: openaiChatHistory,
-      model: model.model,
-    });
-    const scan = await firewallPreflightScan(scanBody, model.model);
-    if (scan.blocked) {
-      throw new Error(scan.blockMessage ?? "Blocked by AI Firewall");
-    }
-    if (scan.finalBody !== scanBody) {
+    const applySanitisedMessages = (finalBody: string, scanBody: string) => {
+      if (finalBody === scanBody) return;
       try {
-        const parsed = JSON.parse(scan.finalBody) as {
+        const parsed = JSON.parse(finalBody) as {
           messages?: Array<{ role: string; content: string }>;
         };
         if (Array.isArray(parsed.messages)) {
-          // Substitute sanitized content back into the OpenAI message
+          // Substitute sanitised content back into the OpenAI message
           // array. The proxy only ever returns string content; we
           // leave multimodal (array-content) messages untouched so we
           // don't accidentally drop image parts on the way back.
@@ -299,6 +298,41 @@ export async function processStreamingResponse(
       } catch {
         // If parse fails, fall through with the original messages.
       }
+    };
+
+    const scanBody = JSON.stringify({
+      messages: openaiChatHistory,
+      model: model.model,
+    });
+    const scan = await firewallPreflightScan(scanBody, model.model);
+
+    if (scan.blocked) {
+      const detail = scan.blockDetail;
+      const choice =
+        callbacks?.onFirewallConsent && detail
+          ? await callbacks.onFirewallConsent(detail)
+          : "cancel";
+
+      if (choice === "cancel") {
+        throw new Error(scan.blockMessage ?? "Blocked by AI Firewall");
+      }
+
+      if (choice === "redact") {
+        // Re-run the scan asking the proxy to downgrade BLOCK → REDACT
+        // and return sanitised messages.
+        const redactScan = await firewallPreflightScan(
+          scanBody,
+          model.model,
+          true,
+        );
+        if (redactScan.blocked) {
+          throw new Error(redactScan.blockMessage ?? "Blocked by AI Firewall");
+        }
+        applySanitisedMessages(redactScan.finalBody, scanBody);
+      }
+      // "bypass" — keep openaiChatHistory untouched
+    } else {
+      applySanitisedMessages(scan.finalBody, scanBody);
     }
   } catch (err) {
     if (

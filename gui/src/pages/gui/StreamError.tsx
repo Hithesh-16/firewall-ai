@@ -17,6 +17,7 @@ import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { selectSelectedProfile } from "../../redux/slices/profilesSlice";
+import { setPendingFirewallConsent } from "../../redux/slices/securitySlice";
 import { setDialogMessage, setShowDialog } from "../../redux/slices/uiSlice";
 import { streamResponseThunk } from "../../redux/thunks/streamResponse";
 import { isLocalProfile } from "../../util";
@@ -124,19 +125,17 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
     return <OutOfCreditsDialog />;
   }
 
-  // ── AI Firewall block — render a firewall-themed surface ─────
+  // ── AI Firewall block — this dialog is the fallback path only ───
   //
-  // When the proxy returns 403 with a BLOCK decision, BaseLLM throws
-  // a `FirewallBlockedRequestError` (see core/llm/firewallScan.ts).
-  // We detect it by name + message prefix so we don't have to import
-  // the typed error across the package boundary, then render a
-  // dedicated dialog with the masked finding list — instead of the
-  // generic "Error handling model response" frame which hides the
-  // useful info behind a "View error output" toggle.
+  // Firewall flags now surface as an inline consent popover above the
+  // chat input (see `streamThunkWrapper` routing to
+  // `setPendingFirewallConsent` + gui/src/components/security/FirewallConsentCard.tsx).
+  // If some transport strips the typed error and this branch still gets
+  // hit, we render the findings + the same three choices so the user
+  // isn't stuck with a generic "error handling model response" panel.
   const isFirewallBlock =
     (error instanceof Error && error.name === "FirewallBlockedRequestError") ||
-    (typeof message === "string" &&
-      message.startsWith("AI Firewall blocked this request"));
+    (typeof message === "string" && message.startsWith("AI Firewall"));
 
   if (isFirewallBlock) {
     // Pull structured detail off the error if available; fall back to
@@ -169,19 +168,38 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
     const reasons = detail?.reasons ?? [];
     const findings = detail?.findings ?? [];
 
+    const closeAndOpenInlineConsent = () => {
+      if (detail && "action" in detail) {
+        dispatch(
+          setPendingFirewallConsent({
+            riskScore: detail.riskScore ?? 0,
+            reasons: detail.reasons ?? [],
+            findings: (detail.findings ?? []).map((f) => ({
+              type: f.type,
+              severity: f.severity,
+              masked: f.masked,
+            })),
+            action: "BLOCK",
+          }),
+        );
+      }
+      dispatch(setShowDialog(false));
+      dispatch(setDialogMessage(undefined));
+    };
+
     return (
       <div className="flex flex-col gap-4 px-3 pb-3 pt-3">
         <div className="flex items-center gap-2">
-          <span className="text-xl">{"\u26D4"}</span>
-          <h3 className="text-error m-0 p-0 text-lg font-medium">
-            AI Firewall blocked this request
+          <span className="text-xl">{"\u26A0\uFE0F"}</span>
+          <h3 className="text-warning m-0 p-0 text-lg font-medium">
+            AI Firewall flagged this request
           </h3>
         </div>
 
         <p className="m-0 p-0 text-sm">
-          The proxy detected sensitive content in your message and refused to
-          forward it to <code>{selectedModel?.title ?? "the model"}</code>. Edit
-          the input to remove the flagged content and resubmit.
+          The proxy detected sensitive content in your message before forwarding
+          it to <code>{selectedModel?.title ?? "the model"}</code>. Choose how
+          to proceed in the consent card above the chat input.
           {typeof riskScore === "number" ? (
             <>
               {" "}
@@ -193,7 +211,7 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
         </p>
 
         {findings.length > 0 ? (
-          <div className="bg-error/5 border-error/30 flex flex-col gap-2 rounded border p-3">
+          <div className="bg-warning/5 border-warning/30 flex flex-col gap-2 rounded border p-3">
             <div className="text-xs font-semibold uppercase tracking-wider">
               Findings
             </div>
@@ -203,7 +221,7 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
                   key={`${f.type}-${i}`}
                   className="flex items-center gap-2 text-sm"
                 >
-                  <code className="bg-error/10 rounded px-1.5 py-0.5 text-xs">
+                  <code className="bg-warning/10 rounded px-1.5 py-0.5 text-xs">
                     {f.type}
                   </code>
                   {f.severity ? (
@@ -212,7 +230,9 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
                     </span>
                   ) : null}
                   {f.masked ? (
-                    <code className="text-description text-xs">{f.masked}</code>
+                    <code className="text-description font-mono text-xs">
+                      {f.masked}
+                    </code>
                   ) : null}
                 </li>
               ))}
@@ -233,7 +253,15 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
           </div>
         ) : null}
 
-        <div className="flex flex-row flex-wrap gap-2">{resubmitButton}</div>
+        <div className="flex flex-row flex-wrap gap-2">
+          <GhostButton
+            className="flex items-center"
+            onClick={closeAndOpenInlineConsent}
+          >
+            <ArrowPathIcon className="mr-1.5 h-3.5 w-3.5" />
+            <span>Review &amp; resubmit</span>
+          </GhostButton>
+        </div>
       </div>
     );
   }

@@ -27,6 +27,7 @@ import { onScanResult, type FirewallScanResult } from "@ai-firewall/fetch";
 
 import { ActionStatus } from "./components/ActionStatus.js";
 import { BottomStatusBar } from "./components/BottomStatusBar.js";
+import { FirewallConsentRequest } from "./components/FirewallConsentRequest.js";
 import { ScanBanner } from "./ScanBanner.js";
 import { ResourceDebugBar } from "./components/ResourceDebugBar.js";
 import { ScreenContent } from "./components/ScreenContent.js";
@@ -303,6 +304,7 @@ const TUIChat: React.FC<TUIChatProps> = ({
     compactionStartTime,
     inputMode,
     activePermissionRequest,
+    activeFirewallConsent,
     activeQuizQuestion,
     wasInterrupted,
     queuedMessages,
@@ -312,6 +314,7 @@ const TUIChat: React.FC<TUIChatProps> = ({
     resetChatHistory,
     handleEditMessage,
     handleToolPermissionResponse,
+    handleFirewallConsentResponse,
     handleQuizAnswer,
   } = useChat({
     assistant: services.config?.config || undefined,
@@ -454,6 +457,14 @@ const TUIChat: React.FC<TUIChatProps> = ({
             piiCount={scanResult.piiCount}
             reasons={scanResult.redactedTypes}
             findings={scanResult.findings}
+          />
+        )}
+
+        {/* Firewall consent prompt — never block directly, always ask */}
+        {activeFirewallConsent && (
+          <FirewallConsentRequest
+            detail={activeFirewallConsent.detail}
+            onResponse={handleFirewallConsentResponse}
           />
         )}
 

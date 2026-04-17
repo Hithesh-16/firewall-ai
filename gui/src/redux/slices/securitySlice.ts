@@ -1,3 +1,4 @@
+import type { BlockDetail } from "core/llm/firewallScan";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export interface ScanFinding {
@@ -121,6 +122,18 @@ export interface SecurityState {
   firewallActivity: FirewallActivity | null;
   /** History of activity steps for the current request */
   activityLog: FirewallActivity[];
+  /**
+   * One-shot override for the next LLM request after the user resolves
+   * the firewall consent dialog. `streamNormalInput` reads this and
+   * clears it before dispatching the request.
+   */
+  pendingFirewallOverride: "bypass" | "redact" | null;
+  /**
+   * Structured detail for a flagged request awaiting user consent.
+   * Rendered inline above the chat input as a popover card (mirrors
+   * the tool-permission UI). Cleared once the user chooses.
+   */
+  pendingFirewallConsent: BlockDetail | null;
 }
 
 const initialState: SecurityState = {
@@ -140,6 +153,8 @@ const initialState: SecurityState = {
   preflightPending: false,
   firewallActivity: null,
   activityLog: [],
+  pendingFirewallOverride: null,
+  pendingFirewallConsent: null,
 };
 
 const securitySlice = createSlice({
@@ -153,6 +168,10 @@ const securitySlice = createSlice({
     addScanResult(state, action: PayloadAction<ScanResult>) {
       const result = action.payload;
       state.lastScanResult = result;
+      // Re-arm the banner for every new scan — the dismiss state only
+      // applies to the previous result, otherwise the 5-second toast
+      // above the chat stays hidden after the first click-to-close.
+      state.showBanner = true;
 
       state.sessionStats.totalScanned += 1;
       if (result.action === "BLOCK") state.sessionStats.blocked += 1;
@@ -207,6 +226,20 @@ const securitySlice = createSlice({
       state.firewallActivity = null;
       state.activityLog = [];
     },
+
+    setFirewallOverride(
+      state,
+      action: PayloadAction<"bypass" | "redact" | null>,
+    ) {
+      state.pendingFirewallOverride = action.payload;
+    },
+
+    setPendingFirewallConsent(
+      state,
+      action: PayloadAction<BlockDetail | null>,
+    ) {
+      state.pendingFirewallConsent = action.payload;
+    },
   },
 });
 
@@ -220,6 +253,8 @@ export const {
   clearPreflight,
   setFirewallActivity,
   clearFirewallActivity,
+  setFirewallOverride,
+  setPendingFirewallConsent,
 } = securitySlice.actions;
 
 export default securitySlice.reducer;

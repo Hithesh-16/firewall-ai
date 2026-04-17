@@ -1,12 +1,40 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
+import type { BlockDetail } from "core/llm/firewallScan";
 import posthog from "posthog-js";
 import StreamErrorDialog from "../../pages/gui/StreamError";
 import { analyzeError } from "../../util/errorAnalysis";
 import { selectSelectedChatModel } from "../slices/configSlice";
+import { setPendingFirewallConsent } from "../slices/securitySlice";
 import { setDialogMessage, setShowDialog } from "../slices/uiSlice";
 import { ThunkApiType } from "../store";
 import { cancelStream } from "./cancelStream";
 import { saveCurrentSession } from "./session";
+
+/**
+ * Extract the firewall BlockDetail from a caught error regardless of
+ * whether the Error prototype survived IPC. JetBrains' webview proxy
+ * flattens errors into plain objects, so `instanceof` is unreliable —
+ * match on `name` + presence of `detail` instead.
+ */
+function extractFirewallBlockDetail(e: unknown): BlockDetail | null {
+  if (!e || typeof e !== "object") return null;
+  const anyErr = e as { name?: string; message?: string; detail?: unknown };
+  const looksLikeFirewallError =
+    anyErr.name === "FirewallBlockedRequestError" ||
+    (typeof anyErr.message === "string" &&
+      anyErr.message.startsWith("AI Firewall"));
+  if (!looksLikeFirewallError) return null;
+  const detail = anyErr.detail;
+  if (!detail || typeof detail !== "object") return null;
+  const d = detail as Partial<BlockDetail>;
+  if (typeof d.riskScore !== "number") return null;
+  return {
+    riskScore: d.riskScore,
+    reasons: Array.isArray(d.reasons) ? d.reasons : [],
+    findings: Array.isArray(d.findings) ? d.findings : [],
+    action: d.action ?? "BLOCK",
+  };
+}
 
 const OVERLOADED_RETRIES = 3;
 const OVERLOADED_DELAY_MS = 1000;
@@ -45,11 +73,21 @@ export const streamThunkWrapper = createAsyncThunk<
       const shouldRetry =
         isOverloadedErrorMessage(message) && attempt < OVERLOADED_RETRIES;
 
+      const firewallDetail = extractFirewallBlockDetail(e);
+
       if (shouldRetry) {
         await dispatch(cancelStream());
         const delayMs = OVERLOADED_DELAY_MS * 2 ** attempt;
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         await dispatch(cancelStream());
+      } else if (firewallDetail) {
+        // Firewall flags surface inline above the chat input (like the
+        // tool-permission card) instead of a blocking modal dialog. The
+        // findings stay visible in the ScanResultBanner while the user
+        // decides; see gui/src/components/security/FirewallConsentCard.tsx.
+        await dispatch(cancelStream());
+        dispatch(setPendingFirewallConsent(firewallDetail));
+        return;
       } else {
         await dispatch(cancelStream());
         dispatch(setDialogMessage(<StreamErrorDialog error={e} />));

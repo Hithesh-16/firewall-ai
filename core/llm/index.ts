@@ -1279,8 +1279,14 @@ export abstract class BaseLLM implements ILLM {
       messages = compiledChatMessages;
     }
 
-    // AI Firewall pre-flight scan — check for secrets/PII/injection before sending to LLM
-    if (signal && !signal.aborted) {
+    // AI Firewall pre-flight scan — check for secrets/PII/injection before sending to LLM.
+    //
+    // The GUI consent dialog may set `messageOptions.firewallOverride`:
+    //   "bypass" — user accepted the risk, skip scanning entirely.
+    //   "redact" — user asked to send a sanitised version of the prompt.
+    // Both are one-shot overrides cleared by the GUI after the request.
+    const firewallOverride = messageOptions?.firewallOverride;
+    if (signal && !signal.aborted && firewallOverride !== "bypass") {
       const scanBody = JSON.stringify({
         messages,
         model: completionOptions.model,
@@ -1288,15 +1294,16 @@ export abstract class BaseLLM implements ILLM {
       const scanResult = await firewallPreflightScan(
         scanBody,
         completionOptions.model,
+        firewallOverride === "redact",
       );
       if (scanResult.blocked) {
         // Throw a typed error carrying the structured BlockDetail
         // (findings + reasons + risk). The GUI's StreamError dialog
-        // detects this name and renders a firewall-themed surface
-        // instead of the generic "Error handling model response"
-        // panel — see gui/src/pages/gui/StreamError.tsx.
+        // detects this name and renders a consent surface asking the
+        // user to send-as-is, redact & send, or cancel — see
+        // gui/src/pages/gui/StreamError.tsx.
         const message =
-          scanResult.blockMessage ?? "AI Firewall blocked this request";
+          scanResult.blockMessage ?? "AI Firewall flagged this request";
         if (scanResult.blockDetail) {
           throw new FirewallBlockedRequestError(
             message,

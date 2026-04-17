@@ -39,6 +39,12 @@ const scanSchema = z.object({
     )
     .min(1),
   model: z.string().optional(),
+  /**
+   * When true, a BLOCK decision is downgraded to REDACT and sanitised
+   * messages are returned. Set by the client after a user explicitly
+   * consents to send a redacted version of a previously-blocked prompt.
+   */
+  forceRedact: z.boolean().optional(),
 });
 
 export async function registerPreflightScanRoute(
@@ -52,7 +58,7 @@ export async function registerPreflightScanRoute(
         .send({ error: "Invalid payload", details: parsed.error.flatten() });
     }
 
-    const { messages, model } = parsed.data;
+    const { messages, model, forceRedact } = parsed.data;
     const policy = loadPolicyConfig();
     const rawText = messages.map((m) => m.content).join("\n");
 
@@ -107,6 +113,14 @@ export async function registerPreflightScanRoute(
           `Prompt injection detected (score: ${piResult.score})`,
         );
       }
+    }
+
+    // User-granted consent — downgrade BLOCK to REDACT so we can still
+    // sanitise + forward the prompt. The client only sets this after an
+    // explicit user click on "Redact & Send" in the consent dialog.
+    if (forceRedact && decision.action === "BLOCK") {
+      decision.action = "REDACT";
+      decision.reasons.push("BLOCK downgraded to REDACT by user consent");
     }
 
     // Set X-AF-* headers — these are what extractScanHeaders() reads

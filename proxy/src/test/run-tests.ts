@@ -62,6 +62,9 @@ import * as modelResolverTests from "./modelResolver.test";
 // Phase I.I2 — declarative subagent registry
 import * as subagentRegistryTests from "./subagentRegistry.test";
 
+// Phase K.K1 — unified streaming event taxonomy
+import * as streamEventsTests from "./streamEvents.test";
+
 // Task Framework + Memory System + Tool Permissions tests
 import * as tasksTests from "./tasks.test";
 import * as toolPermTests from "./toolPermissions.test";
@@ -1539,6 +1542,31 @@ async function run() {
     [
       "subagentReg:toolDefWithReg",
       subagentRegistryTests.testBuildTaskToolDefinitionWithRegistry,
+    ],
+    // Phase K.K1 — unified streaming events
+    [
+      "streamEvents:createSetsTimestamp",
+      streamEventsTests.testCreateStreamEventSetsTimestamp,
+    ],
+    [
+      "streamEvents:createWithNs",
+      streamEventsTests.testCreateStreamEventWithNamespace,
+    ],
+    [
+      "streamEvents:formatSSE",
+      streamEventsTests.testFormatStreamEventProducesSSE,
+    ],
+    [
+      "streamEvents:isEventReqTrue",
+      streamEventsTests.testIsEventStreamRequestedTrue,
+    ],
+    [
+      "streamEvents:isEventReqFalse",
+      streamEventsTests.testIsEventStreamRequestedFalse,
+    ],
+    [
+      "streamEvents:isEventReqArray",
+      streamEventsTests.testIsEventStreamRequestedArray,
     ],
     // Coordinator + Worker Pool
     [

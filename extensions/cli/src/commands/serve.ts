@@ -9,7 +9,6 @@ import { prependPrompt } from "src/util/promptProcessor.js";
 import { getAccessToken, getAssistantSlug } from "../auth/workos.js";
 import { runEnvironmentInstallSafe } from "../environment/environmentHandler.js";
 import { processCommandFlags } from "../flags/flagProcessor.js";
-import { setAgentId } from "../tuiState.js";
 import { toolPermissionManager } from "../permissions/permissionManager.js";
 import {
   getService,
@@ -32,6 +31,7 @@ import { messageQueue } from "../stream/messageQueue.js";
 import { constructSystemMessage } from "../systemMessage.js";
 import { telemetryService } from "../telemetry/telemetryService.js";
 import { reportFailureTool } from "../tools/reportFailure.js";
+import { setAgentId } from "../tuiState.js";
 import { gracefulExit, updateAgentMetadata } from "../util/exit.js";
 import { formatError } from "../util/formatError.js";
 import { getGitDiffSnapshot } from "../util/git.js";

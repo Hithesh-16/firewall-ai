@@ -1,5 +1,3 @@
-import chalk from "chalk";
-
 import {
   buildWebLoginUrl,
   DEFAULT_LOOPBACK_PORTS,
@@ -11,6 +9,7 @@ import {
   type SharedAuthFile,
   type UserRole,
 } from "@ai-firewall/shared-auth";
+import chalk from "chalk";
 
 import { gracefulExit } from "../util/exit.js";
 
@@ -125,7 +124,9 @@ export async function authenticate(
   // 1. Env var shortcut — nothing to do.
   if (process.env.AI_FIREWALL_API_KEY) {
     console.info(
-      chalk.green("✓ Using AI_FIREWALL_API_KEY from environment — no sign-in needed."),
+      chalk.green(
+        "✓ Using AI_FIREWALL_API_KEY from environment — no sign-in needed.",
+      ),
     );
     return true;
   }
@@ -205,7 +206,9 @@ export async function authenticate(
     persistToken(proxyUrl, token, me);
     const onboardingHint =
       me.user.onboardingComplete === false
-        ? chalk.dim("  (onboarding not finished — open the web dashboard to continue setup)")
+        ? chalk.dim(
+            "  (onboarding not finished — open the web dashboard to continue setup)",
+          )
         : "";
     console.info(
       chalk.green(
@@ -282,11 +285,7 @@ async function validateToken(
  * triple. Uses shared-auth's atomic-write helper so the file always
  * ends up chmod 600.
  */
-function persistToken(
-  proxyUrl: string,
-  token: string,
-  me: MeResponse,
-): void {
+function persistToken(proxyUrl: string, token: string, me: MeResponse): void {
   const file: SharedAuthFile = {
     version: 1,
     proxyUrl,

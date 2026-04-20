@@ -1,3 +1,4 @@
+import { SecurityLockIcon } from "../svg/SecurityLockIcon";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../util/navigation";
@@ -30,7 +31,7 @@ export function PerimeterStatus() {
 
   if (loading) {
     return (
-      <div className="bg-secondary rounded-lg p-4 text-xs text-description">
+      <div className="bg-secondary text-description rounded-lg p-4 text-xs">
         Loading perimeter status...
       </div>
     );
@@ -40,28 +41,20 @@ export function PerimeterStatus() {
 
   return (
     <div className="bg-secondary rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <SecurityLockIcon
+            size={16}
+            color="currentColor"
             className={perimeter.configured ? "text-success" : "text-warning"}
-          >
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
-          <span className="text-sm font-medium text-foreground">
+          />
+          <span className="text-foreground text-sm font-medium">
             Security Perimeter
           </span>
         </div>
         <button
           onClick={() => navigate(ROUTES.FIRST_LOOK)}
-          className="bg-secondary text-foreground text-xs px-2.5 py-1 rounded-md border border-border hover:bg-secondary-hover transition-colors focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:outline-none"
+          className="bg-secondary text-foreground border-border hover:bg-secondary-hover focus-visible:ring-border-focus rounded-md border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2"
         >
           {perimeter.configured ? "Edit" : "Set up"}
         </button>
@@ -70,31 +63,33 @@ export function PerimeterStatus() {
       {perimeter.configured ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-success" />
-            <span className="text-xs text-description">
-              {perimeter.restricted_count} file pattern{perimeter.restricted_count !== 1 ? "s" : ""} restricted
+            <div className="bg-success h-2 w-2 rounded-full" />
+            <span className="text-description text-xs">
+              {perimeter.restricted_count} file pattern
+              {perimeter.restricted_count !== 1 ? "s" : ""} restricted
             </span>
           </div>
           <div className="flex flex-wrap gap-1">
             {perimeter.blocklist.slice(0, 6).map((pattern) => (
               <span
                 key={pattern}
-                className="text-xs bg-success/10 text-success px-1.5 py-0.5 rounded font-mono"
+                className="bg-success/10 text-success rounded px-1.5 py-0.5 font-mono text-xs"
               >
                 {pattern}
               </span>
             ))}
             {perimeter.blocklist.length > 6 && (
-              <span className="text-xs text-description">
+              <span className="text-description text-xs">
                 +{perimeter.blocklist.length - 6} more
               </span>
             )}
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 bg-warning/10 border border-warning/20 rounded-lg px-3 py-2">
+        <div className="bg-warning/10 border-warning/20 flex items-center gap-2 rounded-lg border px-3 py-2">
           <span className="text-warning text-xs">
-            No security perimeter configured. Set up file restrictions to protect sensitive data.
+            No security perimeter configured. Set up file restrictions to
+            protect sensitive data.
           </span>
         </div>
       )}

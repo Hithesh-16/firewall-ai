@@ -1,8 +1,8 @@
 import * as os from "os";
 import * as path from "path";
 
-import dotenv from "dotenv";
 import { BRAND } from "@ai-firewall/brand";
+import dotenv from "dotenv";
 
 dotenv.config();
 

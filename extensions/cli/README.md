@@ -37,12 +37,12 @@ cn --print "List all TODO comments in src/"
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `cn` | Start interactive chat session |
-| `cn login` | Authenticate with AI Firewall |
-| `cn logout` | Log out |
-| `cn config` | Open configuration |
+| Command     | Description                    |
+| ----------- | ------------------------------ |
+| `cn`        | Start interactive chat session |
+| `cn login`  | Authenticate with AI Firewall  |
+| `cn logout` | Log out                        |
+| `cn config` | Open configuration             |
 
 ## Features
 
@@ -57,6 +57,7 @@ cn --print "List all TODO comments in src/"
 ## Security
 
 When the AI Firewall proxy is running on `localhost:8080`, the CLI automatically routes all requests through it. Every prompt is scanned for:
+
 - Secrets (AWS keys, private keys, JWTs, database URLs)
 - PII (emails, phone numbers, SSNs, credit cards)
 - Prompt injection attacks

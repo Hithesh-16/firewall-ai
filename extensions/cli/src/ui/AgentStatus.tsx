@@ -1,5 +1,6 @@
 import { Box, Text } from "ink";
 import React from "react";
+
 import { LoadingAnimation } from "./LoadingAnimation.js";
 import { Timer } from "./Timer.js";
 

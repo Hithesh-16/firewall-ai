@@ -1,7 +1,6 @@
+import type { BlockDetail } from "core/llm/firewallScan.js";
 import { Box, Text, useInput } from "ink";
 import React, { useState } from "react";
-
-import type { BlockDetail } from "core/llm/firewallScan.js";
 
 interface FirewallConsentRequestProps {
   detail: BlockDetail;

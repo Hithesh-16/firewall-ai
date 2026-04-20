@@ -185,17 +185,13 @@ async function ensureSignedInOrPrompt(
 
   if (await isAuthenticated()) return;
 
-  console.log(
-    chalk.yellow("\nYou're not signed in to AI Firewall."),
-  );
+  console.log(chalk.yellow("\nYou're not signed in to AI Firewall."));
   console.log(
     chalk.gray(
       "  Sign-in opens your browser to the AI Firewall web dashboard.",
     ),
   );
-  const answer = (
-    await question(chalk.cyan("  Sign in now? (Y/n) "))
-  )
+  const answer = (await question(chalk.cyan("  Sign in now? (Y/n) ")))
     .trim()
     .toLowerCase();
 

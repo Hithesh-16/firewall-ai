@@ -1,5 +1,6 @@
-import { Box, Text } from "ink";
 import * as path from "node:path";
+
+import { Box, Text } from "ink";
 import React, { memo } from "react";
 
 import { ToolCallTitle } from "src/tools/ToolCallTitle.js";

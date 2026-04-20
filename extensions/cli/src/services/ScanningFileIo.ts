@@ -16,6 +16,7 @@
  */
 
 import * as fs from "fs";
+
 import {
   scanFileViaProxy,
   type FileScanDecision,
@@ -25,13 +26,13 @@ import {
   type ScanReport,
 } from "core/util/scanning/FileBlockedByScanError.js";
 import {
-  bypassesScan,
-  type ScanPurpose,
-} from "core/util/scanning/ScanPurpose.js";
-import {
   getCachedDecision,
   setCachedDecision,
 } from "core/util/scanning/scanDecisionCache.js";
+import {
+  bypassesScan,
+  type ScanPurpose,
+} from "core/util/scanning/ScanPurpose.js";
 
 // Keep these two lists in lock-step with the IDE-side decorator at
 // `core/util/scanning/ScanningIde.ts` (FORCED_CONFIG_BASENAMES /

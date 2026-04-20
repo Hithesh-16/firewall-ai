@@ -51,6 +51,7 @@
                 displayName="AI Firewall"/>
         <applicationService
                 serviceImplementation="com.github.continuedev.continueintellijextension.services.ContinueExtensionSettings"/>
+        <projectViewNodeDecorator implementation="com.github.continuedev.continueintellijextension.security.AiFirewallProjectViewDecorator"/>
     </extensions>
 
     <actions>

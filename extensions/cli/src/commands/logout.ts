@@ -1,9 +1,5 @@
+import { deleteAuthFile, loadAuthFile } from "@ai-firewall/shared-auth";
 import chalk from "chalk";
-
-import {
-  deleteAuthFile,
-  loadAuthFile,
-} from "@ai-firewall/shared-auth";
 
 import { logout as legacyWorkosLogout } from "../auth/workos.js";
 

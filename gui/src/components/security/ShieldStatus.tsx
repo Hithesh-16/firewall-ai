@@ -1,3 +1,4 @@
+import { SecurityLockIcon } from "../svg/SecurityLockIcon";
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../../redux/hooks";
 import { ROUTES } from "../../util/navigation";
@@ -38,28 +39,20 @@ export function ShieldStatus() {
   return (
     <button
       onClick={() => navigate(ROUTES.SECURITY)}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-md ${bgColor} hover:opacity-80 transition-opacity focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:outline-none`}
+      className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${bgColor} focus-visible:ring-border-focus transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2`}
       title={`AI Firewall: ${sessionStats.totalScanned} scanned, ${sessionStats.blocked} blocked, ${sessionStats.redacted} redacted`}
     >
       {/* Shield icon */}
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <SecurityLockIcon
+        size={14}
+        color="currentColor"
         className={shieldColor}
-      >
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      </svg>
+      />
       <span className={`text-xs font-medium ${shieldColor}`}>
         {shieldLabel}
       </span>
       {hasActivity && (
-        <span className="text-xs text-description">
+        <span className="text-description text-xs">
           {sessionStats.totalScanned}
         </span>
       )}

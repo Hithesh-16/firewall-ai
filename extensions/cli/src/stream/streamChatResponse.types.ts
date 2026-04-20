@@ -1,6 +1,6 @@
 import { CompletionOptions } from "@ai-firewall/config-yaml";
-import type { BlockDetail } from "core/llm/firewallScan.js";
 import type { ToolStatus } from "core/index.js";
+import type { BlockDetail } from "core/llm/firewallScan.js";
 import type { ChatCompletionCreateParamsStreaming } from "openai/resources.mjs";
 
 import { ToolCallPreview } from "../tools/types.js";

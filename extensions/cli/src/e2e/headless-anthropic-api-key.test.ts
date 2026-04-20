@@ -106,7 +106,11 @@ models:
     expect(result.stderr).not.toContain("Failed to initialize ConfigService");
 
     // Verify config.yaml was automatically created
-    const configPath = path.join(context.testDir, ".ai-firewall", "config.yaml");
+    const configPath = path.join(
+      context.testDir,
+      ".ai-firewall",
+      "config.yaml",
+    );
     const configExists = await fs
       .stat(configPath)
       .then(() => true)

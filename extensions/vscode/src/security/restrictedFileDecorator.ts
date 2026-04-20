@@ -47,7 +47,7 @@ class RestrictedFileDecorationProvider
       // shield that takes on the theme color, matching the AI Firewall
       // extension's sidebar shield icon. Single char so the filename
       // stays fully visible.
-      badge: "\u26E8",
+      badge: "🔒",
       tooltip: `AI Firewall: ${reason}`,
       // charts.green is the standard theme-aware green that follows
       // the user's theme. Matches the emerald brand accent of the
@@ -55,7 +55,7 @@ class RestrictedFileDecorationProvider
       // on the filename it renders as a very subtle tint, matching
       // how Git decorations colour modified/new files.
       color: new vscode.ThemeColor("charts.green"),
-      propagate: false,
+      propagate: true,
     };
   }
 

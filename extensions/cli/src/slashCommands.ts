@@ -1,20 +1,19 @@
 import { type AssistantConfig } from "@ai-firewall/sdk";
+import { loadAuthFile } from "@ai-firewall/shared-auth";
 import chalk from "chalk";
 
+import { loadAssistantYamlFromApi } from "./apiAssistantLoader.js";
 import {
   isAuthenticated,
   isAuthenticatedConfig,
   loadAuthConfig,
 } from "./auth/workos.js";
-import { loadAuthFile } from "@ai-firewall/shared-auth";
-
-import { loadAssistantYamlFromApi } from "./apiAssistantLoader.js";
 import { getAllSlashCommands } from "./commands/commands.js";
 import { handleInit } from "./commands/init.js";
 import { authenticate as webAuthenticate } from "./commands/login.js";
 import { logout as webLogout } from "./commands/logout.js";
 import { handleInfoSlashCommand } from "./infoScreen.js";
-import { reloadService, SERVICE_NAMES, services } from "./services/index.js";
+import { reloadService, SERVICE_NAMES } from "./services/index.js";
 import { getCurrentSession, updateSessionTitle } from "./session.js";
 import { posthogService } from "./telemetry/posthogService.js";
 import { telemetryService } from "./telemetry/telemetryService.js";

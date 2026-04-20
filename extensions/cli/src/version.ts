@@ -41,7 +41,6 @@ export async function getLatestVersion(
   if (latestVersionCache) {
     return latestVersionCache;
   }
-            
 
   // AI Firewall: version checking disabled — no external API calls
   latestVersionCache = Promise.resolve(null);

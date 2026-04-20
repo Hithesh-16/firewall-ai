@@ -1,3 +1,4 @@
+import { onScanResult, type FirewallScanResult } from "@ai-firewall/fetch";
 import { Box, Text } from "ink";
 import React, {
   useCallback,
@@ -23,12 +24,9 @@ import { getTotalSessionCost } from "../session.js";
 import { bashToolEvents } from "../util/cli.js";
 import { logger } from "../util/logger.js";
 
-import { onScanResult, type FirewallScanResult } from "@ai-firewall/fetch";
-
 import { ActionStatus } from "./components/ActionStatus.js";
 import { BottomStatusBar } from "./components/BottomStatusBar.js";
 import { FirewallConsentRequest } from "./components/FirewallConsentRequest.js";
-import { ScanBanner } from "./ScanBanner.js";
 import { ResourceDebugBar } from "./components/ResourceDebugBar.js";
 import { ScreenContent } from "./components/ScreenContent.js";
 import { StaticChatContent } from "./components/StaticChatContent.js";
@@ -41,6 +39,7 @@ import {
   useLoginHandlers,
   useSelectors,
 } from "./hooks/useTUIChatHooks.js";
+import { ScanBanner } from "./ScanBanner.js";
 
 interface TUIChatProps {
   // Remote mode props

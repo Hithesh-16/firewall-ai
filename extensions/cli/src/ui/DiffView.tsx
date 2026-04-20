@@ -3,8 +3,8 @@
  * Supports inline (unified) and side-by-side modes.
  */
 
-import React from "react";
 import { Box, Text } from "ink";
+import React from "react";
 
 interface DiffLine {
   type: "add" | "remove" | "context";

@@ -1,17 +1,14 @@
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
-
-import chalk from "chalk";
-import nodeFetch from "node-fetch";
-import open from "open";
 
 import {
   loadAuthFile as sharedLoadAuthFile,
   saveAuthFile as sharedSaveAuthFile,
-  deleteAuthFile as sharedDeleteAuthFile,
   type SharedAuthFile,
 } from "@ai-firewall/shared-auth";
+import chalk from "chalk";
+import nodeFetch from "node-fetch";
+import open from "open";
 
 import { logger } from "src/util/logger.js";
 
@@ -25,10 +22,7 @@ if (!globalThis.fetch) {
 
 // Config file path - define as a function to avoid initialization order issues
 function getAuthConfigPath() {
-  const continueHome =
-    process.env.AI_FIREWALL_GLOBAL_DIR ||
-    path.join(os.homedir(), ".ai-firewall");
-  return path.join(continueHome, "auth.json");
+  return path.join(env.continueHome, "auth.json");
 }
 
 // Union type representing the possible authentication states
@@ -134,9 +128,7 @@ export function getLocalConfigPath(config: AuthConfig): string | null {
  * caller (useModelSelector, uploadArtifact, hubLoader, apiClient,
  * etc.) working without touching them — we just translate on read.
  */
-function sharedToLegacyConfig(
-  file: SharedAuthFile,
-): AuthenticatedConfig {
+function sharedToLegacyConfig(file: SharedAuthFile): AuthenticatedConfig {
   // Merge in the CLI-only sidecar fields (configUri + modelName)
   // stored next to the shared auth file. Missing sidecar = empty.
   let sidecar: { configUri?: string; modelName?: string } = {};
@@ -163,8 +155,7 @@ function sharedToLegacyConfig(
     // re-login flow on failure.
     refreshToken: file.accessToken,
     expiresAt: file.expiresAt ?? 0,
-    organizationId:
-      file.user.orgId != null ? String(file.user.orgId) : null,
+    organizationId: file.user.orgId != null ? String(file.user.orgId) : null,
     configUri: sidecar.configUri,
     modelName: sidecar.modelName,
   };
@@ -266,8 +257,7 @@ export function saveAuthConfig(config: AuthenticatedConfig): void {
     //    shared-auth package's atomic-write helper).
     const file: SharedAuthFile = {
       version: 1,
-      proxyUrl:
-        process.env.AI_FIREWALL_PROXY_URL || "http://localhost:8080",
+      proxyUrl: process.env.AI_FIREWALL_PROXY_URL || "http://localhost:8080",
       accessToken: config.accessToken,
       user: {
         id: Number(config.userId) || 0,
@@ -384,8 +374,7 @@ export async function isAuthenticated(): Promise<boolean> {
   // every 15 minutes and make the CLI look broken). Just trust the
   // token; the proxy returns 401 when it actually expires and
   // callers fall back to re-login.
-  const isSharedAuthToken =
-    config.accessToken === config.refreshToken;
+  const isSharedAuthToken = config.accessToken === config.refreshToken;
 
   if (!isSharedAuthToken && Date.now() > config.expiresAt) {
     try {
@@ -800,10 +789,10 @@ export async function hasMultipleOrganizations(): Promise<boolean> {
  * Logs the user out by clearing saved credentials
  */
 export function logout(): void {
-  const continueHome =
-    process.env.AI_FIREWALL_GLOBAL_DIR ||
-    path.join(os.homedir(), ".ai-firewall");
-  const onboardingFlagPath = path.join(continueHome, ".onboarding_complete");
+  const onboardingFlagPath = path.join(
+    env.continueHome,
+    ".onboarding_complete",
+  );
 
   // Remove onboarding completion flag so user will go through onboarding again
   if (fs.existsSync(onboardingFlagPath)) {

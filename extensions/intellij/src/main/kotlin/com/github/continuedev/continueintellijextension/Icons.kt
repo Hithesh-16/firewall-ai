@@ -7,4 +7,6 @@ object Icons {
     val Continue = IconLoader.getIcon("/icons/continue.svg", javaClass)
     @JvmField
     val Close = IconLoader.getIcon("/icons/close.svg", javaClass)
+    @JvmField
+    val SecurityLock = IconLoader.getIcon("/icons/security-lock.svg", javaClass)
 }

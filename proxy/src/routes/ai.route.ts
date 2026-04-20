@@ -195,8 +195,7 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
       // unauthenticated requests or installs that haven't migrated yet.
       const userId = request.authContext?.user?.id;
       const gatewayModel = userId
-        ? (resolveGatewayRouteForUser(userId, payload.model) ??
-          resolveGatewayRoute(payload.model))
+        ? resolveGatewayRouteForUser(userId, payload.model)
         : resolveGatewayRoute(payload.model);
       const maxCtx = gatewayModel?.model?.maxContextTokens ?? 0;
       const ctxCheck = await checkContextWindow(

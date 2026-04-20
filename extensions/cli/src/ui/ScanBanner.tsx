@@ -1,7 +1,6 @@
+import type { ScanFinding } from "@ai-firewall/fetch";
 import { Box, Text } from "ink";
 import React from "react";
-
-import type { ScanFinding } from "@ai-firewall/fetch";
 
 interface ScanBannerProps {
   visible: boolean;
@@ -17,9 +16,9 @@ const ACTION_STYLES: Record<
   string,
   { color: string; icon: string; label: string }
 > = {
-  ALLOW: { color: "green", icon: "\u2714", label: "ALLOW" },
-  REDACT: { color: "yellow", icon: "\u26A0", label: "REDACT" },
-  BLOCK: { color: "red", icon: "\u2716", label: "BLOCK" },
+  ALLOW: { color: "green", icon: "\u26E8", label: "ALLOW" },
+  REDACT: { color: "yellow", icon: "\u26E8", label: "REDACT" },
+  BLOCK: { color: "red", icon: "\u26E8", label: "BLOCK" },
 };
 
 const SEVERITY_SHORT: Record<string, string> = {

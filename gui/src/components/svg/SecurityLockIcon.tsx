@@ -1,0 +1,34 @@
+import React from "react";
+
+interface SecurityLockIconProps extends React.SVGProps<SVGSVGElement> {
+  size?: number;
+  color?: string;
+}
+
+export function SecurityLockIcon({
+  size = 16,
+  color = "currentColor",
+  className,
+  ...props
+}: SecurityLockIconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      {...props}
+    >
+      <path
+        d="M8 0L1 3v4.33c0 4.31 2.99 8.35 7 9.35 4.01-1 7-5.04 7-9.35V3L8 0zm0 14.22c-3.14-.92-5.5-4.14-5.5-7.56V4.1l5.5-2.35 5.5 2.35v2.56c0 3.42-2.36 6.64-5.5 7.56z"
+        fill={color}
+      />
+      <path
+        d="M10.5 8h-.5V7c0-1.1-.9-2-2-2s-2 .9-2 2v1h-.5c-.28 0-.5.22-.5.5v3c0 .28.22.5.5.5h5c.28 0 .5-.22.5-.5v-3c0-.28-.22-.5-.5-.5zM7.5 7c0-.28.22-.5.5-.5s.5.22.5.5v1h-1V7z"
+        fill={color}
+      />
+    </svg>
+  );
+}

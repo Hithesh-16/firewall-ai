@@ -17,6 +17,7 @@ When you first use AI Firewall, the **First Look** page scans your workspace and
 | **Certificates** | `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*` |
 | **Configuration** | `config/production.*`, `docker-compose*.yml`, `serviceAccount*.json` |
 | **Internal** | `.git/**`, `.ssh/**`, `.aifirewall-vault/**` |
+| **Ignore Files** | `.gitignore`, `.continueignore`, `.ai-firewallignore` |
 | **Dependencies** | `node_modules/**` |
 | **Build Output** | `dist/**` |
 
@@ -77,6 +78,7 @@ If a restricted file gets through (e.g., client didn't check), the proxy returns
 
 ### In the CLI
 The CLI filters restricted files before sending and shows a terminal warning.
+Files like `.gitignore`, `.continueignore`, and `.ai-firewallignore` are handled locally by the CLI and are never sent to the proxy for scanning, ensuring privacy and performance for local configuration.
 
 ## Managing Restrictions
 

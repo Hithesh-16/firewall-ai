@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useState } from "react";
+import { SecurityLockIcon } from "../svg/SecurityLockIcon";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { dismissBanner } from "../../redux/slices/securitySlice";
 
@@ -18,7 +19,7 @@ const ACTION_CONFIG: Record<
   {
     bg: string;
     border: string;
-    icon: string;
+    icon: ReactNode;
     label: string;
     labelColor: string;
     badgeBg: string;
@@ -27,7 +28,12 @@ const ACTION_CONFIG: Record<
   BLOCK: {
     bg: "bg-error/5",
     border: "border-error/30",
-    icon: "\u26D4",
+    icon: (
+      <SecurityLockIcon
+        size={14}
+        color="var(--vscode-errorForeground, #f87171)"
+      />
+    ),
     label: "Blocked",
     labelColor: "text-error",
     badgeBg: "bg-error/10",
@@ -35,7 +41,12 @@ const ACTION_CONFIG: Record<
   REDACT: {
     bg: "bg-warning/5",
     border: "border-warning/30",
-    icon: "\u26A0\uFE0F",
+    icon: (
+      <SecurityLockIcon
+        size={14}
+        color="var(--vscode-charts-yellow, #fbbf24)"
+      />
+    ),
     label: "Redacted",
     labelColor: "text-warning",
     badgeBg: "bg-warning/10",
@@ -43,7 +54,9 @@ const ACTION_CONFIG: Record<
   ALLOW: {
     bg: "bg-success/5",
     border: "border-success/20",
-    icon: "\u2705",
+    icon: (
+      <SecurityLockIcon size={14} color="var(--vscode-charts-green, #34d399)" />
+    ),
     label: "Scanned",
     labelColor: "text-success",
     badgeBg: "bg-success/10",
@@ -51,7 +64,9 @@ const ACTION_CONFIG: Record<
   REQUIRE_APPROVAL: {
     bg: "bg-info/5",
     border: "border-info/30",
-    icon: "\u23F3",
+    icon: (
+      <SecurityLockIcon size={14} color="var(--vscode-charts-blue, #60a5fa)" />
+    ),
     label: "Pending",
     labelColor: "text-info",
     badgeBg: "bg-info/10",
@@ -122,7 +137,7 @@ export function ScanResultBanner() {
     >
       {/* Single-line header — always visible */}
       <div className="flex items-center gap-2 px-3 py-1.5">
-        <span className="flex-shrink-0 text-sm leading-none">{cfg.icon}</span>
+        <span className="flex flex-shrink-0 items-center">{cfg.icon}</span>
 
         <span className={`text-xs font-semibold ${cfg.labelColor}`}>
           {cfg.label}
@@ -212,7 +227,7 @@ export function ScanResultBanner() {
           })}
           {lastScan.findings.length > 8 && (
             <span className="text-description-muted text-[10px]">
-              +{lastScan.findings.length - 8} more
+              +${lastScan.findings.length - 8} more
             </span>
           )}
         </div>

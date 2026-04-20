@@ -11,8 +11,9 @@
  * commands, which is slower and harder to scope.
  */
 
-import { glob } from "glob";
 import * as path from "node:path";
+
+import { glob } from "glob";
 
 import type { Tool } from "./types.js";
 

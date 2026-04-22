@@ -94,7 +94,43 @@ export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
     {
       signedIn: boolean;
       email?: string;
+      name?: string;
+      role?: string;
       userId?: number;
+    },
+  ];
+
+  // Add a model to the signed-in user's account via the proxy's
+  // unified /api/me/models/add endpoint. The request is proxied
+  // through the extension host (not made directly from the webview)
+  // so the bearer token never leaves the extension sandbox.
+  //
+  // ok=true  → the model was persisted to proxy `user_models` table;
+  //            webview should close the form + refresh its model list.
+  // ok=false → `error` holds a human-readable reason (not signed in,
+  //            proxy unreachable, validation failure, etc.). Webview
+  //            may fall back to the local config/addModel path for
+  //            fully-offline users.
+  "aiFirewall/addUserModel": [
+    {
+      providerSlug: string;
+      modelSlug: string;
+      displayName?: string;
+      apiKey: string;
+      apiBase?: string;
+      roles?: string[];
+    },
+    {
+      ok: boolean;
+      model?: {
+        id: number;
+        providerSlug: string;
+        modelSlug: string;
+        displayName: string | null;
+        apiBase: string | null;
+        roles: string[];
+      };
+      error?: string;
     },
   ];
 };
@@ -137,6 +173,8 @@ export type ToWebviewFromIdeProtocol = ToWebviewFromIdeOrCoreProtocol & {
     {
       signedIn: boolean;
       email?: string;
+      name?: string;
+      role?: string;
       userId?: number;
     },
     void,

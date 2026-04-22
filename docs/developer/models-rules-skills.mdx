@@ -1,0 +1,120 @@
+---
+title: Models, Rules, and Skills — Storage Contract
+description: Where each user-scoped concept lives, what syncs with the backend, and what stays on disk.
+---
+
+# Models, Rules, and Skills
+
+After the REFACTOR-MODEL-SOURCE pass the product is split into two
+lanes: **account-bound** (authoritative source is the proxy DB) and
+**local-only** (lives in `~/.ai-firewall/` and is never uploaded).
+Knowing which lane a concept belongs to tells you exactly where to
+add it, where it syncs, and how to edit it.
+
+## The contract at a glance
+
+| Concept              | Lane          | Primary store                                | Edited where                                      | Syncs to                                               |
+| -------------------- | ------------- | -------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| Models               | Account       | `user_models` + `model_grants`               | Web: Settings → Models                            | Proxy `/api/me/assistant` → IDE/CLI                    |
+| Org Rules            | Account       | `org_rules` + `user_rule_subscriptions`      | Web admin: Org → Rules. User: Settings → Rules    | Mirrored to `~/.ai-firewall/rules/<slug>.md`           |
+| Org Skills           | Account       | `org_skills` + `user_skill_subscriptions`    | Web admin: Org → Skills. User: Settings → Skills  | Mirrored to `~/.ai-firewall/skills/<slug>/SKILL.md`    |
+| Personal rules       | Local         | `~/.ai-firewall/rules/*.md`                  | Text editor of your choice                        | Never — IDE/CLI read them locally                      |
+| MCP servers          | Local         | `~/.ai-firewall/mcp/*.json`                  | Text editor of your choice                        | Never                                                  |
+| Prompt presets       | Local         | `~/.ai-firewall/prompts/*.txt`               | Text editor                                       | Never                                                  |
+| Context providers    | Local (code)  | `.ai-firewall/providers/*.js`                | Your repo                                         | Never                                                  |
+| Slash commands       | Local         | `.ai-firewall/commands/*.md`                 | Your repo                                         | Never                                                  |
+
+## Why the split
+
+- **Admin control needs the DB.** Models (API quota + key vaulting), org rules, and org skills all require an admin to provision once and every team member to pick up without re-configuring. Those belong in rows the proxy owns.
+- **Personal config belongs on the user's machine.** Rules they wrote last night, MCP servers they added for their side-project, prompt tweaks — round-tripping these to the server adds latency, privacy concerns, and merge hell. Local markdown files just work.
+- **Admins push, users pull.** When an admin publishes a new org rule, users see it in the catalogue and click Install. That's the *one* place the two lanes meet.
+
+## API routes
+
+### Admin (capability: `policies:edit`)
+
+```
+POST   /api/orgs/:orgId/rules         # create
+GET    /api/orgs/:orgId/rules         # list
+PUT    /api/orgs/:orgId/rules/:slug   # update
+DELETE /api/orgs/:orgId/rules/:slug   # delete
+
+# Same shape for skills at /api/orgs/:orgId/skills
+```
+
+### User (authenticated)
+
+```
+GET    /api/me/rules                  # catalogue + install state
+GET    /api/me/rules/:slug            # single item with full body
+POST   /api/me/rules/:id/install      # subscribe (writes file to disk)
+DELETE /api/me/rules/:id/install      # unsubscribe (removes file)
+PATCH  /api/me/rules/:id              # enable/disable without uninstalling
+
+# Same shape for skills at /api/me/skills
+```
+
+### Read-through assistant
+
+```
+GET /api/me/assistant                 # synthesised YAML
+```
+
+The proxy assembles this on every request from `user_models`, subscribed `org_rules`, and provider keys. It is a **view**, not a stored blob — there is no `assistants` table after this refactor.
+
+## Filesystem mirror layout
+
+When a user installs an org rule the proxy writes:
+
+```
+~/.ai-firewall/
+├── auth.json                       # bearer token (written on sign-in)
+├── config.yaml                     # IDE-synced assistant (read-only view)
+├── rules/
+│   ├── be-concise.md               # org-installed (managed)
+│   ├── use-typescript.md           # org-installed (managed)
+│   └── my-personal-rule.md         # user-authored (local only)
+├── skills/
+│   ├── code-review/
+│   │   └── SKILL.md                # org-installed (managed)
+│   └── my-custom-skill/
+│       └── SKILL.md                # user-authored (local only)
+├── mcp/                            # local only
+│   ├── filesystem.json
+│   └── postgres.json
+└── prompts/                        # local only
+    ├── default.txt
+    └── security-strict.txt
+```
+
+Every proxy-managed file carries a tracking marker on line 1 (`<!-- ai-firewall:managed -->`). The IDE/CLI never overwrite unmanaged files, and the uninstall flow only removes files it wrote.
+
+## How the IDE + CLI see all this
+
+1. On sign-in, the extension/CLI calls `GET /api/me/assistant` and writes the returned YAML to `~/.ai-firewall/config.yaml`. That YAML contains the `models:` + `rules:` blocks only.
+2. The extension/CLI separately scans `~/.ai-firewall/{rules,mcp,prompts,skills}/` and merges those into the effective config before handing it to Continue core.
+3. Personal rules therefore "just work" — they appear in the merged config without ever touching the proxy.
+
+Because step 2 is purely a filesystem scan, users can hand-edit any file, drop new ones in, or delete them, and the IDE picks up the change on the next reload. No admin involvement required.
+
+## When to choose each lane for a new concept
+
+- Does it need an **admin** to provision once for many users? → Account lane. Add a DB table + CRUD routes.
+- Does it need to be **the same on every device** a user logs into? → Account lane.
+- Does it need **auditing / quotas / billing**? → Account lane.
+- Does it change hourly while a user experiments? → Local.
+- Does it contain per-project metadata (e.g. custom slash commands for one repo)? → Local under `.ai-firewall/` in that repo.
+
+If none of the account-lane criteria apply, default to local. Round-tripping to the backend adds cost and complexity; skip it.
+
+## Resetting a dev install
+
+To clear every user + org for testing:
+
+```bash
+cd proxy
+npm run reset:dev
+```
+
+This wipes users, orgs, providers, models, grants, subscriptions, api tokens, and logs, plus the local `~/.ai-firewall/` user-identity files. Schema and system roles/capabilities stay intact. Register a new admin via the web sign-up flow to start fresh.

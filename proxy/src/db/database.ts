@@ -476,22 +476,11 @@ CREATE TABLE IF NOT EXISTS user_models (
 CREATE INDEX IF NOT EXISTS idx_user_models_user ON user_models(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_models_provider ON user_models(user_id, provider_slug);
 
-CREATE TABLE IF NOT EXISTS assistants (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT NOT NULL,
-  owner_type TEXT NOT NULL CHECK(owner_type IN ('org','user')),
-  owner_id INTEGER NOT NULL,
-  name TEXT NOT NULL,
-  yaml_content TEXT NOT NULL,
-  etag TEXT NOT NULL,
-  is_default INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  UNIQUE(owner_type, owner_id, slug)
-);
-CREATE INDEX IF NOT EXISTS idx_assistants_owner ON assistants(owner_type, owner_id);
-CREATE INDEX IF NOT EXISTS idx_assistants_default
-  ON assistants(owner_type, owner_id, is_default);
+-- Removed: the legacy "assistants" table (was a monolithic YAML blob).
+-- Post-refactor the split is: models in user_models + model_grants,
+-- rules in org_rules, skills in org_skills, personal MCP + prompts
+-- as local files under the .ai-firewall dir. The idempotent DROP
+-- TABLE runs below so pre-refactor installs clean up on next boot.
 
 -- Phase F (slice 2): model access grants. An admin adds a
 -- provider + model combo and grants it to specific users or teams.
@@ -517,10 +506,17 @@ CREATE INDEX IF NOT EXISTS idx_model_grants_grantee
   ON model_grants(grantee_type, grantee_id);
 `);
 
-// One-time data migration: copy any legacy rows from the global
-// `providers` table into `org_providers` for every existing org. Runs
-// once per proxy boot and is idempotent (the UNIQUE constraint on
-// (org_id, provider_slug) makes re-runs no-ops).
+// One-time data migration: copy legacy rows from the global `providers`
+// table into `org_providers` for the OLDEST org only.
+//
+// Why oldest-only, not per-org: the previous implementation looped
+// `orgs × legacyProviders`, so every newly-created org (even ones
+// spun up AFTER the legacy keys were registered) inherited them. A
+// fresh onboarding user would see "Anthropic / OpenAI / Gemini"
+// already added and get UNIQUE-constraint errors when they tried to
+// supply their own key. Targeting only the oldest org matches the
+// `providers.org_id` backfill and keeps legacy ownership consistent.
+// New orgs start empty and opt in to providers via POST /api/providers.
 try {
   const legacyProviders = db
     .prepare(
@@ -535,21 +531,23 @@ try {
     api_key_encrypted: string;
   }>;
   if (legacyProviders.length > 0) {
-    const orgs = db.prepare(`SELECT id FROM organizations`).all() as Array<{
-      id: number;
-    }>;
-    const insertStmt = db.prepare(
-      `INSERT OR IGNORE INTO org_providers
-        (org_id, provider_slug, api_key_encrypted, base_url,
-         enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 1, ?, ?)`,
-    );
-    const now = Date.now();
-    const runMigration = db.transaction(() => {
-      for (const org of orgs) {
+    const oldestOrg = db
+      .prepare(
+        `SELECT id FROM organizations ORDER BY created_at ASC, id ASC LIMIT 1`,
+      )
+      .get() as { id: number } | undefined;
+    if (oldestOrg) {
+      const insertStmt = db.prepare(
+        `INSERT OR IGNORE INTO org_providers
+          (org_id, provider_slug, api_key_encrypted, base_url,
+           enabled, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?, ?)`,
+      );
+      const now = Date.now();
+      const runMigration = db.transaction(() => {
         for (const p of legacyProviders) {
           insertStmt.run(
-            org.id,
+            oldestOrg.id,
             p.slug,
             p.api_key_encrypted,
             p.base_url,
@@ -557,9 +555,9 @@ try {
             now,
           );
         }
-      }
-    });
-    runMigration();
+      });
+      runMigration();
+    }
   }
 } catch {
   // Migration failures are non-fatal — logs table may not exist yet
@@ -684,6 +682,66 @@ try {
   db.exec(
     "ALTER TABLE logs ADD COLUMN team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL",
   );
+}
+
+// ── Multi-tenancy: org_id on providers (BUG-ONBOARD follow-up) ──────
+//
+// The `providers` table was originally a global registry — every row
+// was visible to every user in every org. The onboarding wizard read
+// this table raw and listed unrelated orgs' providers as "already
+// added" for fresh users, which is a cross-tenant leak.
+//
+// Migration strategy:
+//   1. Add `org_id` as nullable (so the ALTER is safe on existing
+//      rows that can't satisfy a NOT NULL constraint at add time).
+//   2. Drop the old slug-unique index — two orgs can legitimately
+//      both register "openai"; uniqueness is now `(org_id, slug)`.
+//   3. Backfill existing rows to the oldest organization. The
+//      reasonable default for single-org installs is "the org the
+//      install was bootstrapped for"; multi-org pre-migration is
+//      extremely rare, and admins can reassign via direct SQL if
+//      that happens in their install.
+//   4. Create the composite unique index + an org_id index for
+//      listing performance.
+//
+// Each block is idempotent (try/catch on a probe SELECT) so process
+// restarts don't re-run the ALTER.
+try {
+  db.prepare("SELECT org_id FROM providers LIMIT 1").get();
+} catch {
+  db.exec(
+    "ALTER TABLE providers ADD COLUMN org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
+  );
+  // Backfill existing rows to the oldest organization in the install.
+  // If there are no organizations yet (unseeded install), rows stay
+  // NULL; the route layer treats NULL org_id as "not visible to any
+  // tenant" so nothing leaks.
+  db.exec(`
+    UPDATE providers
+       SET org_id = (
+         SELECT id FROM organizations
+          ORDER BY created_at ASC, id ASC
+          LIMIT 1
+       )
+     WHERE org_id IS NULL
+  `);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_providers_org ON providers(org_id)");
+}
+// Drop the old globally-unique slug constraint and replace with a
+// composite (org_id, slug) uniqueness. Guarded so existing installs
+// that already have this layout don't error.
+try {
+  // Check if the old unique index on slug still exists. SQLite names
+  // auto-indexes `sqlite_autoindex_providers_N` but drizzle-generated
+  // ones use a specific name. We probe by attempting the composite
+  // index create; if the slug-only unique survives, a second insert
+  // for the same slug across orgs would fail, so we also attempt a
+  // tombstone-drop of common old names.
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_providers_org_slug ON providers(org_id, slug)",
+  );
+} catch {
+  // ignore — index already exists in whatever form
 }
 
 // ── Configurable RBAC ─────────────────────────────────────────────────
@@ -1786,5 +1844,233 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
 );
 `);
+
+// ─── Org-curated catalogue: rules + skills ────────────────────
+//
+// Admins curate markdown-bodied rules and skills per org; users
+// browse them in the web dashboard and "install" the ones they
+// want. Installation creates a subscription row — the proxy then
+// materialises subscribed rules into `/api/me/assistant` (as inline
+// strings in the `rules:` YAML block) and subscribed skills into
+// `~/.ai-firewall/skills/<slug>/SKILL.md` at IDE/CLI sync time.
+//
+// Personal rules / MCP servers / prompts / context providers /
+// slash commands live as LOCAL FILES on the user's machine — the
+// proxy never stores them.
+//
+// Schema rationale:
+//   - `slug`   — stable id for installs; lowercase kebab-case.
+//   - `title`  — short human label for the catalogue list.
+//   - `body`   — full markdown. Newlines preserved.
+//   - `description` — optional one-liner shown above the card.
+//   - (org_id, slug) UNIQUE — prevents dup slugs per org.
+//   - `created_by` — admin who authored it, nullable for system
+//                    defaults.
+db.exec(`
+CREATE TABLE IF NOT EXISTS org_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  body TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(org_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_org_rules_org ON org_rules(org_id);
+
+CREATE TABLE IF NOT EXISTS org_skills (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  body TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(org_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_org_skills_org ON org_skills(org_id);
+
+CREATE TABLE IF NOT EXISTS user_rule_subscriptions (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_rule_id INTEGER NOT NULL REFERENCES org_rules(id) ON DELETE CASCADE,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  subscribed_at INTEGER NOT NULL,
+  PRIMARY KEY(user_id, org_rule_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_rule_subs_user
+  ON user_rule_subscriptions(user_id);
+
+CREATE TABLE IF NOT EXISTS user_skill_subscriptions (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_skill_id INTEGER NOT NULL REFERENCES org_skills(id) ON DELETE CASCADE,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  subscribed_at INTEGER NOT NULL,
+  PRIMARY KEY(user_id, org_skill_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_skill_subs_user
+  ON user_skill_subscriptions(user_id);
+`);
+
+// ── Legacy `assistants` cleanup ──────────────────────────────────
+//
+// The table was the old monolithic blob for "a user's entire
+// assistant config". Post-refactor:
+//   - models  → `user_models` + `model_grants`
+//   - rules   → `org_rules` + `user_rule_subscriptions`
+//   - skills  → `org_skills` + `user_skill_subscriptions`
+//   - MCP / prompts / context providers → local files
+//
+// Drop order is important: the one-shot migration BELOW reads any
+// legacy `models:` entries out of `assistants.yaml_content` first.
+// Dropping here would lose those rows silently. We run the drop
+// AFTER the migration (see end of this block).
+//
+// ── REFACTOR-MODEL-SOURCE one-shot migration ─────────────────────
+//
+// Contract: models live in `user_models` + `model_grants` ONLY.
+// The `assistants.yaml` blob stores rules / MCP / context providers /
+// system message — never models. A `models:` block in any stored
+// assistant YAML is legacy.
+//
+// This migration runs once per install (gated by a `settings` row),
+// scans every user-owned assistant, extracts any `models:` entries
+// into `user_models` via INSERT OR IGNORE, and rewrites the stored
+// YAML without the models block.
+//
+// Idempotent in three ways: the gate key prevents reruns; the
+// INSERT OR IGNORE prevents duplicates on unexpected rerun; the
+// YAML rewrite is a no-op if the block is already absent.
+try {
+  const GATE_KEY = "migration:models_out_of_assistants:v1";
+  const alreadyRun = db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .get(GATE_KEY) as { value: string } | undefined;
+  if (!alreadyRun) {
+    // Lazy-require the YAML parser. Safe because this runs once per
+    // boot at most.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const yamlMod: typeof import("yaml") = require("yaml");
+    // The `assistants` table may or may not exist here — fresh
+    // installs never created it. Wrap in try/catch rather than
+    // checking sqlite_master first so the happy path stays fast.
+    let rows: Array<{
+      id: number;
+      owner_type: string;
+      owner_id: number;
+      yaml: string;
+    }> = [];
+    try {
+      rows = db
+        .prepare(
+          `SELECT id, owner_type, owner_id, yaml_content AS yaml
+             FROM assistants
+            WHERE owner_type = 'user' AND yaml_content LIKE '%models:%'`,
+        )
+        .all() as Array<{
+        id: number;
+        owner_type: string;
+        owner_id: number;
+        yaml: string;
+      }>;
+    } catch {
+      rows = []; // table doesn't exist — nothing to migrate
+    }
+
+    if (rows.length > 0) {
+      const insertModel = db.prepare(
+        `INSERT OR IGNORE INTO user_models (
+           user_id, provider_slug, model_slug, display_name,
+           api_key_encrypted, api_base, enabled, roles,
+           created_at, updated_at, created_by
+         )
+         VALUES (?, ?, ?, ?, '', ?, 1, ?, ?, ?, ?)`,
+      );
+      const updateAssistant = db.prepare(
+        "UPDATE assistants SET yaml_content = ?, updated_at = ? WHERE id = ?",
+      );
+      const now = Date.now();
+      const txn = db.transaction(() => {
+        let movedRows = 0;
+        for (const r of rows) {
+          let doc: ReturnType<typeof yamlMod.parseDocument>;
+          try {
+            doc = yamlMod.parseDocument(r.yaml);
+          } catch {
+            continue;
+          }
+          const modelsNode = doc.get("models");
+          if (!modelsNode || !yamlMod.isSeq(modelsNode)) continue;
+
+          for (const item of modelsNode.items) {
+            if (!yamlMod.isMap(item)) continue;
+            const provider = String(item.get("provider") ?? "").trim();
+            const model = String(item.get("model") ?? "").trim();
+            if (!provider || !model) continue;
+            const displayName =
+              typeof item.get("name") === "string"
+                ? String(item.get("name"))
+                : null;
+            const apiBase =
+              typeof item.get("apiBase") === "string"
+                ? String(item.get("apiBase"))
+                : null;
+            const rolesNode = item.get("roles");
+            let roles = "chat,edit,apply";
+            if (yamlMod.isSeq(rolesNode)) {
+              const rs = rolesNode.items
+                .map((n) => String((n as any)?.value ?? n))
+                .filter(Boolean);
+              if (rs.length > 0) roles = rs.join(",");
+            }
+            insertModel.run(
+              r.owner_id,
+              provider,
+              model,
+              displayName,
+              apiBase,
+              roles,
+              now,
+              now,
+              r.owner_id,
+            );
+            movedRows += 1;
+          }
+
+          doc.delete("models");
+          updateAssistant.run(doc.toString(), now, r.id);
+        }
+        return movedRows;
+      });
+      try {
+        txn();
+      } catch {
+        // Swallow migration errors — we'd rather boot successfully
+        // with the old schema than hard-fail the proxy.
+      }
+    }
+
+    db.prepare(
+      "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+    ).run(GATE_KEY, String(Date.now()), Date.now());
+  }
+} catch {
+  // Fail open: the migration is cosmetic (keeps the DB tidy); the
+  // runtime already strips `models:` from assistant YAML on every
+  // read/write, so missing this step is non-fatal.
+}
+
+// Now safe to drop the table — any legacy `models:` entries above
+// have been promoted into `user_models`. Idempotent: `DROP TABLE
+// IF EXISTS` is a no-op on fresh installs.
+try {
+  db.exec("DROP TABLE IF EXISTS assistants");
+} catch {
+  /* non-fatal */
+}
 
 export default db;

@@ -24,7 +24,11 @@ import { searchWebImpl } from "./implementations/searchWeb";
 import { viewDiffImpl } from "./implementations/viewDiff";
 import { saveMemoryImpl, readMemoryImpl } from "./implementations/memory";
 import { createPlanImpl, updatePlanImpl } from "./implementations/planTool";
-import { createWorktreeImpl, removeWorktreeImpl } from "./implementations/worktree";
+import { todoReadImpl, todoWriteImpl } from "./implementations/todoTool";
+import {
+  createWorktreeImpl,
+  removeWorktreeImpl,
+} from "./implementations/worktree";
 import { viewRepoMapImpl } from "./implementations/viewRepoMap";
 import { viewSubdirectoryImpl } from "./implementations/viewSubdirectory";
 import { safeParseToolCallArgs } from "./parseArgs";
@@ -103,19 +107,24 @@ async function callToolFromUri(
       // -- AI Firewall: Scan MCP Tool Call Inputs ---------------------------
       let finalArgs = args;
       try {
-        const fwResp = await extras.fetch("http://127.0.0.1:8080/v1/mcp/tools/call", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            server_id: mcpId,
-            tool_name: toolName,
-            arguments: args
-          })
-        });
+        const fwResp = await extras.fetch(
+          "http://127.0.0.1:8080/v1/mcp/tools/call",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              server_id: mcpId,
+              tool_name: toolName,
+              arguments: args,
+            }),
+          },
+        );
 
         if (fwResp.status === 403) {
           const fwData = await fwResp.json();
-          throw new Error(`MCP tool call blocked by AI Firewall: ${(fwData.scan?.reasons || []).join(", ")}`);
+          throw new Error(
+            `MCP tool call blocked by AI Firewall: ${(fwData.scan?.reasons || []).join(", ")}`,
+          );
         } else if (fwResp.ok) {
           const fwData = await fwResp.json();
           if (fwData.sanitizedArguments) {
@@ -124,7 +133,10 @@ async function callToolFromUri(
         }
       } catch (e) {
         // Re-throw if it's explicitly a firewall block
-        if (e instanceof Error && e.message.includes("blocked by AI Firewall")) {
+        if (
+          e instanceof Error &&
+          e.message.includes("blocked by AI Firewall")
+        ) {
           throw e;
         } else {
           console.warn("AI Firewall unreachable, allowing MCP tool call.", e);
@@ -271,6 +283,10 @@ export async function callBuiltInTool(
       return await createWorktreeImpl(args, extras);
     case BuiltInToolNames.RemoveWorktree:
       return await removeWorktreeImpl(args, extras);
+    case BuiltInToolNames.TodoWrite:
+      return await todoWriteImpl(args, extras);
+    case BuiltInToolNames.TodoRead:
+      return await todoReadImpl(args, extras);
     default:
       throw new Error(`Tool "${functionName}" not found`);
   }

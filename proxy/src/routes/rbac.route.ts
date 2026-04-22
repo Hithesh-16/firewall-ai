@@ -87,15 +87,12 @@ const overrideSchema = z.object({
 });
 
 export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
-
   // ── Capabilities ────────────────────────────────────────────────────
 
   /** List all available capabilities (for role editor UI) */
-  app.get(
-    "/api/capabilities",
-    { preHandler: requireAuth },
-    async () => ({ capabilities: listAllCapabilities() })
-  );
+  app.get("/api/capabilities", { preHandler: requireAuth }, async () => ({
+    capabilities: listAllCapabilities(),
+  }));
 
   /**
    * GET /api/me/permissions
@@ -122,25 +119,59 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Roles ───────────────────────────────────────────────────────────
 
-  /** List roles for the caller's org (built-in + custom) */
-  app.get(
-    "/api/roles",
-    { preHandler: requireAuth },
-    async (request, reply) => {
-      const orgId = request.authContext?.user.orgId;
-      if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+  /** List roles for the caller's org (built-in + custom).
+   *
+   *  P11-SERVER: accepts `?page`, `?pageSize` (default 20, max 100),
+   *  and `?search` (matches name / displayName / description). Returns
+   *  the uniform `{items, total, page, pageSize}` contract alongside
+   *  the legacy `{roles}` key for backward compatibility. Filtering
+   *  happens in JS because the listRolesForOrg / getRoleCapabilities
+   *  helpers don't push into SQL — given role counts stay ≤20 in
+   *  practice, in-memory filter is fine and keeps the helper surface
+   *  unchanged. */
+  app.get("/api/roles", { preHandler: requireAuth }, async (request, reply) => {
+    const orgId = request.authContext?.user.orgId;
+    if (!orgId)
+      return reply.status(400).send({ error: "User has no organization" });
 
-      const roles = listRolesForOrg(orgId);
+    const q = request.query as {
+      page?: string | number;
+      pageSize?: string | number;
+      search?: string;
+    };
+    const page = Math.max(1, Number(q.page ?? 1) || 1);
+    const requestedSize = Number(q.pageSize ?? 20) || 20;
+    const pageSize = Math.max(1, Math.min(100, requestedSize));
+    const search = (q.search ?? "").toString().trim().toLowerCase();
 
-      // Enrich each role with its capabilities
-      const enriched = roles.map((role) => ({
-        ...role,
-        capabilities: getRoleCapabilities(role.id),
-      }));
+    const all = listRolesForOrg(orgId);
+    const filtered =
+      search.length === 0
+        ? all
+        : all.filter((r) => {
+            return (
+              (r.name ?? "").toLowerCase().includes(search) ||
+              (r.displayName ?? "").toLowerCase().includes(search) ||
+              (r.description ?? "").toLowerCase().includes(search)
+            );
+          });
 
-      return { roles: enriched };
-    }
-  );
+    const total = filtered.length;
+    const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const enriched = paged.map((role) => ({
+      ...role,
+      capabilities: getRoleCapabilities(role.id),
+    }));
+
+    return {
+      items: enriched,
+      roles: enriched, // legacy key — remove once callers migrate
+      total,
+      page,
+      pageSize,
+      hasMore: page * pageSize < total,
+    };
+  });
 
   /** Create a custom role with selected capabilities */
   app.post(
@@ -148,11 +179,14 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: [requireAuth, requireCapability("role:manage")] },
     async (request, reply) => {
       const orgId = request.authContext?.user.orgId;
-      if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
       const parsed = createRoleSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
       try {
@@ -167,7 +201,7 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
       } catch (err) {
         return rbacError(reply, err);
       }
-    }
+    },
   );
 
   /** Update a custom role's capabilities */
@@ -178,7 +212,9 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
       const { id } = request.params as { id: string };
       const parsed = updateRoleSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
       try {
@@ -187,7 +223,7 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
       } catch (err) {
         return rbacError(reply, err);
       }
-    }
+    },
   );
 
   /** Delete a custom role (cannot delete built-in, cannot delete if users are assigned) */
@@ -199,12 +235,13 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
 
       try {
         const deleted = deleteCustomRole(Number(id));
-        if (!deleted) return reply.status(404).send({ error: "Role not found" });
+        if (!deleted)
+          return reply.status(404).send({ error: "Role not found" });
         return { ok: true };
       } catch (err) {
         return rbacError(reply, err);
       }
-    }
+    },
   );
 
   /**
@@ -291,15 +328,23 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
       const { userId } = request.params as { userId: string };
       const parsed = assignRoleSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
       const orgId = request.authContext?.user.orgId;
-      if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
-      assignOrgRole(Number(userId), orgId, parsed.data.roleId, request.authContext?.user.id);
+      assignOrgRole(
+        Number(userId),
+        orgId,
+        parsed.data.roleId,
+        request.authContext?.user.id,
+      );
       return { ok: true };
-    }
+    },
   );
 
   /** Assign team-level role to a user */
@@ -307,15 +352,25 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
     "/api/users/:userId/team-role/:teamId",
     { preHandler: [requireAuth, requireCapability("role:assign")] },
     async (request, reply) => {
-      const { userId, teamId } = request.params as { userId: string; teamId: string };
+      const { userId, teamId } = request.params as {
+        userId: string;
+        teamId: string;
+      };
       const parsed = assignRoleSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
-      assignTeamRole(Number(userId), Number(teamId), parsed.data.roleId, request.authContext?.user.id);
+      assignTeamRole(
+        Number(userId),
+        Number(teamId),
+        parsed.data.roleId,
+        request.authContext?.user.id,
+      );
       return { ok: true };
-    }
+    },
   );
 
   // ── Capability Overrides ────────────────────────────────────────────
@@ -327,11 +382,14 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { userId } = request.params as { userId: string };
       const orgId = request.authContext?.user.orgId;
-      if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
       const parsed = overrideSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid payload", details: parsed.error.flatten() });
+        return reply
+          .status(400)
+          .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
       addCapabilityOverride(
@@ -344,7 +402,7 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
         parsed.data.expiresAt,
       );
       return { ok: true };
-    }
+    },
   );
 
   /** List overrides for a user */
@@ -357,7 +415,7 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
       if (!orgId) return { overrides: [] };
 
       return { overrides: listOverridesForUser(Number(userId), orgId) };
-    }
+    },
   );
 
   /** Remove a capability override */
@@ -365,14 +423,19 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
     "/api/users/:userId/overrides/:capName",
     { preHandler: [requireAuth, requireCapability("role:manage")] },
     async (request, reply) => {
-      const { userId, capName } = request.params as { userId: string; capName: string };
+      const { userId, capName } = request.params as {
+        userId: string;
+        capName: string;
+      };
       const orgId = request.authContext?.user.orgId;
-      if (!orgId) return reply.status(400).send({ error: "User has no organization" });
+      if (!orgId)
+        return reply.status(400).send({ error: "User has no organization" });
 
       const removed = removeCapabilityOverride(Number(userId), orgId, capName);
-      if (!removed) return reply.status(404).send({ error: "Override not found" });
+      if (!removed)
+        return reply.status(404).send({ error: "Override not found" });
       return { ok: true };
-    }
+    },
   );
 
   // ── Permission Check (for UI to test access) ───────────────────────
@@ -383,13 +446,14 @@ export async function registerRbacRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: requireAuth },
     async (request) => {
       const query = request.query as { capability?: string };
-      if (!query.capability) return { error: "capability query param required" };
+      if (!query.capability)
+        return { error: "capability query param required" };
 
       const ctx = request.authContext!;
       const orgId = ctx.user.orgId;
       if (!orgId) return { allowed: false, reason: "No organization" };
 
       return checkPermission(ctx.user.id, orgId, query.capability);
-    }
+    },
   );
 }

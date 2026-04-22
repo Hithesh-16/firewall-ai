@@ -26,7 +26,11 @@ import { cancelStream } from "../redux/thunks/cancelStream";
 import { handleApplyStateUpdate } from "../redux/thunks/handleApplyStateUpdate";
 import { loadSession, refreshSessionMetadata } from "../redux/thunks/session";
 import { updateFileSymbolsFromHistory } from "../redux/thunks/updateFileSymbols";
-import { addScanResult, setProxyHealthy } from "../redux/slices/securitySlice";
+import {
+  addScanResult,
+  setProxyHealthy,
+  updateSessionStats,
+} from "../redux/slices/securitySlice";
 import {
   setDocumentStylesFromLocalStorage,
   setDocumentStylesFromTheme,
@@ -298,6 +302,22 @@ function ParallelListeners() {
           entropyCount: data.entropyCount ?? 0,
           findings: data.findings ?? [],
           timestamp: Date.now(),
+        }),
+      );
+      // Kilocode-parity: feed the extended token breakdown + live
+      // context snapshot into the TaskHeader/ContextBar/TokenBreakdown.
+      // updateSessionStats adds cumulative fields and replaces the
+      // context snapshot — safe to fire on every scan result.
+      dispatch(
+        updateSessionStats({
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          cacheReadTokens: data.cacheReadTokens,
+          cacheWriteTokens: data.cacheWriteTokens,
+          reasoningTokens: data.reasoningTokens,
+          contextUsed: data.contextUsed ?? data.contextTokens,
+          contextLimit: data.contextLimit ?? data.contextMax,
+          outputReserve: data.outputReserve,
         }),
       );
     },

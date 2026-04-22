@@ -30,6 +30,20 @@ export interface FirewallScanResult {
   contextOverflow?: boolean;
   contextTokens?: number;
   contextMax?: number;
+  /** Kilocode-parity token breakdown (Phase UX1).
+   *  Populated when the upstream provider surfaces them; zero/undefined
+   *  otherwise so the UI auto-hides the columns. */
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  /** Live context window snapshot for the ContextBar. `contextUsed`
+   *  may equal `contextTokens` today but is kept separate so we can
+   *  later report "tokens already in the conversation" independently
+   *  of the input-only `contextTokens`. */
+  contextUsed?: number;
+  contextLimit?: number;
+  outputReserve?: number;
   /** MCP gateway (Phase 3) */
   mcpAction?: "ALLOW" | "BLOCK" | "REDACT";
   mcpRiskScore?: number;
@@ -104,6 +118,28 @@ export function extractScanHeaders(
       : undefined,
     contextMax: response.headers.has("x-af-context-max")
       ? parseInt(response.headers.get("x-af-context-max")!, 10)
+      : undefined,
+    // Kilocode-parity token breakdown headers
+    outputTokens: response.headers.has("x-af-output-tokens")
+      ? parseInt(response.headers.get("x-af-output-tokens")!, 10)
+      : undefined,
+    cacheReadTokens: response.headers.has("x-af-cache-read-tokens")
+      ? parseInt(response.headers.get("x-af-cache-read-tokens")!, 10)
+      : undefined,
+    cacheWriteTokens: response.headers.has("x-af-cache-write-tokens")
+      ? parseInt(response.headers.get("x-af-cache-write-tokens")!, 10)
+      : undefined,
+    reasoningTokens: response.headers.has("x-af-reasoning-tokens")
+      ? parseInt(response.headers.get("x-af-reasoning-tokens")!, 10)
+      : undefined,
+    contextUsed: response.headers.has("x-af-context-used")
+      ? parseInt(response.headers.get("x-af-context-used")!, 10)
+      : undefined,
+    contextLimit: response.headers.has("x-af-context-limit")
+      ? parseInt(response.headers.get("x-af-context-limit")!, 10)
+      : undefined,
+    outputReserve: response.headers.has("x-af-output-reserve")
+      ? parseInt(response.headers.get("x-af-output-reserve")!, 10)
       : undefined,
     // MCP gateway headers
     mcpAction:

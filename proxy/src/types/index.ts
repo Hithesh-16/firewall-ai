@@ -370,6 +370,9 @@ export type Provider = {
   enabled: boolean;
   createdAt: number;
   updatedAt: number;
+  /** Owning org (multi-tenancy scoping). Null only for legacy rows
+   *  that missed the backfill — request paths filter those out. */
+  orgId: number | null;
 };
 
 export type Model = {

@@ -14,6 +14,7 @@ import {
   useState,
 } from "react";
 import StickyPromptHeader from "../../components/chat/StickyPromptHeader";
+import { TaskHeader } from "../../components/chat/TaskHeader";
 import { PlanPanel } from "./PlanPanel";
 import { useActivePromptTracking } from "../../hooks/useActivePromptTracking";
 import { ErrorBoundary } from "react-error-boundary";
@@ -523,6 +524,7 @@ export function Chat() {
         ref={stepsDivRef}
         className={`flex-1 overflow-y-scroll ${showScrollbar ? "thin-scrollbar" : "no-scrollbar"}`}
       >
+        <TaskHeader />
         <StickyPromptHeader
           activePromptIndex={activePromptIndex}
           isVisible={stickyVisible}

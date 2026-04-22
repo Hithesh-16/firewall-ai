@@ -769,8 +769,61 @@ export class VsCodeMessenger {
       return {
         signedIn: s.signedIn,
         email: s.user?.email,
+        name: s.user?.name,
+        role: s.user?.role,
         userId: s.user?.id,
       };
+    });
+
+    // Webview posts the AddModelForm payload here; extension host
+    // attaches the bearer token (from AiFirewallAuthService) and
+    // forwards to the proxy's unified /api/me/models/add endpoint.
+    // The token never crosses the webview boundary.
+    this.onWebview("aiFirewall/addUserModel", async (msg) => {
+      const state = this.vsCodeExtension.aiFirewallAuth.getState();
+      if (!state.signedIn || !state.token) {
+        return { ok: false, error: "Not signed in to AI Firewall" };
+      }
+      const proxyUrl = state.proxyUrl || "http://localhost:8080";
+      try {
+        const resp = await fetch(`${proxyUrl}/api/me/models/add`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${state.token}`,
+          },
+          body: JSON.stringify(msg.data),
+        });
+        if (!resp.ok) {
+          let message = `HTTP ${resp.status}`;
+          try {
+            const body = (await resp.json()) as {
+              message?: string;
+              error?: string;
+            };
+            message = body.message || body.error || message;
+          } catch {
+            /* no JSON body */
+          }
+          return { ok: false, error: message };
+        }
+        const body = (await resp.json()) as {
+          model: {
+            id: number;
+            providerSlug: string;
+            modelSlug: string;
+            displayName: string | null;
+            apiBase: string | null;
+            roles: string[];
+          };
+        };
+        return { ok: true, model: body.model };
+      } catch (err) {
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
     });
 
     this.onWebviewOrCore("logoutOfControlPlane", async (msg) => {

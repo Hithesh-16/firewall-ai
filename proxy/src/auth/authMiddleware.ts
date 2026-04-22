@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { validateApiToken, tokenHasScope } from "./authService";
+import type { CapabilityName } from "./capabilities";
 import { checkPermission } from "./rbacService";
 import { AuthContext, Role, TokenScope } from "../types";
 
@@ -77,9 +78,20 @@ export function requireRole(...allowedRoles: Role[]) {
  * Capability-based permission check. Preferred for new routes.
  * Checks user_org_roles → role_capabilities → user_capability_overrides.
  *
- * Usage: { preHandler: [requireAuth, requireCapability("policy:write")] }
+ * Usage: { preHandler: [requireAuth, requireCapability(CAP.policy_write)] }
+ *
+ * `capabilityName` is typed as `CapabilityName | (string & {})` so:
+ *   - Passing `CAP.*` constants is fully type-checked (canonical path)
+ *   - Passing raw strings still compiles (legacy call sites; will be
+ *     migrated incrementally)
+ *
+ * When migrating, swap the raw string for the matching `CAP.*` const
+ * — spelling drift (e.g. `policies.edit` vs seeded `policies:edit`)
+ * becomes a compile error instead of a silent 403.
  */
-export function requireCapability(capabilityName: string) {
+export function requireCapability(
+  capabilityName: CapabilityName | (string & {}),
+) {
   return async (
     request: FastifyRequest,
     reply: FastifyReply,

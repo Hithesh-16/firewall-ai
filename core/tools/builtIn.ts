@@ -27,6 +27,13 @@ export enum BuiltInToolNames {
   CreateWorktree = "create_worktree",
   RemoveWorktree = "remove_worktree",
 
+  // Kilocode-parity todo tools — agent writes a checklist that the
+  // TaskHeader > TodoStrip renders live. todoRead is how the agent
+  // queries its own progress mid-session without paging back through
+  // history.
+  TodoWrite = "todo_write",
+  TodoRead = "todo_read",
+
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",
   ViewSubdirectory = "view_subdirectory",

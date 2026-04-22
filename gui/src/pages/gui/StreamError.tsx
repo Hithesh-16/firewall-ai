@@ -6,7 +6,7 @@ import {
   KeyIcon,
 } from "@heroicons/react/24/outline";
 import { DISCUSSIONS_LINK } from "core/util/constants";
-import { useContext, useMemo } from "react";
+import { useContext, useEffect, useMemo } from "react";
 import { GhostButton, SecondaryButton } from "../../components";
 import { useEditModel } from "../../components/mainInput/Lump/useEditBlock";
 import { useMainEditor } from "../../components/mainInput/TipTapEditor";
@@ -125,145 +125,22 @@ const StreamErrorDialog = ({ error }: StreamErrorProps) => {
     return <OutOfCreditsDialog />;
   }
 
-  // ── AI Firewall block — this dialog is the fallback path only ───
+  // ── AI Firewall block — never render a modal for these (P7) ─────
   //
-  // Firewall flags now surface as an inline consent popover above the
-  // chat input (see `streamThunkWrapper` routing to
-  // `setPendingFirewallConsent` + gui/src/components/security/FirewallConsentCard.tsx).
-  // If some transport strips the typed error and this branch still gets
-  // hit, we render the findings + the same three choices so the user
-  // isn't stuck with a generic "error handling model response" panel.
+  // Firewall flags belong to the inline FirewallConsentCard above the
+  // chat input, not a blocking modal. streamThunkWrapper routes firewall
+  // errors to `setPendingFirewallConsent` so this branch is normally
+  // skipped entirely. The belt-and-braces path below fires when a
+  // transport wrapper mangles the error type beyond what the wrapper
+  // could detect — in that case we silently hand off to the inline
+  // card and render nothing here, rather than showing the alarming
+  // yellow-bordered popover users have flagged as disruptive.
   const isFirewallBlock =
     (error instanceof Error && error.name === "FirewallBlockedRequestError") ||
     (typeof message === "string" && message.startsWith("AI Firewall"));
 
   if (isFirewallBlock) {
-    // Pull structured detail off the error if available; fall back to
-    // string parsing if a downstream wrapper has stripped the typed
-    // class (e.g. JSON-serialized over IPC).
-    const detail =
-      error instanceof Error &&
-      "detail" in error &&
-      typeof (error as { detail?: unknown }).detail === "object"
-        ? (
-            error as {
-              detail: {
-                riskScore?: number;
-                reasons?: string[];
-                findings?: Array<{
-                  type: string;
-                  severity?: string;
-                  masked?: string;
-                }>;
-              };
-            }
-          ).detail
-        : undefined;
-    const riskScore =
-      detail?.riskScore ??
-      (() => {
-        const m = /risk:\s*(\d+)/i.exec(message ?? "");
-        return m ? Number(m[1]) : undefined;
-      })();
-    const reasons = detail?.reasons ?? [];
-    const findings = detail?.findings ?? [];
-
-    const closeAndOpenInlineConsent = () => {
-      if (detail && "action" in detail) {
-        dispatch(
-          setPendingFirewallConsent({
-            riskScore: detail.riskScore ?? 0,
-            reasons: detail.reasons ?? [],
-            findings: (detail.findings ?? []).map((f) => ({
-              type: f.type,
-              severity: f.severity,
-              masked: f.masked,
-            })),
-            action: "BLOCK",
-          }),
-        );
-      }
-      dispatch(setShowDialog(false));
-      dispatch(setDialogMessage(undefined));
-    };
-
-    return (
-      <div className="flex flex-col gap-4 px-3 pb-3 pt-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{"\u26A0\uFE0F"}</span>
-          <h3 className="text-warning m-0 p-0 text-lg font-medium">
-            AI Firewall flagged this request
-          </h3>
-        </div>
-
-        <p className="m-0 p-0 text-sm">
-          The proxy detected sensitive content in your message before forwarding
-          it to <code>{selectedModel?.title ?? "the model"}</code>. Choose how
-          to proceed in the consent card above the chat input.
-          {typeof riskScore === "number" ? (
-            <>
-              {" "}
-              <span className="text-description">
-                (risk score:&nbsp;<strong>{riskScore}</strong>/100)
-              </span>
-            </>
-          ) : null}
-        </p>
-
-        {findings.length > 0 ? (
-          <div className="bg-warning/5 border-warning/30 flex flex-col gap-2 rounded border p-3">
-            <div className="text-xs font-semibold uppercase tracking-wider">
-              Findings
-            </div>
-            <ul className="m-0 flex flex-col gap-1 p-0">
-              {findings.map((f, i) => (
-                <li
-                  key={`${f.type}-${i}`}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <code className="bg-warning/10 rounded px-1.5 py-0.5 text-xs">
-                    {f.type}
-                  </code>
-                  {f.severity ? (
-                    <span className="text-description text-xs">
-                      {f.severity}
-                    </span>
-                  ) : null}
-                  {f.masked ? (
-                    <code className="text-description font-mono text-xs">
-                      {f.masked}
-                    </code>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {reasons.length > 0 ? (
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-description text-xs font-semibold uppercase tracking-wider">
-              Reasons
-            </span>
-            <ul className="m-0 flex flex-col gap-0.5 pl-5">
-              {reasons.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="flex flex-row flex-wrap gap-2">
-          <GhostButton
-            className="flex items-center"
-            onClick={closeAndOpenInlineConsent}
-          >
-            <ArrowPathIcon className="mr-1.5 h-3.5 w-3.5" />
-            <span>Review &amp; resubmit</span>
-          </GhostButton>
-        </div>
-      </div>
-    );
+    return <FirewallBlockSilentRedirect error={error} message={message} />;
   }
 
   let errorContent = (
@@ -469,3 +346,74 @@ Please add any additional context about the error here
 };
 
 export default StreamErrorDialog;
+
+/**
+ * Silent redirect for firewall-block errors that somehow reached the
+ * error dialog (bypassing streamThunkWrapper's inline routing).
+ *
+ * Renders nothing. On mount it parses the structured detail off the
+ * error (or synthesises a minimal one from the message), dispatches
+ * `setPendingFirewallConsent` so the inline FirewallConsentCard
+ * surfaces above the chat input, and closes the modal dialog. The
+ * user never sees a blocking popover — they land directly on the
+ * inline consent UI, which is the intended flow.
+ *
+ * This is the P7 replacement for the legacy yellow-bordered modal.
+ */
+function FirewallBlockSilentRedirect({
+  error,
+  message,
+}: {
+  error: unknown;
+  message?: string | null;
+}) {
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    const detail =
+      error && typeof error === "object" && "detail" in error
+        ? (error as { detail?: unknown }).detail
+        : undefined;
+
+    let consent: {
+      riskScore: number;
+      reasons: string[];
+      findings: Array<{ type: string; severity?: string; masked?: string }>;
+      action: "BLOCK" | "REDACT" | "ALLOW";
+    };
+
+    if (detail && typeof detail === "object") {
+      const d = detail as {
+        riskScore?: number;
+        reasons?: string[];
+        findings?: Array<{
+          type: string;
+          severity?: string;
+          masked?: string;
+        }>;
+        action?: "BLOCK" | "REDACT" | "ALLOW";
+      };
+      consent = {
+        riskScore: typeof d.riskScore === "number" ? d.riskScore : 0,
+        reasons: Array.isArray(d.reasons) ? d.reasons : [],
+        findings: Array.isArray(d.findings) ? d.findings : [],
+        action: d.action ?? "BLOCK",
+      };
+    } else {
+      const msg = typeof message === "string" ? message : "";
+      const riskMatch = /risk:\s*(\d+)/i.exec(msg);
+      consent = {
+        riskScore: riskMatch ? Number(riskMatch[1]) : 0,
+        reasons: msg ? [msg] : [],
+        findings: [],
+        action: "BLOCK",
+      };
+    }
+
+    dispatch(setPendingFirewallConsent(consent));
+    dispatch(setShowDialog(false));
+    dispatch(setDialogMessage(undefined));
+  }, [error, message, dispatch]);
+
+  return null;
+}

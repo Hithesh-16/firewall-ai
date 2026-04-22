@@ -136,14 +136,22 @@ export function Step5Providers({ onNext, onBack }: { onNext: () => void; onBack:
         deploymentName: draft.deploymentName || undefined,
       });
 
-      dispatch(
-        onboardingActions.addProvider({
-          localId: tinyId(),
-          serverId: resp.id,
-          kind: draft.kind,
-          name: resp.name,
-        }),
+      // POST /api/providers is an upsert — re-submitting the same
+      // provider rotates its key rather than erroring. Dedupe by slug
+      // so the "Added" list doesn't grow a duplicate tile on rotation.
+      const alreadyListed = wizard.providers.some(
+        (p) => p.name.toLowerCase() === (resp.name || "").toLowerCase(),
       );
+      if (!alreadyListed) {
+        dispatch(
+          onboardingActions.addProvider({
+            localId: tinyId(),
+            serverId: resp.id,
+            kind: draft.kind,
+            name: resp.name,
+          }),
+        );
+      }
 
       // Reset form for the next add
       setDraft({
@@ -165,7 +173,7 @@ export function Step5Providers({ onNext, onBack }: { onNext: () => void; onBack:
   return (
     <WizardCard
       title="Add your LLM providers"
-      subtitle="Bring your own keys. Everything is encrypted in the proxy's vault (AES-256-GCM) and scoped to your org."
+      subtitle="Bring your own keys. Each key + default model is stored on your account (not in a separate file) and reused across the web, VS Code, and the CLI."
     >
       {/* Existing providers */}
       {wizard.providers.length > 0 && (

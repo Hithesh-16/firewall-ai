@@ -43,6 +43,15 @@ export const getEmptyRootState: () => RootState = () => {
         allowed: 0,
         totalTokens: 0,
         totalCost: 0,
+        // Kilocode-parity extended token fields (zero defaults).
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        reasoningTokens: 0,
+        contextUsed: 0,
+        contextLimit: 0,
+        outputReserve: 0,
       },
       recentScans: [],
       showBanner: true,
@@ -64,6 +73,7 @@ export const getEmptyRootState: () => RootState = () => {
       loading: false,
       error: null,
     },
+    todos: [],
     memory: {
       memories: [],
       indexContent: "",

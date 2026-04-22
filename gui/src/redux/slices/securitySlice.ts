@@ -103,17 +103,51 @@ export const ACTIVITY_LABELS: Record<
 
 // ── State ──────────────────────────────────────────────────────────────
 
+/**
+ * Extended session-wide token accounting (kilocode-parity).
+ *
+ * The original four fields (totalScanned, blocked, redacted, allowed,
+ * totalTokens, totalCost) remain for backward compat — existing
+ * consumers like CostBadge read them unchanged.
+ *
+ * The new fields drive the TaskHeader + ContextBar + TokenBreakdown
+ * components. They arrive via `updateSessionStats` (dispatched after
+ * the proxy emits X-AF-* headers on stream close) rather than per-scan
+ * so a single stream-end event updates everything at once.
+ */
+export interface SessionStats {
+  totalScanned: number;
+  blocked: number;
+  redacted: number;
+  allowed: number;
+  totalTokens: number;
+  totalCost: number;
+
+  // ── Extended token breakdown (kilocode parity) ────────────────────────
+  /** Cumulative prompt/input tokens across the session. */
+  inputTokens: number;
+  /** Cumulative completion/output tokens across the session. */
+  outputTokens: number;
+  /** Cached input tokens served at the discounted cache-read rate. */
+  cacheReadTokens: number;
+  /** Newly-cached input tokens (cache-write, priced at 1.25x or 2x). */
+  cacheWriteTokens: number;
+  /** Thinking/reasoning tokens for models with extended thinking. */
+  reasoningTokens: number;
+
+  // ── Live context window usage (drives ContextBar) ─────────────────────
+  /** Tokens currently in the active context window. */
+  contextUsed: number;
+  /** Model context limit (llm-info.contextLength). */
+  contextLimit: number;
+  /** Tokens reserved for output (model.maxCompletionTokens). */
+  outputReserve: number;
+}
+
 export interface SecurityState {
   proxyHealthy: boolean;
   lastScanResult: ScanResult | null;
-  sessionStats: {
-    totalScanned: number;
-    blocked: number;
-    redacted: number;
-    allowed: number;
-    totalTokens: number;
-    totalCost: number;
-  };
+  sessionStats: SessionStats;
   recentScans: ScanResult[];
   showBanner: boolean;
   preflightResult: PreflightResult | null;
@@ -136,17 +170,27 @@ export interface SecurityState {
   pendingFirewallConsent: BlockDetail | null;
 }
 
+const initialSessionStats: SessionStats = {
+  totalScanned: 0,
+  blocked: 0,
+  redacted: 0,
+  allowed: 0,
+  totalTokens: 0,
+  totalCost: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+  reasoningTokens: 0,
+  contextUsed: 0,
+  contextLimit: 0,
+  outputReserve: 0,
+};
+
 const initialState: SecurityState = {
   proxyHealthy: false,
   lastScanResult: null,
-  sessionStats: {
-    totalScanned: 0,
-    blocked: 0,
-    redacted: 0,
-    allowed: 0,
-    totalTokens: 0,
-    totalCost: 0,
-  },
+  sessionStats: initialSessionStats,
   recentScans: [],
   showBanner: true,
   preflightResult: null,
@@ -200,9 +244,45 @@ const securitySlice = createSlice({
     },
 
     resetSessionStats(state) {
-      state.sessionStats = initialState.sessionStats;
+      state.sessionStats = initialSessionStats;
       state.recentScans = [];
       state.lastScanResult = null;
+    },
+
+    /**
+     * Partial merge for the extended token fields + live context usage.
+     * Cumulative fields (inputTokens, outputTokens, cache*, reasoning)
+     * add to the running total; snapshot fields (contextUsed,
+     * contextLimit, outputReserve) replace the current value.
+     *
+     * Dispatched once per stream completion after the proxy emits
+     * X-AF-* headers — not per scan, to avoid double-counting.
+     */
+    updateSessionStats(
+      state,
+      action: PayloadAction<{
+        inputTokens?: number;
+        outputTokens?: number;
+        cacheReadTokens?: number;
+        cacheWriteTokens?: number;
+        reasoningTokens?: number;
+        contextUsed?: number;
+        contextLimit?: number;
+        outputReserve?: number;
+      }>,
+    ) {
+      const s = state.sessionStats;
+      const p = action.payload;
+      if (p.inputTokens) s.inputTokens += p.inputTokens;
+      if (p.outputTokens) s.outputTokens += p.outputTokens;
+      if (p.cacheReadTokens) s.cacheReadTokens += p.cacheReadTokens;
+      if (p.cacheWriteTokens) s.cacheWriteTokens += p.cacheWriteTokens;
+      if (p.reasoningTokens) s.reasoningTokens += p.reasoningTokens;
+      // Snapshot replaces — live context usage reflects the current
+      // message list, not a cumulative count.
+      if (p.contextUsed !== undefined) s.contextUsed = p.contextUsed;
+      if (p.contextLimit !== undefined) s.contextLimit = p.contextLimit;
+      if (p.outputReserve !== undefined) s.outputReserve = p.outputReserve;
     },
 
     setPreflightResult(state, action: PayloadAction<PreflightResult | null>) {
@@ -249,6 +329,7 @@ export const {
   dismissBanner,
   showBannerAgain,
   resetSessionStats,
+  updateSessionStats,
   setPreflightResult,
   clearPreflight,
   setFirewallActivity,

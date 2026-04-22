@@ -39,7 +39,24 @@ export const ENDPOINTS = {
     modelsAdd: "/api/me/models/add",
     model: (id: string) => `/api/me/models/${encodeURIComponent(id)}`,
     provider: (slug: string) => `/api/me/providers/${encodeURIComponent(slug)}`,
+    /** List of the caller's personal + their org's providers. Use
+     *  this (not `providers.root`) in user-facing surfaces so data
+     *  is properly scoped — /api/providers returns the global table
+     *  unscoped and leaks across orgs. */
+    providers: "/api/me/providers",
     onboardingComplete: "/api/users/me/onboarding/complete",
+    // Org rules + skills the caller can browse + install. The
+    // `installRule`/`installSkill` builders take the numeric row id
+    // returned by the list endpoint (NOT the slug) because that's
+    // the stable reference across renames.
+    rules: "/api/me/rules",
+    rule: (slug: string) => `/api/me/rules/${encodeURIComponent(slug)}`,
+    installRule: (id: string | number) => `/api/me/rules/${id}/install`,
+    toggleRule: (id: string | number) => `/api/me/rules/${id}`,
+    skills: "/api/me/skills",
+    skill: (slug: string) => `/api/me/skills/${encodeURIComponent(slug)}`,
+    installSkill: (id: string | number) => `/api/me/skills/${id}/install`,
+    toggleSkill: (id: string | number) => `/api/me/skills/${id}`,
   },
 
   // ── Organizations ─────────────────────────────────────────────────
@@ -54,10 +71,26 @@ export const ENDPOINTS = {
     modelGrantsBulk: (orgId: string) => `/api/orgs/${encodeURIComponent(orgId)}/model-grants/bulk`,
     modelGrant: (orgId: string, grantId: string) =>
       `/api/orgs/${encodeURIComponent(orgId)}/model-grants/${encodeURIComponent(grantId)}`,
+    // Grants filtered to a single user — used by the Model Access tab so
+    // an admin can see what a specific user can already call before
+    // assigning more.
+    modelGrantsByUser: (orgId: string, userId: string) =>
+      `/api/orgs/${encodeURIComponent(orgId)}/model-grants/by-user/${encodeURIComponent(userId)}`,
+    // Org-curated rule + skill catalogues. Admins only — the matching
+    // user-facing subscription endpoints live under `ENDPOINTS.me`.
+    rules: (orgId: string) => `/api/orgs/${encodeURIComponent(orgId)}/rules`,
+    rule: (orgId: string, slug: string) =>
+      `/api/orgs/${encodeURIComponent(orgId)}/rules/${encodeURIComponent(slug)}`,
+    skills: (orgId: string) => `/api/orgs/${encodeURIComponent(orgId)}/skills`,
+    skill: (orgId: string, slug: string) =>
+      `/api/orgs/${encodeURIComponent(orgId)}/skills/${encodeURIComponent(slug)}`,
   },
 
   // ── Providers & models ────────────────────────────────────────────
   // `root` is the collection URL (GET = list, POST = create).
+  // `models` lists the model catalogue configured for an org provider —
+  // the Model Access tab uses it to populate the "Assign" dropdown so
+  // an admin can only grant models the org has actually set up.
   providers: {
     root: "/api/providers",
     one: (id: string) => `/api/providers/${encodeURIComponent(id)}`,
@@ -83,6 +116,11 @@ export const ENDPOINTS = {
     users: "/api/admin/users",
     user: (userId: string) => `/api/admin/users/${encodeURIComponent(userId)}`,
     userRole: (userId: string) => `/api/admin/users/${encodeURIComponent(userId)}/role`,
+    // Per-user model assignment (org admin only — requires
+    // `policies.edit` capability on the proxy side).
+    userModels: (userId: string) => `/api/admin/users/${encodeURIComponent(userId)}/models`,
+    userModel: (userId: string, modelId: string) =>
+      `/api/admin/users/${encodeURIComponent(userId)}/models/${encodeURIComponent(modelId)}`,
   },
 
   // ── Users ─────────────────────────────────────────────────────────

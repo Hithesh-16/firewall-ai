@@ -81,12 +81,29 @@ export const apiTokens = sqliteTable("api_tokens", {
 export const providers = sqliteTable("providers", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
+  /**
+   * `slug` was `.unique()` pre-multitenancy. Dropped here because two
+   * orgs can legitimately configure a provider with the same slug
+   * (e.g. both hold "openai"). Uniqueness is now `(org_id, slug)`,
+   * enforced by a composite index created in the inline migration in
+   * `database.ts`.
+   */
+  slug: text("slug").notNull(),
   baseUrl: text("base_url").notNull(),
   apiKeyEncrypted: text("api_key_encrypted").notNull(),
   enabled: integer("enabled").default(1),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
+  /**
+   * Multi-tenancy scoping column (added post-launch). Nullable only
+   * to keep the backfill migration idempotent; after the inline
+   * backfill in `database.ts` every row has a non-null value and
+   * new inserts always pass one. Routes filter by this column so a
+   * provider registered for org A can never leak into org B's view.
+   */
+  orgId: integer("org_id").references(() => organizations.id, {
+    onDelete: "cascade",
+  }),
 });
 
 export const models = sqliteTable("models", {

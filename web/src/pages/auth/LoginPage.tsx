@@ -3,11 +3,11 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeftIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { cn } from "../../utils/cn";
 import { useAppDispatch } from "../../store/hooks";
-import { setCredentials, setLoading } from "../../store/slices/authSlice";
+import { setCredentials, setLoading, logout } from "../../store/slices/authSlice";
 import { fetchUserPermissions } from "../../store/slices/permissionsSlice";
 import { apiClient } from "../../api/client";
 import { ENDPOINTS } from "../../api/endpoints";
-import { setToken } from "../../utils/storage";
+import { clearToken, getToken, setToken } from "../../utils/storage";
 import { ROUTES } from "../../utils/routes";
 import type { AuthResponse } from "../../api/types";
 import { config } from "../../config/env";
@@ -145,6 +145,19 @@ export function LoginPage() {
   const [loading, setLoadingLocal] = useState(false);
   const [ssoProviders, setSsoProviders] = useState<string[]>([]);
 
+  // IDE/CLI handoff reuse: when the user arrives via `?from=extension`
+  // and is already signed in (valid token in localStorage), show a
+  // confirmation card instead of the sign-in form so they don't have
+  // to re-enter credentials the browser session already trusts. The
+  // confirmation is mandatory — auto-relaying the token silently would
+  // let a malicious open tab steal an IDE session.
+  const [reuseState, setReuseState] = useState<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "offer"; user: AuthResponse["user"]; token: string }
+    | { kind: "relaying" }
+  >({ kind: "idle" });
+
   // Auth-guard redirection is owned by the `PublicOnly` route wrapper
   // (see src/routes/PublicOnly.tsx). It reads the token synchronously
   // from localStorage and bounces authenticated users to `?next` or
@@ -173,6 +186,58 @@ export function LoginPage() {
         );
       });
   }, []);
+
+  // Extension-flow session reuse: if the page was opened via
+  // /web-login-start AND the browser already has a valid session,
+  // skip the form and offer to hand that session to the IDE/CLI.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("from") !== "extension") return;
+    const existingToken = getToken();
+    if (!existingToken) return;
+
+    let cancelled = false;
+    setReuseState({ kind: "checking" });
+
+    apiClient
+      .get<{ user: AuthResponse["user"] }>(ENDPOINTS.auth.me)
+      .then((data) => {
+        if (cancelled) return;
+        setReuseState({ kind: "offer", user: data.user, token: existingToken });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Token is stale — drop it silently and fall back to the
+        // normal sign-in form. We don't surface an error because
+        // the user never actively tried to sign in yet.
+        clearToken();
+        dispatch(logout());
+        setReuseState({ kind: "idle" });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleUseDifferentAccount() {
+    clearToken();
+    dispatch(logout());
+    setReuseState({ kind: "idle" });
+  }
+
+  async function handleContinueAsCurrentUser() {
+    if (reuseState.kind !== "offer") return;
+    const { user, token } = reuseState;
+    setReuseState({ kind: "relaying" });
+    try {
+      await finishSignIn(user, token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to continue");
+      setReuseState({ kind: "idle" });
+    }
+  }
 
   /**
    * Post-success housekeeping shared by every sign-in path:
@@ -219,10 +284,42 @@ export function LoginPage() {
       const extInfo = decodeExtPayload(extRaw);
       if (extInfo) {
         if (extInfo.return === "vscode" && extInfo.callback) {
+          // `asExternalUri` in some VS Code forks (Antigravity, Cursor,
+          // Windsurf) returns a URI that already has a query string —
+          // blindly appending "?token=..." produces a malformed URL.
+          // Pick the correct separator up front.
           const stateQs = extInfo.state ? `&state=${encodeURIComponent(extInfo.state)}` : "";
-          const target = `${extInfo.callback}?token=${encodeURIComponent(token)}${stateQs}`;
-          window.location.replace(target);
-          return;
+          const sep = extInfo.callback.includes("?") ? "&" : "?";
+          const target = `${extInfo.callback}${sep}token=${encodeURIComponent(token)}${stateQs}`;
+
+          // Hand off to the OS URI handler via a hidden <a> click
+          // rather than `window.location.replace(target)`. A top-level
+          // navigation to a custom scheme (`antigravity:`, `cursor:`)
+          // often leaves the tab on a "nothing happened" state —
+          // either the browser's confirm prompt fires and the user
+          // cancels, or the tab just sits on the original URL. In
+          // both cases the web session is also now signed in
+          // (token + user are already in Redux + localStorage), so
+          // we want to *continue* on to the dashboard after the
+          // handoff instead of stranding the user on /login. The
+          // anchor click triggers the protocol handler without
+          // navigating the tab, so the SPA router can keep running.
+          try {
+            const a = document.createElement("a");
+            a.href = target;
+            a.style.display = "none";
+            a.rel = "noopener";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          } catch {
+            // Fallback to the old behaviour if the DOM trick fails
+            // for any reason — at least the IDE still gets the token.
+            window.location.replace(target);
+            return;
+          }
+          // Fall through to the onboarding / dashboard navigate()
+          // below so the browser tab ends up signed in too.
         }
         if ((extInfo.return === "cli" || extInfo.return === "jetbrains") && extInfo.port) {
           // CRITICAL: the loopback server in @ai-firewall/shared-auth
@@ -338,12 +435,22 @@ export function LoginPage() {
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandShield size={72} pulse />
           <h1 className="mt-6 text-3xl font-bold tracking-tight text-white">
-            {tab === "login" ? "Welcome back" : "Welcome to AI Firewall"}
+            {reuseState.kind === "offer" ||
+            reuseState.kind === "checking" ||
+            reuseState.kind === "relaying"
+              ? "Continue to your IDE"
+              : tab === "login"
+                ? "Welcome back"
+                : "Welcome to AI Firewall"}
           </h1>
           <p className="mt-2 max-w-xs text-sm text-slate-400">
-            {tab === "login"
-              ? "Sign in to your secure AI workspace"
-              : "Create an account to start firewalling your AI"}
+            {reuseState.kind === "offer" ||
+            reuseState.kind === "checking" ||
+            reuseState.kind === "relaying"
+              ? "You're already signed in — confirm to hand this session to the IDE."
+              : tab === "login"
+                ? "Sign in to your secure AI workspace"
+                : "Create an account to start firewalling your AI"}
           </p>
         </div>
 
@@ -352,8 +459,109 @@ export function LoginPage() {
           {/* Top accent line */}
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
 
-          {/* SSO buttons */}
-          {ssoProviders.length > 0 && (
+          {/* Extension reuse: skip the sign-in form when a valid
+              browser session already exists. */}
+          {reuseState.kind === "checking" && (
+            <div className="flex items-center justify-center gap-3 py-8 text-sm text-slate-400">
+              <svg
+                className="h-4 w-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              Checking your session…
+            </div>
+          )}
+
+          {reuseState.kind === "offer" && (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-4">
+                <p className="text-xs uppercase tracking-wider text-emerald-300/80">Signed in as</p>
+                <p className="mt-1 text-base font-semibold text-slate-100">
+                  {reuseState.user.name || reuseState.user.email}
+                </p>
+                <p className="text-xs text-slate-400">{reuseState.user.email}</p>
+              </div>
+
+              <p className="text-xs text-slate-400">
+                Approving will send your existing access token to the IDE / CLI that opened this
+                page. You can switch accounts instead if this isn't the profile you want the IDE to
+                use.
+              </p>
+
+              {error && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  onClick={handleContinueAsCurrentUser}
+                  className={cn(
+                    "relative flex w-full items-center justify-center overflow-hidden rounded-xl px-4 py-3 text-sm font-semibold text-white transition-all",
+                    "bg-gradient-to-r from-emerald-500 to-cyan-500",
+                    "shadow-[0_0_30px_rgba(16,185,129,0.35)]",
+                    "hover:scale-[1.02] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)]",
+                  )}
+                >
+                  Continue as {reuseState.user.name || reuseState.user.email}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUseDifferentAccount}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:border-slate-600 hover:text-white"
+                >
+                  Use a different account
+                </button>
+              </div>
+            </div>
+          )}
+
+          {reuseState.kind === "relaying" && (
+            <div className="flex items-center justify-center gap-3 py-8 text-sm text-slate-300">
+              <svg
+                className="h-4 w-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              Handing off to the IDE…
+            </div>
+          )}
+
+          {/* Normal sign-in form — only when the session reuse path
+              isn't active. */}
+          {reuseState.kind === "idle" && ssoProviders.length > 0 && (
             <>
               <div className="mb-5 space-y-2.5">
                 {ssoProviders.map((provider) => {
@@ -390,190 +598,205 @@ export function LoginPage() {
             </>
           )}
 
-          {/* Tab toggle */}
-          <div className="mb-5 flex rounded-lg border border-slate-800 bg-slate-950/60 p-1">
-            <button
-              type="button"
-              className={cn(
-                "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-all",
-                tab === "login"
-                  ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-white shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)]"
-                  : "text-slate-400 hover:text-slate-200",
-              )}
-              onClick={() => {
-                setTab("login");
-                setError(null);
-              }}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-all",
-                tab === "register"
-                  ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-white shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)]"
-                  : "text-slate-400 hover:text-slate-200",
-              )}
-              onClick={() => {
-                setTab("register");
-                setError(null);
-              }}
-            >
-              Create Account
-            </button>
-          </div>
-
-          {/* Error banner */}
-          {error && (
-            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              {error}
-            </div>
-          )}
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {tab === "register" && (
-              <div>
-                <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-slate-200">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  required
-                  autoComplete="name"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                />
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-200">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                autoComplete="email"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-200">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={
-                    tab === "register" ? "Create a password (8+ characters)" : "Enter your password"
-                  }
-                  required
-                  minLength={tab === "register" ? 8 : undefined}
-                  autoComplete={tab === "register" ? "new-password" : "current-password"}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 pr-11 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                />
+          {/* Tab toggle — hidden when the session-reuse path is active. */}
+          {reuseState.kind === "idle" && (
+            <>
+              <div className="mb-5 flex rounded-lg border border-slate-800 bg-slate-950/60 p-1">
                 <button
                   type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition-colors hover:text-slate-200"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5" />
+                  className={cn(
+                    "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-all",
+                    tab === "login"
+                      ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-white shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)]"
+                      : "text-slate-400 hover:text-slate-200",
                   )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className={cn(
-                "relative flex w-full items-center justify-center overflow-hidden rounded-xl px-4 py-3 text-sm font-semibold text-white transition-all",
-                "bg-gradient-to-r from-emerald-500 to-cyan-500",
-                "shadow-[0_0_30px_rgba(16,185,129,0.35)]",
-                "hover:scale-[1.02] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)]",
-                "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100",
-              )}
-            >
-              {loading ? (
-                <>
-                  <svg
-                    className="mr-2 h-4 w-4 animate-spin"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                  {primaryButtonBusyLabel}
-                </>
-              ) : (
-                primaryButtonIdleLabel
-              )}
-            </button>
-          </form>
-
-          {/* Footer link */}
-          <p className="mt-6 text-center text-sm text-slate-400">
-            {tab === "login" ? (
-              <>
-                Don&apos;t have an account?{" "}
-                <button
-                  type="button"
-                  className="font-medium text-emerald-400 transition-colors hover:text-emerald-300"
-                  onClick={() => {
-                    setTab("register");
-                    setError(null);
-                  }}
-                >
-                  Create one
-                </button>
-              </>
-            ) : (
-              <>
-                Already have an account?{" "}
-                <button
-                  type="button"
-                  className="font-medium text-emerald-400 transition-colors hover:text-emerald-300"
                   onClick={() => {
                     setTab("login");
                     setError(null);
                   }}
                 >
-                  Sign in
+                  Sign In
                 </button>
-              </>
-            )}
-          </p>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-all",
+                    tab === "register"
+                      ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-white shadow-[inset_0_0_0_1px_rgba(16,185,129,0.35)]"
+                      : "text-slate-400 hover:text-slate-200",
+                  )}
+                  onClick={() => {
+                    setTab("register");
+                    setError(null);
+                  }}
+                >
+                  Create Account
+                </button>
+              </div>
+
+              {/* Error banner */}
+              {error && (
+                <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {error}
+                </div>
+              )}
+
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {tab === "register" && (
+                  <div>
+                    <label
+                      htmlFor="name"
+                      className="mb-1.5 block text-sm font-medium text-slate-200"
+                    >
+                      Name
+                    </label>
+                    <input
+                      id="name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your name"
+                      required
+                      autoComplete="name"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="mb-1.5 block text-sm font-medium text-slate-200"
+                  >
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    autoComplete="email"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="password"
+                    className="mb-1.5 block text-sm font-medium text-slate-200"
+                  >
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={
+                        tab === "register"
+                          ? "Create a password (8+ characters)"
+                          : "Enter your password"
+                      }
+                      required
+                      minLength={tab === "register" ? 8 : undefined}
+                      autoComplete={tab === "register" ? "new-password" : "current-password"}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3 pr-11 text-slate-100 placeholder:text-slate-500 transition-colors focus:border-emerald-500/60 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition-colors hover:text-slate-200"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeSlashIcon className="h-5 w-5" />
+                      ) : (
+                        <EyeIcon className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={cn(
+                    "relative flex w-full items-center justify-center overflow-hidden rounded-xl px-4 py-3 text-sm font-semibold text-white transition-all",
+                    "bg-gradient-to-r from-emerald-500 to-cyan-500",
+                    "shadow-[0_0_30px_rgba(16,185,129,0.35)]",
+                    "hover:scale-[1.02] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)]",
+                    "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100",
+                  )}
+                >
+                  {loading ? (
+                    <>
+                      <svg
+                        className="mr-2 h-4 w-4 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                      {primaryButtonBusyLabel}
+                    </>
+                  ) : (
+                    primaryButtonIdleLabel
+                  )}
+                </button>
+              </form>
+
+              {/* Footer link */}
+              <p className="mt-6 text-center text-sm text-slate-400">
+                {tab === "login" ? (
+                  <>
+                    Don&apos;t have an account?{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-emerald-400 transition-colors hover:text-emerald-300"
+                      onClick={() => {
+                        setTab("register");
+                        setError(null);
+                      }}
+                    >
+                      Create one
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-emerald-400 transition-colors hover:text-emerald-300"
+                      onClick={() => {
+                        setTab("login");
+                        setError(null);
+                      }}
+                    >
+                      Sign in
+                    </button>
+                  </>
+                )}
+              </p>
+            </>
+          )}
         </div>
 
         {/* Bottom text */}

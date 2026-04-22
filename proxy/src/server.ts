@@ -28,7 +28,7 @@ import { registerSSORoutes } from "./routes/sso.route";
 import { registerAuthHandoffRoutes } from "./routes/authHandoff.route";
 import { registerMeRoutes } from "./routes/me.route";
 import { registerModelGrantRoutes } from "./routes/modelGrants.route";
-import { registerOrgAssistantRoutes } from "./routes/orgAssistants.route";
+import { registerOrgCatalogueRoutes } from "./routes/orgCatalogue.route";
 import { registerUserModelRoutes } from "./routes/userModels.route";
 import { registerWebLoginBridgeRoutes } from "./routes/webLoginBridge.route";
 import { registerPublicConfigRoute } from "./routes/publicConfig.route";
@@ -227,8 +227,13 @@ async function bootstrap(): Promise<void> {
   // assistant, models, personal providers).
   await registerMeRoutes(app);
 
-  // Phase F (slice 1) — admin provisioning of org-level assistants.
-  await registerOrgAssistantRoutes(app);
+  // Org-curated rules + skills catalogue. Admins create items under
+  // `/api/orgs/:orgId/{rules,skills}`; users browse + install them
+  // via `/api/me/{rules,skills}`. Installed items are mirrored to
+  // `~/.ai-firewall/rules/<slug>.md` and `~/.ai-firewall/skills/
+  // <slug>/SKILL.md`. Personal rules/MCP/prompts are local files
+  // only — they do NOT go through this route.
+  await registerOrgCatalogueRoutes(app);
 
   // Phase F (slice 2) — admin CRUD for model access grants (legacy).
   await registerModelGrantRoutes(app);

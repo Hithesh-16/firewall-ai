@@ -873,18 +873,24 @@ const UserInput: React.FC<UserInputProps> = ({
     <Box flexDirection="column">
       <InterruptedBanner wasInterrupted={!!wasInterrupted} />
 
-      {/* Input box */}
+      {/* Input box — P12a: emerald accent rail on the left edge when
+           the input is in normal-chat mode (bash / remote modes keep
+           their distinct color so users see the mode at a glance). */}
       <Box
         borderStyle="round"
         borderTop={true}
         paddingX={1}
-        borderColor={showBashMode ? "yellow" : isRemoteMode ? "cyan" : "gray"}
+        borderColor={
+          showBashMode ? "yellow" : isRemoteMode ? "cyan" : "greenBright"
+        }
       >
         <Text
-          color={showBashMode ? "yellow" : isRemoteMode ? "cyan" : "blue"}
+          color={
+            showBashMode ? "yellow" : isRemoteMode ? "cyan" : "greenBright"
+          }
           bold
         >
-          {showBashMode ? "$ " : isRemoteMode ? "◉ " : "● "}
+          {showBashMode ? "$ " : isRemoteMode ? "◉ " : "▎ "}
         </Text>
         {renderInputText()}
       </Box>

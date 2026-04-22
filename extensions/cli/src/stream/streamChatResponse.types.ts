@@ -19,6 +19,16 @@ export interface UsageStats {
   cost?: number;
   contextUtilization?: number;
   maxContextTokens?: number;
+  /** Cached input tokens served at the discounted cache-read rate.
+   *  Provider-dependent (Anthropic, OpenAI, Gemini surface it; others
+   *  return undefined). Shown in green in the CLI footer. */
+  cacheReadTokens?: number;
+  /** Newly-cached input tokens (cache-write, billed at 1.25x or 2x
+   *  input on Anthropic). Shown in cyan in the CLI footer. */
+  cacheWriteTokens?: number;
+  /** Thinking / reasoning tokens for extended-thinking models.
+   *  Shown in magenta in the CLI footer. */
+  reasoningTokens?: number;
 }
 
 export interface PlanUpdate {

@@ -1,4 +1,8 @@
-import { deleteAuthFile, loadAuthFile } from "@ai-firewall/shared-auth";
+import {
+  clearUserArtefacts,
+  deleteAuthFile,
+  loadAuthFile,
+} from "@ai-firewall/shared-auth";
 import chalk from "chalk";
 
 import { clearAssistantCache } from "../apiAssistantLoader.js";
@@ -59,6 +63,13 @@ export async function logout(): Promise<void> {
 
   // Step 3 — local cleanup. Always runs, even if the proxy calls
   // above failed.
+  //
+  // `clearUserArtefacts` removes every identity-bound file under
+  // `~/.ai-firewall/`: auth.json, config.yaml (unless the user
+  // flagged it `# user-managed: true`), the sync cache, CLI
+  // sessions, and the legacy cli-state.json. Without this, the
+  // next user to sign in inherits the previous account's models
+  // and conversation history.
   try {
     deleteAuthFile();
   } catch {
@@ -68,6 +79,11 @@ export async function logout(): Promise<void> {
     clearAssistantCache();
   } catch {
     /* ignore */
+  }
+  try {
+    clearUserArtefacts();
+  } catch {
+    /* best-effort */
   }
   try {
     legacyWorkosLogout();

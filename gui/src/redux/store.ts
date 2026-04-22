@@ -24,6 +24,7 @@ import securityReducer from "./slices/securitySlice";
 import sessionReducer from "./slices/sessionSlice";
 import tabsReducer from "./slices/tabsSlice";
 import taskReducer from "./slices/taskSlice";
+import todosReducer from "./slices/todosSlice";
 import memoryReducer from "./slices/memorySlice";
 import permissionReducer from "./slices/permissionSlice";
 import uiReducer from "./slices/uiSlice";
@@ -39,6 +40,7 @@ const rootReducer = combineReducers({
   security: securityReducer,
   agent: agentReducer,
   tasks: taskReducer,
+  todos: todosReducer,
   memory: memoryReducer,
   permissions: permissionReducer,
 });

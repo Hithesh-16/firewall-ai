@@ -9,13 +9,18 @@ import { LocalStorageProvider } from "../context/LocalStorage";
 import TelemetryProviders from "../hooks/TelemetryProviders";
 import { useWebviewListener } from "../hooks/useWebviewListener";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
+import { EMPTY_CONFIG, updateConfig } from "../redux/slices/configSlice";
 import { setCodeToEdit } from "../redux/slices/editState";
+import {
+  setOrganizations,
+  setSelectedOrgId,
+  setSelectedProfile,
+} from "../redux/slices/profilesSlice";
 import { setDialogMessage, setShowDialog } from "../redux/slices/uiSlice";
 import { enterEdit, exitEdit } from "../redux/thunks/edit";
 import { saveCurrentSession } from "../redux/thunks/session";
 import { fontSize, isMetaEquivalentKeyPressed } from "../util";
 import { ROUTES } from "../util/navigation";
-import { AuthStatusBar } from "./AuthStatusBar";
 import { FatalErrorIndicator } from "./config/FatalErrorNotice";
 import TextDialog from "./dialogs";
 import { GenerateRuleDialog } from "./GenerateRuleDialog";
@@ -138,20 +143,56 @@ const Layout = () => {
 
     // Identity actually changed — drop the in-progress chat so it
     // isn't visible to the next user (or to the "no user" state).
-    try {
-      if (isInEdit) {
-        await dispatch(exitEdit({}));
-      } else {
-        await dispatch(
-          saveCurrentSession({
-            openNewSession: true,
-            generateTitle: false,
-          }),
-        );
+    // Race the cleanup against a 500 ms budget: the save-session
+    // thunk can stall if the control plane is slow (especially after
+    // a sign-out where the token has just been revoked), and we'd
+    // rather flicker the chat away on the way out than leave the
+    // user stranded on a Layout that never navigates. The sync
+    // fallback resolves immediately if the thunk wins, or aborts the
+    // await so the navigate still fires.
+    const cleanup = (async () => {
+      try {
+        if (isInEdit) {
+          await dispatch(exitEdit({}));
+        } else {
+          await dispatch(
+            saveCurrentSession({
+              openNewSession: true,
+              generateTitle: false,
+            }),
+          );
+        }
+      } catch {
+        /* non-fatal */
       }
-    } catch {
-      /* non-fatal — next render will still show the new user */
-    }
+    })();
+    const budget = new Promise<void>((resolve) => setTimeout(resolve, 500));
+    await Promise.race([cleanup, budget]);
+
+    // Clear every slice that redux-persist rehydrated from the
+    // previous user's session. Three slices carry user-specific
+    // data that would otherwise survive a sign-out:
+    //
+    //   1. `profiles`   — orgs list + selectedProfileId / selectedOrgId.
+    //   2. `config`     — the full BrowserSerializedContinueConfig,
+    //                     including `modelsByRole` + `selectedModelByRole`.
+    //                     This is what the model dropdown actually
+    //                     reads (see `ModelSelect.tsx` → `state.config`),
+    //                     so without resetting it the picker keeps
+    //                     showing User A's models until Continue core's
+    //                     next `configUpdate` event fires — which can
+    //                     be seconds later and is what the user was
+    //                     seeing as "stale previous-user models".
+    //
+    // We reset `config` to `EMPTY_CONFIG` (not undefined) so
+    // components that read `state.config.config.modelsByRole.*`
+    // don't crash on the intermediate empty state — the
+    // extension's next `configUpdate` push will repopulate within
+    // a tick.
+    dispatch(setOrganizations([]));
+    dispatch(setSelectedOrgId(null));
+    dispatch(setSelectedProfile(null));
+    dispatch(updateConfig(EMPTY_CONFIG));
 
     navigate(signedIn ? ROUTES.HOME : ROUTES.LOGIN);
   };
@@ -372,7 +413,6 @@ const Layout = () => {
         </GridDiv>
       </div>
       <div style={{ fontSize: fontSize(-4) }} id="tooltip-portal-div" />
-      <AuthStatusBar />
     </LayoutTopDiv>
   );
 

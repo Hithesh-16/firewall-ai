@@ -42,6 +42,13 @@ export interface UserModelPublic {
   roles: string[];
   createdAt: number;
   updatedAt: number;
+  /**
+   * The user_id of the admin who assigned this model, or null when the
+   * end user added it themselves. Lets the /settings/models UI render
+   * an "Assigned by org" badge and gate the delete button for
+   * org-assigned models.
+   */
+  createdBy: number | null;
 }
 
 interface RawRow {
@@ -95,6 +102,7 @@ function rowToPublic(row: RawRow): UserModelPublic {
     roles: parseRoles(row.roles),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    createdBy: row.created_by,
   };
 }
 

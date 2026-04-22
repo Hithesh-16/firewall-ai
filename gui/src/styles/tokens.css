@@ -1,0 +1,225 @@
+/**
+ * Kilocode-parity design tokens + keyframes.
+ *
+ * All values resolve from VS Code theme variables first, with sane
+ * fallbacks for when the webview runs outside a VS Code host (e.g.
+ * standalone dev preview). Exposed to Tailwind via tailwind.config.cjs
+ * so components can use `text-weak`, `bg-surface-inset`, `bg-diff-add`,
+ * `animate-shimmer`, etc.
+ *
+ * Groups:
+ *   - Text hierarchy       (--text-weak/base/strong/success)
+ *   - Surface hierarchy    (--surface-base, --surface-inset-base)
+ *   - Borders              (--border-weak-base, --border-focus)
+ *   - Radii                (--radius-sm/md/lg)
+ *   - Timeline swatches    (--tl-user/read/write/tool/success/error/reasoning)
+ *   - Diff surfaces        (--surface-diff-add/del/gutter)
+ *
+ * Keyframes: shimmer (Thinking… gradient), timeline-fade-in,
+ * timeline-pulse.
+ */
+
+:root {
+  /* ── Text hierarchy ───────────────────────────────────────── */
+  --text-weak: var(--vscode-descriptionForeground, #858585);
+  --text-base: var(--vscode-foreground, #cccccc);
+  --text-strong: var(--vscode-editor-foreground, #ffffff);
+  --text-success: var(--vscode-testing-iconPassed, #5cb85c);
+
+  /* ── Surfaces ─────────────────────────────────────────────── */
+  --surface-base: var(--vscode-editor-background, #1e1e1e);
+  --surface-inset-base: var(--vscode-sideBar-background, #252526);
+  --surface-inset-base-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+
+  /* ── Borders ──────────────────────────────────────────────── */
+  --border-weak-base: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  --border-focus: var(--vscode-focusBorder, #007fd4);
+
+  /* ── Radii ────────────────────────────────────────────────── */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* ── Timeline swatches ────────────────────────────────────── */
+  --tl-user: var(--vscode-textLink-foreground, #3794ff);
+  --tl-read: var(--vscode-charts-blue, #4e9eff);
+  --tl-write: var(--vscode-charts-green, #4ec9b0);
+  --tl-tool: var(--vscode-charts-purple, #c586c0);
+  --tl-success: var(--vscode-testing-iconPassed, #5cb85c);
+  --tl-error: var(--vscode-errorForeground, #f48771);
+  --tl-reasoning: var(--vscode-descriptionForeground, #858585);
+
+  /* ── Diff surfaces ────────────────────────────────────────── */
+  --surface-diff-add: color-mix(in srgb, #4ec9b0 12%, transparent);
+  --surface-diff-del: color-mix(in srgb, #f48771 14%, transparent);
+  --surface-diff-gutter: color-mix(in srgb, var(--text-base) 6%, transparent);
+
+  /* ── AI Firewall identity palette (P1 polish pass) ──────────
+   * Accent = emerald (trusted / safe) + info = cyan (precise / technical).
+   * Applied only on product-identity surfaces (CTAs, active nav, loaders,
+   * headers). Semantic roles (error/warning/success) keep the VS Code
+   * theme tokens so the editor's color story still dominates. */
+  --af-accent: #10b981;
+  --af-accent-hover: #059669;
+  --af-accent-glow: rgba(16, 185, 129, 0.18);
+  --af-info: #06b6d4;
+  --af-info-glow: rgba(6, 182, 212, 0.18);
+  --af-danger: #ef4444;
+  --af-warning: #f59e0b;
+
+  /* Premium surface hierarchy — only used by the web dashboard shell
+   * so it reads as a branded product, not a stripped VS Code panel. */
+  --af-surface-deep: #0b0f14;
+  --af-surface-raised: #1e293b;
+  --af-hairline: rgba(148, 163, 184, 0.14);
+
+  /* ── Type scale (P1) ────────────────────────────────────────
+   * Three sizes, each with a purpose. Consumers use the Tailwind
+   * utilities text-af-caption / body / heading rather than raw px. */
+  --af-caption-size: 11px;
+  --af-caption-line: 1.4;
+  --af-body-size: 13px;
+  --af-body-line: 1.55;
+  --af-heading-size: 16px;
+  --af-heading-line: 1.3;
+}
+
+/* ── Keyframes ──────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes timeline-fade-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes timeline-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ── AI Firewall motion vocabulary (P1) ────────────────────────
+ * Six named animations, one verb each. Any new component picks
+ * from this set rather than inventing.
+ *
+ *   af-pulse      "live, security-active" — halo around firewall/scanner icons
+ *   af-progress   "multi-step pipeline" — gradient sweep on indeterminate bars
+ *   af-pop-in     "content just arrived" — scale+fade on new toasts/messages
+ *   af-slide-down "drawer opening" — accordions, dropdowns, consent cards
+ *   af-bounce     "success confirmation" — copy/save/grant check mark
+ *
+ * `shimmer` already exists above (used for Thinking... labels).
+ */
+
+@keyframes af-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.75;
+  }
+}
+
+@keyframes af-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes af-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes af-slide-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+    max-height: 0;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 2000px;
+  }
+}
+
+@keyframes af-bounce {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes af-stroke-draw {
+  0% {
+    stroke-dashoffset: 32;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+/* ── Accessibility: honour prefers-reduced-motion ─────────────
+ * Infinite animations collapse to static; one-shot transitions
+ * become instant. Applied at the keyframe level so any component
+ * that references these utilities inherits the behaviour without
+ * extra code. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer,
+  .animate-timeline-pulse,
+  .animate-af-pulse,
+  .animate-af-progress {
+    animation: none !important;
+  }
+  .animate-timeline-fade-in,
+  .animate-af-pop-in,
+  .animate-af-slide-down,
+  .animate-af-bounce {
+    animation-duration: 0.01ms !important;
+  }
+}

@@ -496,12 +496,50 @@ export async function processStreamingResponse(
       duration: totalDuration,
     });
 
+    // CLI-TOK: surface token breakdown via formatTokenUsage so cache
+    // and reasoning columns render alongside the in/out totals. The
+    // previous hardcoded "[Tokens: X in, Y out]" line dropped cache
+    // data on the floor even when the provider emitted it. Pulls cache
+    // + reasoning fields off the OpenAI-style `prompt_tokens_details`
+    // and `completion_tokens_details` bags; undefined when the provider
+    // doesn't surface them (and then the chips auto-hide).
+    const cacheReadTokens =
+      fullUsage?.prompt_tokens_details?.cache_read_tokens ??
+      fullUsage?.prompt_tokens_details?.cached_tokens ??
+      undefined;
+    const cacheWriteTokens =
+      fullUsage?.prompt_tokens_details?.cache_write_tokens ??
+      fullUsage?.prompt_tokens_details?.cache_creation_input_tokens ??
+      undefined;
+    const reasoningTokens =
+      fullUsage?.completion_tokens_details?.reasoning_tokens ?? undefined;
+
+    // Surface the token footer where the user actually sees it — the
+    // chat stream. `logger.info` goes to a file; the user's TUI is
+    // driven by `onSystemMessage` which posts a dim line under the
+    // assistant's response. CLI-TOK: this is the fix for "I don't see
+    // token visibility in the CLI" — the old hardcoded "[Tokens:...]"
+    // line was going to the log file, not the terminal.
     if (!isHeadless) {
-      const yellow = "\x1b[33m";
-      const reset = "\x1b[0m";
-      logger.info(
-        `${yellow}[Tokens: ${inputTokens} in, ${outputTokens} out]${reset}`,
+      const { formatTokenUsage } = await import("../util/sessionMetrics.js");
+      const line = formatTokenUsage(
+        {
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens: inputTokens + outputTokens,
+          cacheReadTokens,
+          cacheWriteTokens,
+          reasoningTokens,
+        },
+        cost ? { cost } : undefined,
       );
+      if (line) {
+        if (callbacks?.onSystemMessage) {
+          callbacks.onSystemMessage(line);
+        }
+        // Keep a log-file record too for debugging / postmortem.
+        logger.info(line);
+      }
     }
 
     if (callbacks?.onUsageStats) {
@@ -510,6 +548,9 @@ export async function processStreamingResponse(
         completionTokens: outputTokens,
         totalTokens: inputTokens + outputTokens,
         cost,
+        cacheReadTokens,
+        cacheWriteTokens,
+        reasoningTokens,
       });
     }
 

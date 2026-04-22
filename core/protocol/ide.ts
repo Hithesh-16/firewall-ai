@@ -112,6 +112,18 @@ export type ScanResult = {
   }[];
   tokensUsed?: number;
   cost?: number;
+  // Kilocode-parity token breakdown — forwarded from the proxy's
+  // X-AF-* headers through the VsCode extension → webview bridge.
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  contextUsed?: number;
+  contextTokens?: number;
+  contextLimit?: number;
+  contextMax?: number;
+  outputReserve?: number;
 };
 
 export type ToWebviewOrCoreFromIdeProtocol = {

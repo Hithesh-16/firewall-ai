@@ -63,6 +63,7 @@ export function resolveGatewayRouteForUser(
     enabled: true,
     createdAt: um.createdAt,
     updatedAt: um.updatedAt,
+    orgId: null,
   };
 
   const syntheticModel: Model = {
@@ -244,10 +245,31 @@ export function normalizeGeminiResponse(
   };
 }
 
+/**
+ * Extended token-usage shape (kilocode-parity).
+ *
+ * Beyond the raw input/output counts, this now surfaces:
+ *   - cache-read tokens (10% input cost on Anthropic/OpenAI)
+ *   - cache-write tokens (1.25x / 2x input cost on Anthropic)
+ *   - reasoning tokens (extended thinking on Claude, o1 "reasoning"
+ *     tokens on OpenAI, thoughtsTokenCount on Gemini Flash Thinking)
+ *
+ * When a provider doesn't surface a field, it's 0 — the UI hides
+ * empty columns automatically.
+ */
+export interface TokenUsageBreakdown {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  reasoningTokens: number;
+}
+
 export function extractTokenUsage(
   providerSlug: string,
   responseData: Record<string, unknown>,
-): { inputTokens: number; outputTokens: number; totalTokens: number } {
+): TokenUsageBreakdown {
   const slug = providerSlug.toLowerCase();
 
   if (slug.includes("anthropic") || slug.includes("claude")) {
@@ -255,11 +277,23 @@ export function extractTokenUsage(
       | {
           input_tokens?: number;
           output_tokens?: number;
+          cache_read_input_tokens?: number;
+          cache_creation_input_tokens?: number;
         }
       | undefined;
     const inp = usage?.input_tokens ?? 0;
     const out = usage?.output_tokens ?? 0;
-    return { inputTokens: inp, outputTokens: out, totalTokens: inp + out };
+    return {
+      inputTokens: inp,
+      outputTokens: out,
+      totalTokens: inp + out,
+      cacheReadTokens: usage?.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: usage?.cache_creation_input_tokens ?? 0,
+      // Anthropic doesn't separate reasoning in the usage block — it
+      // counts as output. Extended thinking users can infer from
+      // output_tokens being larger than the final message text.
+      reasoningTokens: 0,
+    };
   }
 
   if (slug.includes("google") || slug.includes("gemini")) {
@@ -268,12 +302,17 @@ export function extractTokenUsage(
           promptTokenCount?: number;
           candidatesTokenCount?: number;
           totalTokenCount?: number;
+          cachedContentTokenCount?: number;
+          thoughtsTokenCount?: number;
         }
       | undefined;
     return {
       inputTokens: meta?.promptTokenCount ?? 0,
       outputTokens: meta?.candidatesTokenCount ?? 0,
       totalTokens: meta?.totalTokenCount ?? 0,
+      cacheReadTokens: meta?.cachedContentTokenCount ?? 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: meta?.thoughtsTokenCount ?? 0,
     };
   }
 
@@ -284,14 +323,23 @@ export function extractTokenUsage(
       totalTokens:
         ((responseData.prompt_eval_count as number) ?? 0) +
         ((responseData.eval_count as number) ?? 0),
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
     };
   }
 
+  // OpenAI-compatible (OpenAI, Groq, Mistral, DeepSeek, XAI, OpenRouter,
+  // Cohere, Together). Cache and reasoning token counts live in nested
+  // `*_details` objects; they're optional on the provider side so we
+  // default to 0 when missing.
   const usage = responseData.usage as
     | {
         prompt_tokens?: number;
         completion_tokens?: number;
         total_tokens?: number;
+        prompt_tokens_details?: { cached_tokens?: number };
+        completion_tokens_details?: { reasoning_tokens?: number };
       }
     | undefined;
 
@@ -299,5 +347,8 @@ export function extractTokenUsage(
     inputTokens: usage?.prompt_tokens ?? 0,
     outputTokens: usage?.completion_tokens ?? 0,
     totalTokens: usage?.total_tokens ?? 0,
+    cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens ?? 0,
+    cacheWriteTokens: 0,
+    reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens ?? 0,
   };
 }

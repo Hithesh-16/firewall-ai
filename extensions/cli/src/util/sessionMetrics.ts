@@ -6,6 +6,9 @@ export interface TokenUsage {
   totalTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  /** Thinking / reasoning tokens (Claude extended thinking, o1,
+   *  Gemini Flash Thinking). Displayed in magenta when present. */
+  reasoningTokens?: number;
 }
 
 export interface CostBreakdown {
@@ -65,10 +68,18 @@ export function formatTokenUsage(
   usage: TokenUsage,
   cost?: CostBreakdown,
 ): string {
-  if (!usage.promptTokens && !usage.completionTokens) {
-    return "";
-  }
+  const hasAny =
+    usage.promptTokens ||
+    usage.completionTokens ||
+    usage.cacheReadTokens ||
+    usage.cacheWriteTokens ||
+    usage.reasoningTokens;
+  if (!hasAny) return "";
 
+  // Kilocode-parity: in/out/total inline, then cache (green cache-read,
+  // cyan cache-write) and reasoning (magenta) as separate columns so
+  // a user skimming the line can spot which tokens were billable vs
+  // cached.
   const parts: string[] = [];
 
   if (usage.promptTokens) {
@@ -81,13 +92,27 @@ export function formatTokenUsage(
     parts.push(`total: ${formatTokens(usage.totalTokens)}`);
   }
 
-  const usageStr = chalk.dim(parts.join(" · "));
-
-  if (cost && cost.cost > 0) {
-    return `${usageStr} · ${formatCost(cost.cost)}`;
+  const base = chalk.dim(parts.join(" · "));
+  const extras: string[] = [];
+  if (usage.cacheReadTokens) {
+    extras.push(chalk.green(`cache↓ ${formatTokens(usage.cacheReadTokens)}`));
+  }
+  if (usage.cacheWriteTokens) {
+    extras.push(chalk.cyan(`cache↑ ${formatTokens(usage.cacheWriteTokens)}`));
+  }
+  if (usage.reasoningTokens) {
+    extras.push(chalk.magenta(`think ${formatTokens(usage.reasoningTokens)}`));
   }
 
-  return usageStr;
+  const line =
+    base && extras.length > 0
+      ? `${base} · ${extras.join(" · ")}`
+      : base || extras.join(" · ");
+
+  if (cost && cost.cost > 0) {
+    return `${line} · ${formatCost(cost.cost)}`;
+  }
+  return line;
 }
 
 export function formatContextUtilization(

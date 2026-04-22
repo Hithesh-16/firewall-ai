@@ -592,6 +592,44 @@ export async function registerAiRoute(app: FastifyInstance): Promise<void> {
             "X-AF-Cost",
             String(Math.round(cost * 1_000_000) / 1_000_000),
           );
+          // Kilocode-parity token breakdown. Zero values omitted so
+          // the GUI never renders "cache: 0" rows on providers that
+          // don't surface them.
+          reply.header("X-AF-Output-Tokens", String(tokenUsage.outputTokens));
+          if (tokenUsage.cacheReadTokens > 0) {
+            reply.header(
+              "X-AF-Cache-Read-Tokens",
+              String(tokenUsage.cacheReadTokens),
+            );
+          }
+          if (tokenUsage.cacheWriteTokens > 0) {
+            reply.header(
+              "X-AF-Cache-Write-Tokens",
+              String(tokenUsage.cacheWriteTokens),
+            );
+          }
+          if (tokenUsage.reasoningTokens > 0) {
+            reply.header(
+              "X-AF-Reasoning-Tokens",
+              String(tokenUsage.reasoningTokens),
+            );
+          }
+          // Context window snapshot — lets the ContextBar show how
+          // much of the model's context is currently consumed. Output
+          // reserve defaults to 4096 (matches checkContextWindow's
+          // internal default); once we thread model.maxCompletionTokens
+          // through gatewayModel we can emit a provider-specific
+          // reserve here.
+          if (ctxCheck?.totalTokens != null) {
+            reply.header("X-AF-Context-Used", String(ctxCheck.totalTokens));
+          }
+          if (ctxCheck?.maxContextTokens != null) {
+            reply.header(
+              "X-AF-Context-Limit",
+              String(ctxCheck.maxContextTokens),
+            );
+          }
+          reply.header("X-AF-Output-Reserve", "4096");
 
           // Response scanning (LLM05 defense) — scan LLM output for leaked secrets/PII
           const responseScanConfig = (policy as Record<string, unknown>)

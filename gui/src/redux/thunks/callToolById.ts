@@ -12,6 +12,7 @@ import {
   setToolCallCalling,
   updateToolCallOutput,
 } from "../slices/sessionSlice";
+import { setTodos, type TodoItem } from "../slices/todosSlice";
 import { ThunkApiType } from "../store";
 import { findToolCallById, logToolUsage } from "../util";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
@@ -127,6 +128,35 @@ export const callToolById = createAsyncThunk<
         mcpUiState,
       }),
     );
+
+    // Kilocode-parity: todoWrite/todoRead tools emit a context item
+    // with a `uri.type` discriminator. Mirror that list into the
+    // `todos` slice so TaskHeader > TodoStrip stays in sync with the
+    // agent's own view.
+    //
+    // The core ContextItem.uri.type is typed as "file" | "url" by
+    // core/index.d.ts; the plan tool sets type to an extension value
+    // via `as any`, and we follow suit here. Widen via a local cast
+    // so a narrow-type change in core doesn't propagate.
+    for (const item of output) {
+      const uri = item.uri as
+        | { type: string; value: string }
+        | null
+        | undefined;
+      if (!uri || (uri.type !== "todo_write" && uri.type !== "todo_read")) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(uri.value) as TodoItem[];
+        if (Array.isArray(parsed)) {
+          dispatch(setTodos(parsed));
+        }
+      } catch {
+        // Malformed payload — leave the existing list untouched so
+        // the user doesn't see the strip flash empty because of a
+        // single bad emit.
+      }
+    }
   }
 
   // Capture telemetry for tool call execution outcome with duration

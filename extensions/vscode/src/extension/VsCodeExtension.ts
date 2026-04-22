@@ -271,50 +271,77 @@ export class VsCodeExtension {
     });
     let lastAuthBroadcastKey: string | null = null;
     this.aiFirewallAuth.onDidChangeAuth(async (state) => {
-      const { refreshFileScope, clearFileScope } =
-        await import("../security/fileRestrictionChecker");
-      if (state.signedIn && state.token) {
-        await refreshFileScope(
-          this.proxyManager.proxyUrl ?? undefined,
-          state.token,
-        );
-        // Sign-in or token change → re-sync the assistant YAML
-        // so new models show up without a VS Code restart.
-        await runAssistantSync(state.token);
-      } else {
-        clearFileScope();
-      }
-      refreshRestrictedFileDecorations();
-
-      // Push the new auth state to every open webview so the chat
-      // UI can (a) clear the previous user's chat history via
-      // `newSession` and (b) render the sign-in gate when the user
-      // is no longer authenticated. `send()` is a fire-and-forget
-      // postMessage; if the webview hasn't booted yet the message
-      // is dropped, but the webview also polls `aiFirewall/getAuthState`
-      // on mount to cover that race.
+      // ── 1. Broadcast to the webview FIRST ──────────────────────
       //
-      // Skip the broadcast when nothing observable changed. Without
-      // this guard, file-watcher coalescing or duplicate fires after
-      // system sleep produced bursts of identical messages that
-      // accumulated in the webview's postMessage queue and replayed
-      // on wake, garbling the chat panel.
+      // Everything below (file-scope refresh, assistant sync, and
+      // especially `configHandler.refreshAll`) makes network calls
+      // that can stall for seconds — refreshAll hits the control
+      // plane, and on sign-out the token is invalid so the request
+      // may sit until it 401s. If we `await` any of those before
+      // posting `aiFirewall/authState`, the webview never sees the
+      // event and Layout's `reactToAuthChange` never runs, so the
+      // chat doesn't auto-navigate to /login on sign-out or back to
+      // / on sign-in. Broadcasting first decouples the UI switch
+      // from the slow/flaky cache refreshes.
       const key = state.signedIn
         ? `in:${state.user?.id ?? ""}:${state.user?.email ?? ""}`
         : "out";
-      if (key === lastAuthBroadcastKey) return;
-      lastAuthBroadcastKey = key;
-
-      try {
-        this.sidebar.webviewProtocol.send("aiFirewall/authState", {
-          signedIn: state.signedIn,
-          email: state.user?.email,
-          userId: state.user?.id,
-        });
-      } catch {
-        // Sidebar not ready yet — the webview's on-mount poll will
-        // pick up the current state as soon as it finishes booting.
+      const shouldBroadcast = key !== lastAuthBroadcastKey;
+      if (shouldBroadcast) {
+        lastAuthBroadcastKey = key;
+        try {
+          this.sidebar.webviewProtocol.send("aiFirewall/authState", {
+            signedIn: state.signedIn,
+            email: state.user?.email,
+            name: state.user?.name,
+            role: state.user?.role,
+            userId: state.user?.id,
+          });
+        } catch {
+          // Sidebar not ready yet — the webview's on-mount poll
+          // will pick up the current state as soon as it finishes
+          // booting.
+        }
       }
+
+      // ── 2. File scope + assistant sync (fire-and-forget) ──────
+      //
+      // Kick these off but don't block the handler. They only
+      // affect background concerns (file-restriction decorations,
+      // the on-disk `config.yaml`) and the webview can update
+      // independently.
+      void (async () => {
+        try {
+          const { refreshFileScope, clearFileScope } =
+            await import("../security/fileRestrictionChecker");
+          if (state.signedIn && state.token) {
+            await refreshFileScope(
+              this.proxyManager.proxyUrl ?? undefined,
+              state.token,
+            );
+            await runAssistantSync(state.token);
+          } else {
+            clearFileScope();
+          }
+          refreshRestrictedFileDecorations();
+        } catch {
+          /* non-fatal */
+        }
+
+        // Continue core's ConfigHandler caches orgs + profiles in
+        // memory. Refresh AFTER the webview has been notified so a
+        // slow control-plane fetch can't wedge the sign-in / sign-out
+        // UI transition.
+        try {
+          await this.configHandler.refreshAll(
+            state.signedIn
+              ? "AI Firewall auth changed — reload profiles"
+              : "AI Firewall signed out — clear profiles",
+          );
+        } catch {
+          /* non-fatal */
+        }
+      })();
     });
 
     // Background sync every 10 minutes as a safety net for changes

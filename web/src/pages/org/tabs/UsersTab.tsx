@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { UsersIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { apiClient } from "../../../api/client";
 import { ENDPOINTS } from "../../../api/endpoints";
@@ -9,9 +9,12 @@ import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Badge } from "../../../components/ui/Badge";
 import { Avatar } from "../../../components/ui/Avatar";
-import { LoadingSpinner } from "../../../components/ui/LoadingSpinner";
+import { SkeletonList } from "../../../components/ui/Skeleton";
 import { ErrorBanner } from "../../../components/ui/ErrorBanner";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { Pagination } from "../../../components/ui/Pagination";
+import { SearchInput } from "../../../components/ui/SearchInput";
+import { useServerTable } from "../../../hooks/useServerTable";
 
 const ROLES = ["admin", "security_lead", "developer", "auditor"] as const;
 
@@ -24,9 +27,6 @@ const roleVariant: Record<string, "error" | "warning" | "info" | "success" | "de
 
 export function UsersTab() {
   const dispatch = useAppDispatch();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({
     email: "",
@@ -36,30 +36,34 @@ export function UsersTab() {
   });
   const [inviting, setInviting] = useState(false);
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  async function loadUsers() {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiClient.get<{ users: User[] } | User[]>(ENDPOINTS.admin.users);
-      setUsers(Array.isArray(data) ? data : data.users);
-    } catch (err: unknown) {
-      if (err instanceof Error) setError(err.message);
-      else setError("Failed to load users");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // P11-SERVER: server-driven pagination + search. Backend returns
+  // {items, total, page, pageSize} for /api/admin/users, scoped to
+  // the caller's org. Default 20/page; search debounced at 300ms,
+  // matches email / name / role on the proxy side.
+  const {
+    items: users,
+    total,
+    page,
+    totalPages,
+    setPage,
+    search,
+    setSearch,
+    loading,
+    error,
+    refetch,
+  } = useServerTable<User>({
+    endpoint: ENDPOINTS.admin.users,
+    pageSize: 20,
+    legacyKey: "users",
+  });
 
   async function changeRole(userId: string, role: string) {
     try {
       await apiClient.put(ENDPOINTS.admin.userRole(String(userId)), { role });
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: role as User["role"] } : u)),
-      );
+      // Re-fetch the current page so the role badge + dropdown reflect
+      // the new value (also picks up any concurrent edits from other
+      // admins).
+      refetch();
       dispatch(
         showToast({
           id: `role-${Date.now()}`,
@@ -93,7 +97,7 @@ export function UsersTab() {
       );
       setInviteForm({ email: "", name: "", password: "", role: "developer" });
       setShowInvite(false);
-      await loadUsers();
+      refetch();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to invite user";
       dispatch(
@@ -108,12 +112,10 @@ export function UsersTab() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
+  // Skeleton only on first load (no data yet). On subsequent refetches
+  // we keep the old rows visible and rely on the fetch to resolve.
+  if (loading && users.length === 0 && search.length === 0) {
+    return <SkeletonList count={4} withAvatar />;
   }
 
   if (error) return <ErrorBanner message={error} />;
@@ -175,36 +177,55 @@ export function UsersTab() {
         </Card>
       )}
 
+      <SearchInput
+        placeholder="Search by email, name, or role…"
+        value={search}
+        onChange={setSearch}
+      />
+
       {users.length === 0 ? (
         <EmptyState
           icon={<UsersIcon className="h-12 w-12" />}
-          title="No users"
-          description="Invite users to your organization."
+          title={search ? "No matching users" : "No users"}
+          description={
+            search
+              ? `No users match "${search}". Try a different term.`
+              : "Invite users to your organization."
+          }
         />
       ) : (
-        <div className="space-y-2">
-          {users.map((u) => (
-            <Card key={u.id} className="flex items-center gap-3">
-              <Avatar name={u.name || u.email} />
-              <div className="min-w-0 flex-1">
-                <p className="text-foreground truncate text-sm font-medium">{u.name}</p>
-                <p className="text-description truncate text-xs">{u.email}</p>
-              </div>
-              <select
-                value={u.role}
-                onChange={(e) => changeRole(u.id, e.target.value)}
-                className="border-input-border bg-input text-input-foreground focus:border-border-focus focus:ring-border-focus rounded-md border px-2 py-1 text-xs focus:outline-none focus:ring-1"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r.replace("_", " ")}
-                  </option>
-                ))}
-              </select>
-              <Badge variant={roleVariant[u.role] ?? "default"}>{u.role.replace("_", " ")}</Badge>
-            </Card>
-          ))}
-        </div>
+        <>
+          <div className="space-y-2">
+            {users.map((u) => (
+              <Card key={u.id} className="flex items-center gap-3">
+                <Avatar name={u.name || u.email} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-foreground truncate text-sm font-medium">{u.name}</p>
+                  <p className="text-description truncate text-xs">{u.email}</p>
+                </div>
+                <select
+                  value={u.role}
+                  onChange={(e) => changeRole(u.id, e.target.value)}
+                  className="border-input-border bg-input text-input-foreground focus:border-border-focus focus:ring-border-focus rounded-md border px-2 py-1 text-xs focus:outline-none focus:ring-1"
+                >
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r.replace("_", " ")}
+                    </option>
+                  ))}
+                </select>
+                <Badge variant={roleVariant[u.role] ?? "default"}>{u.role.replace("_", " ")}</Badge>
+              </Card>
+            ))}
+          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            itemLabel="users"
+            onPageChange={setPage}
+          />
+        </>
       )}
     </div>
   );

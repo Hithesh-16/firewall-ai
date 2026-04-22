@@ -7,6 +7,7 @@ import styled from "styled-components";
 
 import { AnimatedEllipsis } from "../../AnimatedEllipsis";
 import StyledMarkdownPreview from "../../StyledMarkdownPreview";
+import { AfTextShimmer } from "../../loaders/AfTextShimmer";
 import { Button } from "../../ui";
 
 const MarkdownWrapper = styled.div`
@@ -68,10 +69,18 @@ function ThinkingBlockPeek({
             onClick={() => setOpen(!open)}
           >
             {inProgress ? (
-              <span>
-                {redactedThinking ? "Redacted Thinking" : "Thinking"}
-                <AnimatedEllipsis />
-              </span>
+              // Kilocode-parity: gradient shimmer on the label while
+              // reasoning is actively streaming. More eye-catching
+              // than AnimatedEllipsis, which still loops below for
+              // "Redacted Thinking" cases (no text to shimmer over).
+              redactedThinking ? (
+                <span>
+                  Redacted Thinking
+                  <AnimatedEllipsis />
+                </span>
+              ) : (
+                <AfTextShimmer variant="thinking" />
+              )
             ) : redactedThinking ? (
               "Redacted Thinking"
             ) : (

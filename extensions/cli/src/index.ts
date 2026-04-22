@@ -9,6 +9,11 @@ import { chat } from "./commands/chat.js";
 import { checks } from "./commands/checks.js";
 import { login } from "./commands/login.js";
 import { logout } from "./commands/logout.js";
+import { models } from "./commands/models.js";
+import {
+  rules as listRules,
+  skills as listSkills,
+} from "./commands/catalogue.js";
 import { listSessionsCommand } from "./commands/ls.js";
 import { remoteTest } from "./commands/remote-test.js";
 import { remote } from "./commands/remote.js";
@@ -279,6 +284,38 @@ program
     // Telemetry: record command invocation
     await posthogService.capture("cliCommand", { command: "logout" });
     await logout();
+  });
+
+// `cn models` — read-only listing of the user's models. Editing
+// happens in the web dashboard (Settings → Models); this command
+// just confirms what's currently bound to the account.
+program
+  .command("models")
+  .description("List the models bound to your AI Firewall account")
+  .action(async () => {
+    await posthogService.capture("cliCommand", { command: "models" });
+    await models();
+  });
+
+// `cn rules` / `cn skills` — read-only listings of the org catalogue.
+// Authoring happens in the web dashboard (Org Settings → Rules/
+// Skills for admins, Settings → Rules/Skills for users). These
+// surface what's visible from the current account + whether the
+// user has clicked Install.
+program
+  .command("rules")
+  .description("List the org rule catalogue visible to your account")
+  .action(async () => {
+    await posthogService.capture("cliCommand", { command: "rules" });
+    await listRules();
+  });
+
+program
+  .command("skills")
+  .description("List the org skill catalogue visible to your account")
+  .action(async () => {
+    await posthogService.capture("cliCommand", { command: "skills" });
+    await listSkills();
   });
 
 // Phase G: `cn sync-config` — one-shot migration of

@@ -4,8 +4,6 @@ import {
   ArrowPathIcon,
   ArrowUturnLeftIcon,
   BoltIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -62,22 +60,19 @@ interface GetAssistantResponse {
   assistant: AssistantPayload;
 }
 
-interface ModelsResponse {
-  hasAny: boolean;
-  canAddPersonal: boolean;
-  hasAssistant: boolean;
-}
-
 // Small helper: try to parse YAML in the browser so we can show
 // instant feedback on the save button. We don't bundle `yaml` here
 // — we just look for obvious structural problems. Full schema
 // validation happens server-side on save.
+//
+// Models are intentionally not validated here — they're managed
+// at Settings → Models (stored in `user_models` + `model_grants`);
+// this YAML is for rules, MCP servers, context providers, and the
+// system message. The proxy strips any `models:` block on save.
 function quickValidate(yaml: string): string | null {
   if (!yaml.trim()) return "Assistant YAML is empty.";
   if (!yaml.includes("name:")) return "Missing required `name:` field.";
   if (!yaml.includes("schema:")) return "Missing required `schema: v1` field.";
-  if (!yaml.includes("models:") && !yaml.includes("models :"))
-    return "Missing `models:` block — at least one model must be declared.";
   return null;
 }
 
@@ -100,7 +95,6 @@ export default function AssistantPage() {
   const [assistant, setAssistant] = useState<AssistantPayload | null>(null);
   const [yaml, setYaml] = useState<string>("");
   const [originalYaml, setOriginalYaml] = useState<string>("");
-  const [modelStatus, setModelStatus] = useState<ModelsResponse | null>(null);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -110,28 +104,34 @@ export default function AssistantPage() {
     setLoading(true);
     setError(null);
     try {
-      const [a, m] = await Promise.all([
-        apiClient.get<GetAssistantResponse>(ENDPOINTS.me.assistant).catch(() => null),
-        apiClient.get<ModelsResponse>(ENDPOINTS.me.models).catch(() => null),
-      ]);
-      setModelStatus(m);
+      const a = await apiClient.get<GetAssistantResponse>(ENDPOINTS.me.assistant).catch(() => null);
       if (a?.assistant) {
         setAssistant(a.assistant);
         setYaml(a.assistant.yaml);
         setOriginalYaml(a.assistant.yaml);
       } else {
         // No assistant yet — seed with a minimal template.
+        // Models are intentionally omitted: they live with your
+        // account (Settings → Models), not in this YAML.
         const template =
           "# AI Firewall assistant — edit this YAML and click Save.\n" +
+          "#\n" +
+          "# Models are managed under Settings → Models. This file is\n" +
+          "# for rules, MCP servers, context providers, and the system\n" +
+          "# message. The server strips any `models:` block on save.\n" +
+          "#\n" +
           "# See docs/developer/onboarding.mdx for the full schema.\n" +
           "name: my-assistant\n" +
           "schema: v1\n" +
           "version: 0.0.1\n" +
-          "models:\n" +
-          "  - name: GPT-4o\n" +
-          "    provider: openai\n" +
-          "    model: gpt-4o\n" +
-          "    roles: [chat, edit]\n";
+          "# rules:\n" +
+          "#   - Prefer TypeScript over JavaScript for new files.\n" +
+          "# mcpServers:\n" +
+          "#   - name: filesystem\n" +
+          "#     transport: stdio\n" +
+          "#     command: npx\n" +
+          "#     args: ['-y', '@modelcontextprotocol/server-filesystem', '.']\n" +
+          "# systemMessage: You are a senior engineer. Always respond in markdown.\n";
         setAssistant(null);
         setYaml(template);
         setOriginalYaml(template);
@@ -297,8 +297,8 @@ export default function AssistantPage() {
         <div>
           <h1 className="text-2xl font-semibold">Assistant</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Your AI Firewall assistant definition — models, MCP servers, context providers, rules,
-            and prompts. This is the file the CLI loads when{" "}
+            Rules, MCP servers, context providers, and the system message for your assistant. This
+            is the file the CLI loads when{" "}
             <span className="font-mono text-slate-300">AI_FIREWALL_USE_API_ASSISTANT=1</span>.
           </p>
         </div>
@@ -321,6 +321,20 @@ export default function AssistantPage() {
         </div>
       </div>
 
+      {/* ── Source-of-truth banner ───────────────────────── */}
+      <div className="rounded border border-info/30 bg-info/5 px-4 py-2 text-xs leading-relaxed text-slate-300">
+        <span className="font-medium text-slate-100">Models are separate.</span> Anything you write
+        in a <span className="font-mono">models:</span> block will be dropped on save — models are
+        managed at{" "}
+        <a
+          href="/settings/models"
+          className="font-mono text-info underline-offset-2 hover:underline"
+        >
+          Settings → Models
+        </a>
+        , where they're bound to your account and shared across IDEs and the CLI.
+      </div>
+
       {/* ── Status strip ─────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 rounded border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
@@ -335,17 +349,6 @@ export default function AssistantPage() {
             etag <span className="font-mono">{assistant.etag.slice(0, 16)}…</span>
           </div>
         )}
-        <div className="ml-auto flex items-center gap-2">
-          {modelStatus && modelStatus.hasAny ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/60 px-2 py-0.5 text-xs text-emerald-300">
-              <CheckCircleIcon className="h-3.5 w-3.5" /> models reachable
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-950/60 px-2 py-0.5 text-xs text-amber-300">
-              <ExclamationTriangleIcon className="h-3.5 w-3.5" /> no models reachable
-            </span>
-          )}
-        </div>
       </div>
 
       {/* ── Banners ──────────────────────────────────────── */}

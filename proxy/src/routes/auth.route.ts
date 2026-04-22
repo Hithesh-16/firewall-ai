@@ -18,7 +18,7 @@ import { createOrg, assignUserToOrg } from "../org/orgService";
 import rawDb from "../db/database";
 import { db } from "../db/index";
 import { users } from "../db/schema";
-import { asc } from "drizzle-orm";
+import { and, asc, eq, like, or, sql } from "drizzle-orm";
 
 const VALID_SCOPES = [
   "chat:write",
@@ -356,8 +356,46 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/api/admin/users",
     { preHandler: [requireAuth, requireCapability("user:read")] },
-    async () => {
-      const rows = db
+    async (request) => {
+      // P11-SERVER: paginated + searchable user listing. Scoped to
+      // the caller's org so cross-org leakage is impossible. Returns
+      // the uniform {items, total, page, pageSize} contract alongside
+      // the legacy {users} key for back-compat with callers that
+      // haven't migrated yet.
+      const ctx = request.authContext!;
+      const orgId = ctx.user.orgId;
+
+      const q = request.query as {
+        page?: string | number;
+        pageSize?: string | number;
+        search?: string;
+      };
+      const page = Math.max(1, Number(q.page ?? 1) || 1);
+      const requestedSize = Number(q.pageSize ?? 20) || 20;
+      const pageSize = Math.max(1, Math.min(100, requestedSize));
+      const search = (q.search ?? "").toString().trim();
+
+      // Build WHERE: always filter by org, optionally match search.
+      const clauses = [] as any[];
+      if (orgId != null) clauses.push(eq(users.orgId, orgId));
+      if (search.length > 0) {
+        // SQLite `LIKE` is case-insensitive for ASCII by default, so
+        // a plain `%search%` match on email / name / role covers the
+        // common case without a collation wrapper. Escape `%` and `_`
+        // in the search term so user-typed wildcards don't expand.
+        const safe = search.replace(/[\\%_]/g, "\\$&");
+        const like_ = `%${safe}%`;
+        clauses.push(
+          or(
+            like(users.email, like_),
+            like(users.name, like_),
+            like(users.role, like_),
+          )!,
+        );
+      }
+      const whereClause = clauses.length > 0 ? and(...clauses) : undefined;
+
+      const base = db
         .select({
           id: users.id,
           email: users.email,
@@ -366,11 +404,32 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           org_id: users.orgId,
           created_at: users.createdAt,
         })
-        .from(users)
+        .from(users);
+
+      const rows = (whereClause ? base.where(whereClause) : base)
         .orderBy(asc(users.createdAt))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize)
         .all();
 
-      return { users: rows };
+      const totalRow = (
+        whereClause
+          ? db
+              .select({ n: sql<number>`count(*)` })
+              .from(users)
+              .where(whereClause)
+          : db.select({ n: sql<number>`count(*)` }).from(users)
+      ).get();
+      const total = totalRow?.n ?? 0;
+
+      return {
+        items: rows,
+        users: rows, // legacy key — remove once callers migrate
+        total,
+        page,
+        pageSize,
+        hasMore: page * pageSize < total,
+      };
     },
   );
 

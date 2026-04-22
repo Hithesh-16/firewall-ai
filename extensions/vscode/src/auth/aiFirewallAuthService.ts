@@ -149,6 +149,17 @@ export class AiFirewallAuthService {
             } catch {
               /* ignore */
             }
+            // Another surface signed out (e.g. `cn logout` or the
+            // web dashboard's Logout) — drop every identity-bound
+            // artefact locally so the previous user's models /
+            // sessions don't linger when someone else signs in next.
+            try {
+              const { clearUserArtefacts } =
+                await import("@ai-firewall/shared-auth");
+              clearUserArtefacts();
+            } catch {
+              /* ignore */
+            }
             this.state = { signedIn: false };
             this._onDidChangeAuth.fire(this.state);
           }
@@ -157,6 +168,23 @@ export class AiFirewallAuthService {
 
         if (file.accessToken === this.state.token) return;
 
+        // Token changed — either rotation for the same user or
+        // a completely different identity. On identity switch wipe
+        // every user-bound artefact so the new account sees a
+        // clean slate (no stale models, sessions, or ETag cache
+        // that would short-circuit the next assistant sync).
+        const previousUserId = this.state.user?.id;
+        const nextUserId = file.user?.id;
+        if (previousUserId && nextUserId && previousUserId !== nextUserId) {
+          try {
+            const { clearUserArtefacts } =
+              await import("@ai-firewall/shared-auth");
+            clearUserArtefacts();
+          } catch {
+            /* ignore */
+          }
+        }
+
         try {
           await this.context.secrets.store(SECRET_KEY, JSON.stringify(file));
         } catch {
@@ -164,6 +192,20 @@ export class AiFirewallAuthService {
         }
         this.state = this.fromSharedFile(file);
         this._onDidChangeAuth.fire(this.state);
+
+        // If `signIn()` is sitting on `tokenPromise` waiting for the
+        // URI callback, the handoff may have arrived via the shared
+        // auth file instead (browser redirected to a fork URI the OS
+        // couldn't route, or the user clicked "Continue as X" on the
+        // web and the proxy's `/api/auth/handoff` wrote the file).
+        // Resolve the pending sign-in so the "Signing in…" toast
+        // dismisses instead of sitting there forever.
+        if (this.pending) {
+          const p = this.pending;
+          this.pending = null;
+          clearTimeout(p.timeoutHandle);
+          p.resolve(file.accessToken);
+        }
       } catch (err) {
         console.warn(
           "[AiFirewallAuthService] shared auth watcher failed:",
@@ -202,15 +244,33 @@ export class AiFirewallAuthService {
   }
 
   /**
-   * Build the VS Code callback URI that the web dashboard should post
-   * the token to. We use `vscode.env.asExternalUri` so Remote/Codespaces
-   * get a tunneled https:// URL instead of an un-resolvable
-   * vscode:// URI.
+   * Build the callback URI that the web dashboard should post the
+   * token to.
+   *
+   * We normally call `vscode.env.asExternalUri` so Remote / Codespaces
+   * get a tunneled https:// URL. But several VS Code forks
+   * (Antigravity, Cursor) return a nested `fork:workspace?vscode://...`
+   * URI even in a local session — when the browser appends
+   * `?token=...` to that, the extra query params are swallowed by the
+   * outer scheme and the extension never sees the token.
+   *
+   * The safer path in a local install is to use the fork's native
+   * scheme directly (`<uriScheme>://ai-firewall.ai-firewall/authCallback`)
+   * so there's no wrapping to contend with. We only fall back to
+   * `asExternalUri` when the session is flagged remote, which is the
+   * one case where a bare fork URI is genuinely un-resolvable.
    */
   private async buildCallbackUri(): Promise<vscode.Uri> {
+    const scheme = vscode.env.uriScheme || "vscode";
     const raw = vscode.Uri.parse(
-      "vscode://ai-firewall.ai-firewall/authCallback",
+      `${scheme}://ai-firewall.ai-firewall/authCallback`,
     );
+    if (!vscode.env.remoteName) {
+      // Local install — the OS's URI handler for `<scheme>:` already
+      // routes back to us. Skip asExternalUri to avoid the nested
+      // wrapping some forks apply.
+      return raw;
+    }
     try {
       return await vscode.env.asExternalUri(raw);
     } catch {
@@ -379,6 +439,16 @@ export class AiFirewallAuthService {
     }
     try {
       deleteAuthFile();
+    } catch {
+      /* ignore */
+    }
+    // Wipe every user-identity-bound artefact under `~/.ai-firewall/`
+    // (synced config.yaml, sync cache, CLI sessions, cli-state.json)
+    // so the next user who signs in doesn't inherit this user's
+    // models / chat history.
+    try {
+      const { clearUserArtefacts } = await import("@ai-firewall/shared-auth");
+      clearUserArtefacts();
     } catch {
       /* ignore */
     }

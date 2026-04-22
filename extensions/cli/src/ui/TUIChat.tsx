@@ -26,6 +26,7 @@ import { logger } from "../util/logger.js";
 
 import { ActionStatus } from "./components/ActionStatus.js";
 import { BottomStatusBar } from "./components/BottomStatusBar.js";
+import { CLITodoStrip } from "./components/CLITodoStrip.js";
 import { FirewallConsentRequest } from "./components/FirewallConsentRequest.js";
 import { ResourceDebugBar } from "./components/ResourceDebugBar.js";
 import { ScreenContent } from "./components/ScreenContent.js";
@@ -466,6 +467,12 @@ const TUIChat: React.FC<TUIChatProps> = ({
             onResponse={handleFirewallConsentResponse}
           />
         )}
+
+        {/* P8 — sticky TODO strip. Auto-hides when empty; updates live
+            via the core todoTool subscriber bus when the agent calls
+            todo_write. Mounted above ActionStatus so it stays visible
+            even while the assistant is still streaming a response. */}
+        <CLITodoStrip />
 
         {/* Status */}
         <ActionStatus

@@ -25,12 +25,27 @@ module.exports = {
     extend: {
       animation: {
         "spin-slow": "spin 6s linear infinite",
+        // Kilocode-parity animations (keyframes live in src/styles/tokens.css).
+        shimmer: "shimmer 2s linear infinite",
+        "timeline-fade-in": "timeline-fade-in 200ms ease-out",
+        "timeline-pulse": "timeline-pulse 1.4s ease-in-out infinite",
+        // ── AI Firewall motion vocabulary (P1) ─────────────────
+        "af-pulse": "af-pulse 1.4s ease-in-out infinite",
+        "af-progress": "af-progress 1.4s ease-in-out infinite",
+        "af-pop-in": "af-pop-in 180ms ease-out",
+        "af-slide-down": "af-slide-down 200ms ease-out",
+        "af-bounce": "af-bounce 280ms cubic-bezier(0.34,1.56,0.64,1)",
+        "af-stroke-draw": "af-stroke-draw 360ms ease-out forwards",
       },
       borderRadius: {
         default: "0.5rem",
       },
       fontSize: {
         "2xs": "0.6875rem", // 11px
+        // ── AI Firewall type scale (P1) — three sizes, one per role ──
+        "af-caption": ["11px", { lineHeight: "1.4" }],
+        "af-body": ["13px", { lineHeight: "1.55" }],
+        "af-heading": ["16px", { lineHeight: "1.3", fontWeight: "600" }],
       },
       outlineOffset: {
         0.5: "0.5px",
@@ -98,6 +113,65 @@ module.exports = {
             DEFAULT: varWithFallback("list-active"),
             foreground: varWithFallback("list-active-foreground"),
           },
+        },
+
+        // ── Kilocode-parity tokens (defined in src/styles/tokens.css) ──
+        // Text hierarchy — weak/base/strong augment the existing
+        // foreground/description pair with a stronger variant.
+        weak: "var(--text-weak)",
+        strong: "var(--text-strong)",
+
+        // Surface hierarchy — inset surfaces (sidebars, accordion
+        // headers, task header) sit behind the main editor surface.
+        "surface-base": "var(--surface-base)",
+        "surface-inset": {
+          DEFAULT: "var(--surface-inset-base)",
+          hover: "var(--surface-inset-base-hover)",
+        },
+
+        // Border weak — softer than `border` for internal dividers.
+        "border-weak": "var(--border-weak-base)",
+
+        // Timeline colors — per-turn-part activity swatches.
+        timeline: {
+          user: "var(--tl-user)",
+          read: "var(--tl-read)",
+          write: "var(--tl-write)",
+          tool: "var(--tl-tool)",
+          success: "var(--tl-success)",
+          error: "var(--tl-error)",
+          reasoning: "var(--tl-reasoning)",
+        },
+
+        // Diff surfaces — add/del/gutter backgrounds for inline
+        // and side-by-side diff rendering.
+        diff: {
+          add: "var(--surface-diff-add)",
+          del: "var(--surface-diff-del)",
+          gutter: "var(--surface-diff-gutter)",
+        },
+
+        // ── AI Firewall identity palette (P1) ────────────────────
+        // Used on product-identity surfaces (CTAs, active nav,
+        // loaders, brand moments). Semantic roles like success/error
+        // keep the VS Code theme tokens so the editor still rules.
+        af: {
+          accent: {
+            DEFAULT: "var(--af-accent)",
+            hover: "var(--af-accent-hover)",
+            glow: "var(--af-accent-glow)",
+          },
+          info: {
+            DEFAULT: "var(--af-info)",
+            glow: "var(--af-info-glow)",
+          },
+          danger: "var(--af-danger)",
+          warning: "var(--af-warning)",
+          surface: {
+            deep: "var(--af-surface-deep)",
+            raised: "var(--af-surface-raised)",
+          },
+          hairline: "var(--af-hairline)",
         },
 
         // DEPRECATED, slowly remove usages of these ide-named or explicit colors

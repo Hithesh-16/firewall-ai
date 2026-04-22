@@ -199,13 +199,22 @@ export const MemoizedMessage = memo<MemoizedMessageProps>(
                         isErrored
                           ? "red"
                           : isCompleted
-                            ? "green"
+                            ? "greenBright"
                             : toolState.status === "generated"
                               ? "yellow"
-                              : "white"
+                              : "cyan"
                       }
                     >
-                      {isCompleted || isErrored ? "●" : "○"}
+                      {/* P12b: brighter glyph vocabulary per state.
+                           done → emerald ✔, error → red ✖, calling →
+                           cyan ⟳, queued/generated → yellow ◐. */}
+                      {isErrored
+                        ? "✖"
+                        : isCompleted
+                          ? "✔"
+                          : toolState.status === "generated"
+                            ? "◐"
+                            : "⟳"}
                     </Text>
                   </Box>
                   <Box flexGrow={1} flexShrink={1} minWidth={0}>

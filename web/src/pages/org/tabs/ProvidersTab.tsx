@@ -16,7 +16,7 @@ import type { Provider } from "../../../api/types";
 import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Badge } from "../../../components/ui/Badge";
-import { LoadingSpinner } from "../../../components/ui/LoadingSpinner";
+import { SkeletonList } from "../../../components/ui/Skeleton";
 import { ErrorBanner } from "../../../components/ui/ErrorBanner";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
@@ -85,11 +85,8 @@ export function ProvidersTab() {
   }
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
+    // P3 polish: skeleton placeholders.
+    return <SkeletonList count={3} withAvatar={false} />;
   }
 
   if (error) return <ErrorBanner message={error} />;

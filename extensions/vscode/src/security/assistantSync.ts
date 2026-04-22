@@ -3,6 +3,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import {
+  mergeLocalIntoAssistantYaml,
+  scanLocalCustomisations,
+} from "@ai-firewall/shared-auth";
+
 /**
  * Phase F2+ — VS Code assistant sync.
  *
@@ -52,8 +57,19 @@ const ETAG_PATH = path.join(CACHE_DIR, "vscode-assistant.etag");
 const CONFIG_YAML_PATH = path.join(os.homedir(), ".ai-firewall", "config.yaml");
 
 const MANAGED_HEADER =
-  "# Managed by AI Firewall — edit via the web dashboard.\n" +
-  "# Add `# user-managed: true` on the first line to prevent auto-sync.\n";
+  "# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+  "# Managed by AI Firewall — synced from your account.\n" +
+  "#\n" +
+  "#   MODELS       → Settings → Models in the web dashboard\n" +
+  "#                  (stored per-user; shared across CLI + IDEs)\n" +
+  "#   RULES / MCP  → Settings → Assistant in the web dashboard,\n" +
+  "#                  or edit the matching keys below.\n" +
+  "#   SYSTEM MSG   → Settings → Assistant, or `systemMessage:`\n" +
+  "#                  below.\n" +
+  "#\n" +
+  "# Put `# user-managed: true` on the first line to opt out of\n" +
+  "# auto-sync and hand-manage everything.\n" +
+  "# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
 
 const USER_MANAGED_MARKER = "# user-managed: true";
 
@@ -121,6 +137,33 @@ function writeConfigYaml(yaml: string): void {
 }
 
 /**
+ * Remove the cached assistant artefacts — `config.yaml` itself plus
+ * the ETag marker used for conditional GETs.
+ *
+ * Must be called on sign-out and whenever the signed-in identity
+ * changes. Without this, a user who logs out and back in as a
+ * different account keeps seeing the previous account's models in
+ * the picker because `ConfigHandler` just re-reads whatever is on
+ * disk. We skip `user-managed: true` files so hand-edited configs
+ * aren't clobbered.
+ */
+export function clearConfigYaml(): void {
+  try {
+    if (isFileUserManaged(CONFIG_YAML_PATH)) return;
+    if (fs.existsSync(CONFIG_YAML_PATH)) {
+      fs.unlinkSync(CONFIG_YAML_PATH);
+    }
+  } catch {
+    /* best-effort */
+  }
+  try {
+    if (fs.existsSync(ETAG_PATH)) fs.unlinkSync(ETAG_PATH);
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
  * Pull the user's model list + assistant config from the proxy
  * and write a merged config.yaml. Uses two endpoints:
  *
@@ -177,6 +220,21 @@ export async function syncAssistantToConfigYaml(
       return { kind: "ok", fresh: false };
     }
     if (res.status === 404) {
+      // Server has no assistant (and now no fallback either, e.g. old
+      // proxy build). Delete any stale config.yaml on disk so the
+      // next user doesn't see the previous user's models — leaving
+      // the file would strand Continue core on cached stale content.
+      try {
+        if (
+          fs.existsSync(CONFIG_YAML_PATH) &&
+          !isFileUserManaged(CONFIG_YAML_PATH)
+        ) {
+          fs.unlinkSync(CONFIG_YAML_PATH);
+        }
+        if (fs.existsSync(ETAG_PATH)) fs.unlinkSync(ETAG_PATH);
+      } catch {
+        /* best-effort */
+      }
       return {
         kind: "error",
         message:
@@ -201,17 +259,36 @@ export async function syncAssistantToConfigYaml(
       };
     }
 
+    // Layer purely-local customisations (~/.ai-firewall/rules/*.md,
+    // mcp/*.json, prompts/*.txt) on top of the proxy YAML before
+    // writing. These are strictly client-side — never uploaded —
+    // so users can hand-author them and the IDE picks them up on
+    // every sync.
+    const yamlMod = await import("yaml");
+    const local = scanLocalCustomisations();
+    const merged = mergeLocalIntoAssistantYaml(yaml, local, {
+      parseDocument: yamlMod.parseDocument,
+      parse: yamlMod.parse,
+      isSeq: yamlMod.isSeq,
+      isMap: yamlMod.isMap,
+    });
+
     // If the etag matches what we already cached AND the file on
     // disk has the right content, we can skip the write. The
     // cache path and the file path are separate so a manual
     // deletion of `config.yaml` forces a refresh on next sync.
-    if (cachedEtag === etag && fs.existsSync(CONFIG_YAML_PATH)) {
+    //
+    // Since local files can change independently, we hash the
+    // MERGED content — an edit to `~/.ai-firewall/rules/foo.md`
+    // correctly invalidates the cache even when the proxy ETag
+    // hasn't changed.
+    const mergedHash = crypto.createHash("sha256").update(merged).digest("hex");
+    const mergedEtag = `${etag}:local:${mergedHash.slice(0, 12)}`;
+
+    if (cachedEtag === mergedEtag && fs.existsSync(CONFIG_YAML_PATH)) {
       return { kind: "ok", fresh: false };
     }
 
-    // Also skip write if the current file already contains the
-    // same YAML body — this catches the case where the cache
-    // file was deleted but the on-disk YAML is identical.
     try {
       if (fs.existsSync(CONFIG_YAML_PATH)) {
         const current = fs.readFileSync(CONFIG_YAML_PATH, "utf8");
@@ -220,12 +297,8 @@ export async function syncAssistantToConfigYaml(
           .createHash("sha256")
           .update(currentWithoutHeader)
           .digest("hex");
-        const freshHash = crypto
-          .createHash("sha256")
-          .update(yaml)
-          .digest("hex");
-        if (currentHash === freshHash) {
-          writeCachedEtag(etag);
+        if (currentHash === mergedHash) {
+          writeCachedEtag(mergedEtag);
           return { kind: "ok", fresh: false };
         }
       }
@@ -233,8 +306,8 @@ export async function syncAssistantToConfigYaml(
       /* fall through to write */
     }
 
-    writeConfigYaml(yaml);
-    writeCachedEtag(etag);
+    writeConfigYaml(merged);
+    writeCachedEtag(mergedEtag);
     return { kind: "ok", fresh: true };
   } catch (err) {
     return {

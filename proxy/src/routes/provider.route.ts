@@ -10,13 +10,62 @@ import {
   getProviderById,
   updateProvider,
 } from "../gateway/providerService";
-import { resolveProviderForUser } from "../gateway/userProviderService";
+import {
+  listOrgProviders,
+  listUserProviders,
+  resolveProviderForUser,
+  upsertOrgProvider,
+} from "../gateway/userProviderService";
+import { createGrant } from "../gateway/modelGrantService";
 import {
   addModel,
   deleteModel,
   listModels,
   updateModel,
 } from "../gateway/modelService";
+import { addUserModel } from "../gateway/userModelService";
+
+/**
+ * Canonical "default model" per provider kind. When an admin adds a
+ * provider during onboarding we auto-map one sensible model into their
+ * personal `user_models` table so they can chat immediately — the
+ * mandatory-models gate (`ModelGate` in web) counts `user_models`
+ * rows, not wildcard grants, so an admin with only a provider key
+ * would otherwise be bounced to a blank /settings/models page.
+ *
+ * Admins can add more via Settings → Models; this just picks the
+ * single flagship so the first-run experience isn't broken.
+ */
+const DEFAULT_MODEL_BY_KIND: Record<
+  string,
+  { modelSlug: string; displayName: string } | null
+> = {
+  openai: { modelSlug: "gpt-4o", displayName: "GPT-4o" },
+  anthropic: {
+    modelSlug: "claude-sonnet-4-5-20250929",
+    displayName: "Claude 4.5 Sonnet",
+  },
+  gemini: { modelSlug: "gemini-1.5-pro", displayName: "Gemini 1.5 Pro" },
+  mistral: { modelSlug: "mistral-large-latest", displayName: "Mistral Large" },
+  ollama: { modelSlug: "llama3.2:latest", displayName: "Llama 3.2" },
+  // Azure + custom: the caller has to supply deployment/model names;
+  // we can't guess a correct default so skip the seed.
+  azure: null,
+  custom: null,
+};
+
+/**
+ * Deterministic djb2-style hash for a string. Used to synthesise
+ * stable negative pseudo-ids for org-scoped provider rows in the
+ * flat `GET /api/providers` response.
+ */
+function hashSlug(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  }
+  return h % 1_000_000_000 || 1;
+}
 
 /**
  * Default base URLs per provider kind. The web onboarding wizard sends
@@ -109,6 +158,18 @@ export async function registerProviderRoutes(
           .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
 
+      // Multi-tenancy: every new provider must belong to an org. The
+      // caller is authenticated here (requireAuth preHandler), so we
+      // pull their org from the auth context rather than trusting the
+      // request body.
+      const ctxOrgId = request.authContext?.user?.orgId;
+      if (!ctxOrgId) {
+        return reply.status(403).send({
+          error: "Caller is not attached to an organisation",
+          code: "NO_ORG",
+        });
+      }
+
       try {
         const data = parsed.data;
         const resolvedBaseUrl =
@@ -122,22 +183,107 @@ export async function registerProviderRoutes(
         // Ollama doesn't have an API key; pass a sentinel placeholder
         // so the encrypted-vault layer doesn't blow up on empty string.
         const apiKey = data.apiKey ?? "__no_key_required__";
-        const provider = createProvider(data.name, apiKey, resolvedBaseUrl);
+
+        // Derive a deterministic slug from the kind (preferred — matches
+        // provider slugs the gateway resolves against, e.g. "anthropic",
+        // "openai") falling back to a slugified name. The kind is what
+        // onboarding Step 5 sends; the display name is arbitrary.
+        const slug = (
+          data.kind && data.kind !== "custom" ? data.kind : data.name
+        )
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "");
+
+        // Write into `org_providers` via upsert. This matches the
+        // scoped read paths (`GET /api/providers`, `/api/me/providers`)
+        // and lets admins rotate a key by re-submitting without hitting
+        // a 409. Prior versions wrote to the legacy `providers` table,
+        // which diverged from the read path and surfaced "already
+        // exists" to users whose fresh org had been seeded by the
+        // legacy-copy boot migration.
+        upsertOrgProvider(ctxOrgId, slug, apiKey, {
+          baseUrl: resolvedBaseUrl,
+          displayName: data.name,
+          enabled: true,
+        });
+
+        // Mirror into the legacy `providers` table as a vault fallback
+        // for the few resolver paths that still hit it (e.g. token
+        // refresh jobs). Safe to no-op if the row already exists.
+        try {
+          const existingLegacy = getProviderBySlug(slug, ctxOrgId);
+          if (!existingLegacy) {
+            createProvider(data.name, apiKey, resolvedBaseUrl, ctxOrgId);
+          }
+        } catch {
+          // Non-fatal: the legacy mirror is a belt-and-braces fallback,
+          // org_providers is the source of truth.
+        }
+
+        // Auto-grant + auto-seed for the admin who just added the
+        // provider so the web `/settings/models` page and the
+        // mandatory-models gate both recognise them as ready.
+        //
+        //   1. Wildcard model_grants row — covers any future model
+        //      on this provider. Cheap; makes team-grants additive.
+        //   2. user_models seed with a canonical default model slug —
+        //      the `ModelGate` reads `user_models` (grants with
+        //      modelSlug="*" are deliberately filtered out of the
+        //      list) so without this the admin would land on a
+        //      blank page and be forced to re-enter their key.
+        const grantorId = request.authContext?.user?.id;
+        if (grantorId) {
+          try {
+            createGrant({
+              orgId: ctxOrgId,
+              granteeType: "user",
+              granteeId: grantorId,
+              providerSlug: slug,
+              modelSlug: "*",
+              grantedBy: grantorId,
+            });
+          } catch {
+            // Non-fatal.
+          }
+
+          const defaultModel = data.kind
+            ? DEFAULT_MODEL_BY_KIND[data.kind]
+            : null;
+          if (defaultModel) {
+            try {
+              addUserModel({
+                userId: grantorId,
+                providerSlug: slug,
+                modelSlug: defaultModel.modelSlug,
+                displayName: defaultModel.displayName,
+                apiKey,
+                apiBase: resolvedBaseUrl,
+                roles: ["chat", "edit", "apply"],
+                createdBy: grantorId,
+              });
+            } catch {
+              // Non-fatal: provider is still registered; admin can add
+              // models manually from Settings → Models.
+            }
+          }
+        }
+
+        // Respond with the shape onboarding expects. The id is the
+        // org_providers row id (listed via GET /api/providers).
+        const row = listOrgProviders(ctxOrgId).find(
+          (p) => p.providerSlug === slug,
+        );
         return reply.status(201).send({
-          id: provider.id,
-          name: provider.name,
-          slug: provider.slug,
-          baseUrl: provider.baseUrl,
-          enabled: provider.enabled,
-          createdAt: provider.createdAt,
+          id: row?.id ?? 0,
+          name: data.name,
+          slug,
+          baseUrl: resolvedBaseUrl,
+          enabled: true,
+          createdAt: row?.createdAt ?? Date.now(),
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
-        if (msg.includes("UNIQUE constraint")) {
-          return reply
-            .status(409)
-            .send({ error: "Provider with this name already exists" });
-        }
         return reply.status(500).send({ error: msg });
       }
     },
@@ -146,16 +292,55 @@ export async function registerProviderRoutes(
   app.get(
     "/api/providers",
     { preHandler: [requireAuth, requireCapability("provider:read")] },
-    async () => {
-      const providers = listProviders();
-      return providers.map((p) => ({
+    async (request) => {
+      // Scope to the caller's user + org so the admin provider list
+      // can't leak other orgs' rows. Returns the SAME flat-array
+      // shape the endpoint has always returned (existing callers:
+      // ModelPicker, SecurityDashboard, ProvidersTab, UserModelsTab
+      // all expect an array), just scoped via user_providers +
+      // org_providers rather than `listProviders()` globally.
+      //
+      // Each row is shaped {id, name, slug, baseUrl, enabled,
+      // createdAt} to match the existing contract. Personal rows
+      // carry their real db id; org rows get a synthesised negative
+      // id so the two namespaces can't collide on the client.
+      const user = request.authContext?.user;
+      const userId = user?.id;
+      const orgId = user?.orgId;
+
+      const personal = userId ? listUserProviders(userId) : [];
+      const org = orgId ? listOrgProviders(orgId) : [];
+
+      const personalRows = personal.map((p) => ({
         id: p.id,
-        name: p.name,
-        slug: p.slug,
-        baseUrl: p.baseUrl,
+        name: p.providerSlug,
+        slug: p.providerSlug,
+        baseUrl: p.baseUrl ?? "",
         enabled: p.enabled,
         createdAt: p.createdAt,
       }));
+
+      // Synthesise ids for org rows using a djb2-style hash so two
+      // orgs with overlapping slugs don't collide. Kept negative to
+      // signal "not a real personal-provider row" to downstream
+      // code that tries to call DELETE /api/providers/:id on it.
+      const orgRows = org.map((p) => ({
+        id: -Math.abs(hashSlug(`org:${orgId}:${p.providerSlug}`)),
+        name: p.displayName ?? p.providerSlug,
+        slug: p.providerSlug,
+        baseUrl: p.baseUrl ?? "",
+        enabled: p.enabled,
+        createdAt: 0,
+      }));
+
+      // De-dupe: if a user has a personal override for the same slug
+      // they see in the org list, the personal row wins.
+      const seen = new Set(personalRows.map((r) => r.slug));
+      const combined = [
+        ...personalRows,
+        ...orgRows.filter((r) => !seen.has(r.slug)),
+      ];
+      return combined;
     },
   );
 
@@ -226,9 +411,10 @@ export async function registerProviderRoutes(
         };
       }
 
-      // 3: legacy global registry fallback. Will be removed once C2
-      // makes the user/org scope the canonical write path.
-      const global = getProviderBySlug(slug);
+      // 3: legacy global registry fallback. Only fires when the caller
+      // has an org — global lookups without org scope were removed in
+      // the BUG-ONBOARD migration to prevent cross-org leakage.
+      const global = orgId ? getProviderBySlug(slug, orgId) : null;
       if (global && global.enabled) {
         return {
           slug: global.slug,

@@ -6,6 +6,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
+    "reset:dev": "ts-node scripts/reset-dev-db.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test:unit": "ts-node src/test/run-tests.ts",

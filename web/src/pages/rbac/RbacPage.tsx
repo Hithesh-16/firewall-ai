@@ -19,7 +19,9 @@ import { LoadingSpinner } from "../../components/ui/LoadingSpinner";
 import { ErrorBanner } from "../../components/ui/ErrorBanner";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { UnderlineTabs } from "../../components/ui/UnderlineTabs";
+import { SearchInput } from "../../components/ui/SearchInput";
 import { PermissionGate } from "../../components/shared/guard/PermissionGate";
+import { useServerTable } from "../../hooks/useServerTable";
 import { selectPermissionsFetched } from "../../store/selectors/permissions.selectors";
 import { fetchUserPermissions } from "../../store/slices/permissionsSlice";
 import {
@@ -99,38 +101,62 @@ export function RbacPage() {
   const dispatch = useAppDispatch();
   const permsFetched = useAppSelector(selectPermissionsFetched);
 
-  const [roles, setRoles] = useState<Role[]>([]);
+  // P11-SERVER: roles list flows through useServerTable so search
+  // happens on the proxy (case-insensitive match on name / display /
+  // description). Users list stays a one-shot fetch — the RoleEditor
+  // only needs the full list for the per-role "users with this role"
+  // panel; it doesn't paginate it.
+  const {
+    items: roles,
+    search: roleSearch,
+    setSearch: setRoleSearch,
+    loading: rolesLoading,
+    error: rolesError,
+    refetch: refetchRoles,
+  } = useServerTable<Role>({
+    endpoint: ENDPOINTS.rbac.roles,
+    pageSize: 100, // fetch all roles — sidebar renders grouped, not paged
+    legacyKey: "roles",
+  });
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
+  const loading = rolesLoading || usersLoading;
+  const loadError = rolesError ?? usersError;
+
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    setUsersError(null);
     try {
-      const [rolesResp, usersResp] = await Promise.all([
-        apiClient.get<{ roles: Role[] }>(ENDPOINTS.rbac.roles),
-        apiClient
-          .get<{ users: UserWithRole[] }>(ENDPOINTS.users.list)
-          .catch(() => ({ users: [] as UserWithRole[] })),
-      ]);
-      setRoles(rolesResp.roles);
+      const usersResp = await apiClient
+        .get<{ users: UserWithRole[] }>(ENDPOINTS.users.list)
+        .catch(() => ({ users: [] as UserWithRole[] }));
       setUsers(usersResp.users ?? []);
-      if (rolesResp.roles.length > 0 && selectedRoleId === null) {
-        setSelectedRoleId(rolesResp.roles[0].id);
-      }
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Failed to load roles");
+      setUsersError(err instanceof Error ? err.message : "Failed to load users");
     } finally {
-      setLoading(false);
+      setUsersLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadUsers();
+  }, [loadUsers]);
+
+  // Initialise the selected role as soon as roles arrive from the
+  // backend — matches the pre-pivot behaviour.
+  useEffect(() => {
+    if (roles.length > 0 && selectedRoleId === null) {
+      setSelectedRoleId(roles[0].id);
+    }
+  }, [roles, selectedRoleId]);
+
+  const load = useCallback(() => {
+    refetchRoles();
+    loadUsers();
+  }, [refetchRoles, loadUsers]);
 
   const refreshPerms = useCallback(() => {
     if (permsFetched) dispatch(fetchUserPermissions());
@@ -168,6 +194,8 @@ export function RbacPage() {
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
           <RoleSidebar
+            search={roleSearch}
+            onSearchChange={setRoleSearch}
             systemRoles={systemRoles}
             customRoles={customRoles}
             selectedRoleId={selectedRoleId}
@@ -204,33 +232,51 @@ export function RbacPage() {
 // ─── Role sidebar ───────────────────────────────────────────────────
 
 function RoleSidebar({
+  search,
+  onSearchChange,
   systemRoles,
   customRoles,
   selectedRoleId,
   onSelect,
 }: {
+  search: string;
+  onSearchChange: (next: string) => void;
   systemRoles: Role[];
   customRoles: Role[];
   selectedRoleId: number | null;
   onSelect: (id: number) => void;
 }) {
+  // P11-SERVER: search is driven by the parent via useServerTable —
+  // backend filters + paginates. Since role counts are small (≤20)
+  // no Pagination component is rendered; if that changes we can
+  // drop one into the sidebar without further backend work.
+  const nothingMatches =
+    search.trim().length > 0 && systemRoles.length === 0 && customRoles.length === 0;
+
   return (
     <aside className="space-y-4">
-      <RoleGroup
-        label="System Roles"
-        icon={<LockClosedIcon className="h-4 w-4" />}
-        roles={systemRoles}
-        selectedRoleId={selectedRoleId}
-        onSelect={onSelect}
-      />
-      <RoleGroup
-        label="Custom Roles"
-        icon={<ShieldCheckIcon className="h-4 w-4" />}
-        roles={customRoles}
-        selectedRoleId={selectedRoleId}
-        onSelect={onSelect}
-        emptyMessage="No custom roles yet. Click “New role” above."
-      />
+      <SearchInput placeholder="Search roles…" value={search} onChange={onSearchChange} />
+      {nothingMatches ? (
+        <p className="text-description-muted text-xs italic">No roles match "{search}".</p>
+      ) : (
+        <>
+          <RoleGroup
+            label="System Roles"
+            icon={<LockClosedIcon className="h-4 w-4" />}
+            roles={systemRoles}
+            selectedRoleId={selectedRoleId}
+            onSelect={onSelect}
+          />
+          <RoleGroup
+            label="Custom Roles"
+            icon={<ShieldCheckIcon className="h-4 w-4" />}
+            roles={customRoles}
+            selectedRoleId={selectedRoleId}
+            onSelect={onSelect}
+            emptyMessage="No custom roles yet. Click “New role” above."
+          />
+        </>
+      )}
     </aside>
   );
 }

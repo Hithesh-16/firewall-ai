@@ -32,6 +32,7 @@ const ChatPage = lazy(() =>
 const AssistantPage = lazy(() => import("../pages/settings/AssistantPage"));
 const ModelAccessPage = lazy(() => import("../pages/settings/ModelAccessPage"));
 const ModelsPage = lazy(() => import("../pages/settings/ModelsPage"));
+const CataloguePage = lazy(() => import("../pages/settings/CataloguePage"));
 
 // Security
 const SecurityDashboard = lazy(() =>
@@ -185,6 +186,14 @@ export const privateRoutes: RouteObject[] = [
       {
         path: "settings/model-access",
         element: lazyElement(<ModelAccessPage />),
+      },
+      {
+        path: "settings/rules",
+        element: lazyElement(<CataloguePage kind="rule" />),
+      },
+      {
+        path: "settings/skills",
+        element: lazyElement(<CataloguePage kind="skill" />),
       },
     ],
   },

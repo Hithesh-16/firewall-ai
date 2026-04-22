@@ -1,5 +1,6 @@
 import {
   buildWebLoginUrl,
+  clearUserArtefacts,
   DEFAULT_LOOPBACK_PORTS,
   generateStateNonce,
   getAuthFilePath,
@@ -217,6 +218,40 @@ export async function authenticate(
     );
     console.info(chalk.dim(`  token saved to ${getAuthFilePath()}`));
     if (onboardingHint) console.info(onboardingHint);
+
+    // 7. Auto-sync: pull the user's models + policy from the proxy so
+    // web-added models appear on first CLI run without a manual /sync.
+    // reloadServices=false — the TUI hasn't booted yet, there's nothing
+    // to reload. Best-effort: a sync failure must not fail login.
+    try {
+      const fresh = loadAuthFile();
+      if (fresh?.accessToken) {
+        const { syncFromProxy } = await import("../sync.js");
+        const res = await syncFromProxy(fresh, proxyUrl, {
+          reloadServices: false,
+        });
+        if (res.modelsOk) {
+          console.info(
+            chalk.dim(
+              `  synced ${res.modelCount} model${res.modelCount === 1 ? "" : "s"} from your account`,
+            ),
+          );
+          console.info(
+            chalk.dim(
+              "  manage models at Settings → Models in the web dashboard",
+            ),
+          );
+        }
+      }
+    } catch (syncErr) {
+      // Non-fatal — user can always run /sync later.
+      console.info(
+        chalk.dim(
+          `  (auto-sync skipped: ${syncErr instanceof Error ? syncErr.message : syncErr})`,
+        ),
+      );
+    }
+
     return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -286,6 +321,19 @@ async function validateToken(
  * ends up chmod 600.
  */
 function persistToken(proxyUrl: string, token: string, me: MeResponse): void {
+  // Identity switch: if a different user was signed in before this
+  // call, wipe the previous user's sync cache, synced config.yaml,
+  // and CLI sessions so the new account sees a clean slate instead
+  // of the previous user's models + chat history.
+  const existing = loadAuthFile();
+  if (existing?.user?.id && existing.user.id !== me.user.id) {
+    try {
+      clearUserArtefacts();
+    } catch {
+      /* best-effort */
+    }
+  }
+
   const file: SharedAuthFile = {
     version: 1,
     proxyUrl,

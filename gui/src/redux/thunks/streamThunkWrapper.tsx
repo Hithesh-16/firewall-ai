@@ -15,6 +15,13 @@ import { saveCurrentSession } from "./session";
  * whether the Error prototype survived IPC. JetBrains' webview proxy
  * flattens errors into plain objects, so `instanceof` is unreliable —
  * match on `name` + presence of `detail` instead.
+ *
+ * Defensive: if the error looks like a firewall flag but `detail` has
+ * been stripped by the transport layer, we still synthesise a minimal
+ * BlockDetail from the error message rather than falling through to
+ * the generic error dialog (P7 — the fallback modal was alarming and
+ * user-visible even when the inline consent card path worked). A
+ * firewall flag always belongs to the inline consent flow.
  */
 function extractFirewallBlockDetail(e: unknown): BlockDetail | null {
   if (!e || typeof e !== "object") return null;
@@ -24,15 +31,28 @@ function extractFirewallBlockDetail(e: unknown): BlockDetail | null {
     (typeof anyErr.message === "string" &&
       anyErr.message.startsWith("AI Firewall"));
   if (!looksLikeFirewallError) return null;
+
   const detail = anyErr.detail;
-  if (!detail || typeof detail !== "object") return null;
-  const d = detail as Partial<BlockDetail>;
-  if (typeof d.riskScore !== "number") return null;
+  if (detail && typeof detail === "object") {
+    const d = detail as Partial<BlockDetail>;
+    return {
+      riskScore: typeof d.riskScore === "number" ? d.riskScore : 0,
+      reasons: Array.isArray(d.reasons) ? d.reasons : [],
+      findings: Array.isArray(d.findings) ? d.findings : [],
+      action: d.action ?? "BLOCK",
+    };
+  }
+
+  // Detail was stripped in transit — best-effort parse from the
+  // message so the user still lands on the inline consent card
+  // rather than the disruptive StreamErrorDialog popover.
+  const msg = typeof anyErr.message === "string" ? anyErr.message : "";
+  const riskMatch = /risk:\s*(\d+)/i.exec(msg);
   return {
-    riskScore: d.riskScore,
-    reasons: Array.isArray(d.reasons) ? d.reasons : [],
-    findings: Array.isArray(d.findings) ? d.findings : [],
-    action: d.action ?? "BLOCK",
+    riskScore: riskMatch ? Number(riskMatch[1]) : 0,
+    reasons: msg ? [msg] : [],
+    findings: [],
+    action: "BLOCK",
   };
 }
 

@@ -169,6 +169,76 @@ export function deleteAuthFile(filePath: string = getAuthFilePath()): void {
 }
 
 /**
+ * Returns the root `~/.ai-firewall/` directory (or the
+ * `$AI_FIREWALL_GLOBAL_DIR` override used by tests).
+ */
+export function getAuthRootDir(): string {
+  return (
+    process.env.AI_FIREWALL_GLOBAL_DIR ||
+    path.join(os.homedir(), ".ai-firewall")
+  );
+}
+
+/**
+ * Remove every user-identity-bound artefact written under
+ * `~/.ai-firewall/`. Called from every sign-out flow (web, CLI,
+ * VS Code) and whenever the file watcher sees the accessToken
+ * change to a different user — otherwise stale models, sessions,
+ * and sync caches from the previous account linger and surface in
+ * the IDE / CLI on the next sign-in.
+ *
+ * Wipes:
+ *   - auth.json                        (bearer token)
+ *   - config.yaml                      (synced assistant — unless
+ *                                       marked `# user-managed: true`)
+ *   - cache/                           (assistant.yaml, etag, meta,
+ *                                       vscode-assistant.etag)
+ *   - sessions/                        (CLI chat history)
+ *   - cli-state.json                   (legacy WorkOS sidecar)
+ *
+ * Preserves (not identity-bound):
+ *   - permissions.yaml, settings.json, .env, memory/
+ *
+ * Idempotent. Never throws — every step is wrapped individually so
+ * a single permissions error on one file doesn't block the rest.
+ */
+export function clearUserArtefacts(rootDir: string = getAuthRootDir()): void {
+  const safeUnlink = (p: string): void => {
+    try {
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    } catch {
+      /* best-effort */
+    }
+  };
+  const safeRmDir = (p: string): void => {
+    try {
+      if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  safeUnlink(path.join(rootDir, "auth.json"));
+  safeUnlink(path.join(rootDir, "cli-state.json"));
+
+  // Respect a hand-edited config.yaml that opted out of auto-sync.
+  try {
+    const configPath = path.join(rootDir, "config.yaml");
+    if (fs.existsSync(configPath)) {
+      const head = fs.readFileSync(configPath, "utf8").slice(0, 200);
+      if (!head.includes("# user-managed: true")) {
+        fs.unlinkSync(configPath);
+      }
+    }
+  } catch {
+    /* best-effort */
+  }
+
+  safeRmDir(path.join(rootDir, "cache"));
+  safeRmDir(path.join(rootDir, "sessions"));
+}
+
+/**
  * Returns `true` if the auth record has an access token and is not expired.
  *
  * A record with `expiresAt` unset or `0` is treated as non-expiring.

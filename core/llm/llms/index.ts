@@ -132,22 +132,12 @@ export const LLMClasses = [
   zAI,
 ];
 
-export interface ProviderEntry {
-  providerName: string;
-  apiBase?: string;
-  isCustomApi: boolean;
-}
-
-export const PROVIDER_REGISTRY: ProviderEntry[] = LLMClasses.map((cls) => {
-  const apiBase = cls.defaultOptions?.apiBase;
-  const isOpenAICompatible = apiBase?.includes("/v1/");
-  return {
-    providerName: cls.providerName,
-    apiBase: isOpenAICompatible ? apiBase : undefined,
-    isCustomApi: !isOpenAICompatible && !!apiBase,
-  };
-}).filter((entry) => entry.apiBase || entry.isCustomApi);
-
+// The canonical PROVIDER_REGISTRY (and getApiBaseForProvider) live in
+// @ai-firewall/openai-adapters/src/providerRegistry.ts. A duplicate local
+// declaration used to sit here with a different shape (ProviderEntry[] vs
+// ProviderDefinition[]), which triggered TS2323 "Cannot redeclare" against
+// the re-export on every build. Nothing in the repo consumed the local
+// shape, so this file now simply forwards the canonical one.
 export {
   PROVIDER_REGISTRY,
   getApiBaseForProvider,

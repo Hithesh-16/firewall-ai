@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { requireAuth, requireCapability } from "../auth/authMiddleware";
+import { CAP } from "../auth/capabilities";
 import {
   createGrant,
   deleteGrant,
@@ -51,7 +52,7 @@ const bulkCreateSchema = z.object({
 export async function registerModelGrantRoutes(
   app: FastifyInstance,
 ): Promise<void> {
-  const preHandler = [requireAuth, requireCapability("policies.edit")];
+  const preHandler = [requireAuth, requireCapability(CAP.policies_edit)];
 
   app.get<{ Params: { orgId: string } }>(
     "/api/orgs/:orgId/model-grants",

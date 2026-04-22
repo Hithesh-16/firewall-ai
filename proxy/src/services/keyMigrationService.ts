@@ -21,7 +21,29 @@
 
 import * as fs from "node:fs";
 import * as YAML from "yaml";
+import { asc } from "drizzle-orm";
 import { createProvider, getProviderBySlug } from "../gateway/providerService";
+import { db } from "../db/index";
+import { organizations } from "../db/schema";
+
+/**
+ * Resolve the "system" org used by the startup YAML → vault migration.
+ *
+ * Why: the migration runs without an authenticated user, but providers
+ * are now strictly org-scoped (ux_providers_org_slug). We attach
+ * migrated rows to the oldest org — the same rule used by the
+ * database.ts backfill, so a freshly-installed instance stays
+ * consistent with pre-migration data.
+ */
+function getSystemOrgId(): number | null {
+  const row = db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .orderBy(asc(organizations.createdAt), asc(organizations.id))
+    .limit(1)
+    .get();
+  return row?.id ?? null;
+}
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -67,6 +89,18 @@ export function migrateConfigKeys(configPath: string): MigrationResult {
       migrated: 0,
       skipped: 0,
       errors: ["No 'models' array found in config.yaml"],
+      details: [],
+    };
+  }
+
+  // Resolve the org that will own migrated providers. No orgs → nothing
+  // to migrate yet (fresh install, onboarding has not run).
+  const systemOrgId = getSystemOrgId();
+  if (systemOrgId == null) {
+    return {
+      migrated: 0,
+      skipped: 0,
+      errors: ["No organizations exist; cannot vault keys yet"],
       details: [],
     };
   }
@@ -137,11 +171,11 @@ export function migrateConfigKeys(configPath: string): MigrationResult {
     // Vault the key
     const slug = provider;
     try {
-      // Check if already vaulted under this slug
-      const existing = getProviderBySlug(slug);
+      // Check if already vaulted under this slug (within the system org)
+      const existing = getProviderBySlug(slug, systemOrgId);
       if (!existing) {
         const baseUrl = apiBaseNode ? String(apiBaseNode) : "";
-        createProvider(provider, apiKey, baseUrl);
+        createProvider(provider, apiKey, baseUrl, systemOrgId);
       }
       // else: slug already exists in vault — reuse it. The key may
       // differ (user rotated), but for migration we keep the first

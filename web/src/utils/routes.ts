@@ -45,6 +45,8 @@ export const ROUTES = {
   SETTINGS_MODELS: "/settings/models",
   SETTINGS_ASSISTANT: "/settings/assistant",
   SETTINGS_MODEL_ACCESS: "/settings/model-access",
+  SETTINGS_RULES: "/settings/rules",
+  SETTINGS_SKILLS: "/settings/skills",
   ADD_PROVIDER: "/providers/add",
 } as const;
 
@@ -93,6 +95,8 @@ export const PRIVATE_PATHS: readonly RoutePath[] = [
   ROUTES.SETTINGS_MODELS,
   ROUTES.SETTINGS_ASSISTANT,
   ROUTES.SETTINGS_MODEL_ACCESS,
+  ROUTES.SETTINGS_RULES,
+  ROUTES.SETTINGS_SKILLS,
   ROUTES.ADD_PROVIDER,
 ] as const;
 

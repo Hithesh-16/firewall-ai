@@ -28,15 +28,23 @@ export type {
 
 export {
   getAuthFilePath,
+  getAuthRootDir,
   loadAuthFile,
   saveAuthFile,
   deleteAuthFile,
+  clearUserArtefacts,
   isAuthValid,
   watchAuthFile,
   normalizeAuthFile,
 } from "./authFile.js";
 
 export { buildWebLoginUrl, generateStateNonce } from "./webLoginUrl.js";
+
+export {
+  mergeLocalIntoAssistantYaml,
+  scanLocalCustomisations,
+  type LocalCustomisations,
+} from "./localMerge.js";
 
 export {
   startLoopbackTokenServer,

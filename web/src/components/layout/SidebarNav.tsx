@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { NavLink } from "react-router-dom";
 import {
   ChatBubbleLeftRightIcon,
@@ -19,9 +19,11 @@ import {
   ClockIcon,
   CodeBracketSquareIcon,
   CubeIcon,
+  AcademicCapIcon,
 } from "@heroicons/react/24/outline";
 import { cn } from "../../utils/cn";
 import { ROUTES } from "../../utils/routes";
+import { useAppSelector } from "../../store/hooks";
 
 interface NavItem {
   label: string;
@@ -73,6 +75,16 @@ const sections: NavSection[] = [
         icon: CubeIcon,
       },
       {
+        label: "Rules",
+        to: "/settings/rules",
+        icon: DocumentTextIcon,
+      },
+      {
+        label: "Skills",
+        to: "/settings/skills",
+        icon: BoltIcon,
+      },
+      {
         label: "Assistant",
         to: "/settings/assistant",
         icon: CodeBracketSquareIcon,
@@ -90,9 +102,35 @@ interface SidebarNavProps {
 }
 
 export function SidebarNav({ collapsed }: SidebarNavProps) {
+  // Admin-only "Model Access" entry surfaces when the user can edit
+  // policies (the same capability gating the proxy's admin model
+  // endpoints). Non-admins never see the link — they discover
+  // admin-assigned models on /settings/models instead.
+  const canEditPolicies = useAppSelector((s) =>
+    s.permissions.permissions.includes("policies.edit"),
+  );
+
+  const resolvedSections = useMemo(() => {
+    if (!canEditPolicies) return sections;
+    return sections.map((section) => {
+      if (section.title !== "Management") return section;
+      const items = [...section.items];
+      // Insert "Model Access" right after "Organization" so admins
+      // land on a group of related org-scoped admin surfaces.
+      const orgIdx = items.findIndex((i) => i.to === ROUTES.ORG);
+      const insertAt = orgIdx >= 0 ? orgIdx + 1 : items.length;
+      items.splice(insertAt, 0, {
+        label: "Model Access",
+        to: `${ROUTES.ORG}?tab=user-models`,
+        icon: AcademicCapIcon,
+      });
+      return { ...section, items };
+    });
+  }, [canEditPolicies]);
+
   return (
     <nav className="flex flex-col gap-4 px-2">
-      {sections.map((section) => (
+      {resolvedSections.map((section) => (
         <div key={section.title}>
           {!collapsed && (
             <p className="text-description-muted mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest">

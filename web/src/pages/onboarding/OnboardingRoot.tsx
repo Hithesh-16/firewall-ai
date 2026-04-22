@@ -34,6 +34,20 @@ interface ProviderSnapshot {
   slug: string;
   baseUrl: string;
 }
+
+/**
+ * Deterministic small integer from a slug — used to generate pseudo
+ * server IDs for org-scoped providers that don't carry a numeric id
+ * of their own. Negative values so they can't collide with real
+ * personal-provider rows (whose ids are positive).
+ */
+function hashSlug(slug: string): number {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) {
+    h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+  }
+  return h % 1_000_000 || 1;
+}
 interface WizardPolicySnapshot {
   scanners: {
     secrets: { enabled: boolean; block: number; redact: number };
@@ -163,12 +177,57 @@ export function OnboardingRoot() {
           }
         }
 
-        // 4. Providers
-        const providers = await apiClient
-          .get<ProviderSnapshot[]>(ENDPOINTS.providers.root)
-          .catch(() => [] as ProviderSnapshot[]);
+        // 4. Providers — SECURITY FIX
+        //
+        // Previously this called `GET /api/providers` which returns the
+        // global `providers` table unscoped — it has no `org_id`
+        // column so every user in every org saw every other org's
+        // providers as "already added" during onboarding.
+        //
+        // Hitting `/api/me/providers` instead returns only the current
+        // user's personal providers + their org's providers (properly
+        // scoped by `user_id` / `org_id` in the handler). A fresh user
+        // sees an empty list, which is the correct onboarding state.
+        const meProviders = await apiClient
+          .get<{
+            personal?: Array<{
+              id?: number;
+              providerSlug: string;
+              baseUrl?: string | null;
+            }>;
+            org?: Array<{
+              providerSlug: string;
+              displayName?: string;
+              baseUrl?: string | null;
+            }>;
+          }>(ENDPOINTS.me.providers)
+          .catch(() => ({ personal: [], org: [] }));
         if (cancelled) return;
-        for (const p of providers) {
+
+        // Merge personal + org into the local ProviderSnapshot shape
+        // the wizard state expects. Keys:
+        //   id         — serverId (personal rows have it; org rows don't
+        //                so we synthesise a negative pseudo-id from a
+        //                hash of the slug to avoid colliding with real
+        //                personal rows and to make dedupe deterministic).
+        //   name       — slug (or displayName for org rows).
+        //   slug/baseUrl — as returned.
+        const providerSnapshots: ProviderSnapshot[] = [
+          ...(meProviders.personal ?? []).map((p) => ({
+            id: typeof p.id === "number" ? p.id : -hashSlug(p.providerSlug),
+            name: p.providerSlug,
+            slug: p.providerSlug,
+            baseUrl: p.baseUrl ?? "",
+          })),
+          ...(meProviders.org ?? []).map((p) => ({
+            id: -hashSlug(`org:${p.providerSlug}`),
+            name: p.displayName ?? p.providerSlug,
+            slug: p.providerSlug,
+            baseUrl: p.baseUrl ?? "",
+          })),
+        ];
+
+        for (const p of providerSnapshots) {
           if (!wizard.providers.some((x) => x.serverId === p.id)) {
             const kind = inferKindFromBaseUrl(p.baseUrl);
             dispatch(
@@ -243,7 +302,17 @@ export function OnboardingRoot() {
   }
   function goFinish() {
     dispatch(onboardingActions.markCompleted());
-    navigate(ROUTES.CHAT);
+    // Post-onboarding landing depends on role:
+    //   - admin → /org (Providers tab by default), so they can verify
+    //     the org keys + models they just set up and start granting
+    //     them to team members.
+    //   - everyone else → /settings/models, where they pick which of
+    //     the org-provided models they want (or add personal BYOK if
+    //     the org hasn't shared anything).
+    // Adding models is mandatory; the relevant landing page is the
+    // one that actually lets them add.
+    const dest = user?.role === "admin" ? ROUTES.ORG : ROUTES.SETTINGS_MODELS;
+    navigate(dest);
   }
 
   // Steps 3 and 6 are visible only to team / org workspaces.

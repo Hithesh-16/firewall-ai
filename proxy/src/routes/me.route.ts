@@ -2,19 +2,12 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { requireAuth } from "../auth/authMiddleware";
-import {
-  deleteAssistant,
-  getAssistant,
-  listAssistants,
-  resolveAssistantForUser,
-  setDefaultAssistant,
-  upsertAssistant,
-} from "../gateway/assistantService";
 import crypto from "node:crypto";
 
 import {
   inferGrantMode,
   isModelGrantedToUser,
+  listGrantsForUser,
   resolveGrantsForUser,
 } from "../gateway/modelGrantService";
 import {
@@ -25,6 +18,11 @@ import {
   resolveProviderForUser,
   upsertUserProvider,
 } from "../gateway/userProviderService";
+import { listUserModels } from "../gateway/userModelService";
+import {
+  listSubscribedItems,
+  reconcileCatalogueFiles,
+} from "../gateway/orgCatalogueService";
 import { resolveEffectivePolicy } from "../policy/policyChain";
 
 /**
@@ -116,168 +114,73 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: requireAuth },
     async (request, reply) => {
       const user = requireUser(request);
-      const assistant = resolveAssistantForUser(user.id, user.orgId);
-      if (!assistant) {
-        return reply.status(404).send({
-          error: "NO_ASSISTANT_CONFIGURED",
-          message:
-            "No default assistant is configured for your user or org. " +
-            "Ask your admin to provision an org assistant, or create a " +
-            "personal assistant via the web dashboard.",
-        });
+
+      // Single-source architecture: the assistant YAML is a VIEW,
+      // not a stored blob. We synthesise it on every call from:
+      //   - user_models + model_grants → `models:`
+      //   - subscribed org_rules      → `rules:`
+      //   - (subscribed org_skills are mirrored to disk instead)
+      //
+      // Personal rules / MCP servers / prompts that the user
+      // authors directly into `~/.ai-firewall/` are read by the
+      // IDE/CLI locally and merged after this response — the
+      // proxy does NOT store them.
+      const userRows = listUserModels(user.id);
+      const grants = user.orgId
+        ? listGrantsForUser(user.orgId, user.id).filter(
+            (g) => g.modelSlug !== "*",
+          )
+        : [];
+      const canonicalModels = buildCanonicalModels(userRows, grants);
+      const subscribedRules = listSubscribedItems("rule", user.id);
+
+      // Reflect subscribed items onto disk so the IDE + CLI pick
+      // up markdown files in the layout users can edit directly.
+      try {
+        reconcileCatalogueFiles("rule", user.id);
+        reconcileCatalogueFiles("skill", user.id);
+      } catch {
+        /* filesystem mirror is best-effort */
       }
 
-      // ── KEY INJECTION ────────────────────────────────────────
-      //
-      // The YAML stored in the `assistants` table is intentionally
-      // key-free — API keys live in `user_providers` / `org_providers`
-      // and are AES-256-GCM encrypted at rest. But the CLI's
-      // Continue config-yaml unroller wants credentials inline on
-      // each model entry (`apiKey: ...`) so it can construct an
-      // LLM client.
-      //
-      // We do the injection here, on every GET, so:
-      //   - The DB never stores plaintext keys next to the assistant
-      //   - Rotating a key via `PUT /api/me/providers/:slug` is
-      //     picked up on the next conditional GET (the injected
-      //     etag changes when the key material changes)
-      //   - Users who don't have a provider for a given model get
-      //     an empty string — the unroller still lists the model
-      //     so the CLI can show it and surface a better "missing
-      //     credentials" error than "no models"
-      //
-      // Both the stored etag and a hash of the injected content
-      // go into the outgoing ETag so changing either the YAML or
-      // any upstream key triggers a refetch.
-      const injected = await injectProviderKeys(
-        assistant.yaml,
-        user.id,
-        user.orgId,
-      );
+      const yaml = buildFallbackAssistantYaml(canonicalModels, subscribedRules);
+      const baseEtag =
+        "v2:" +
+        crypto.createHash("sha256").update(yaml).digest("hex").slice(0, 16);
+
+      const injected = await injectProviderKeys(yaml, user.id, user.orgId);
       const injectedEtag =
-        assistant.etag +
+        baseEtag +
         ":" +
         crypto.createHash("sha256").update(injected).digest("hex").slice(0, 12);
 
-      // Conditional GET — cheap etag round-trip for client caches.
-      const incoming = request.headers["if-none-match"];
-      if (incoming && incoming === injectedEtag) {
+      const incomingEtag = request.headers["if-none-match"];
+      if (incomingEtag && incomingEtag === injectedEtag) {
         return reply.status(304).send();
       }
 
       reply.header("ETag", injectedEtag);
       return {
         assistant: {
-          slug: assistant.slug,
-          name: assistant.name,
-          owner: { type: assistant.ownerType, id: assistant.ownerId },
+          slug: "default",
+          name: "Personal assistant",
+          owner: { type: "user" as const, id: user.id },
           yaml: injected,
           etag: injectedEtag,
-          isDefault: assistant.isDefault,
-          updatedAt: assistant.updatedAt,
+          isDefault: true,
+          updatedAt: Date.now(),
         },
       };
     },
   );
 
-  app.get(
-    "/api/me/assistants",
-    { preHandler: requireAuth },
-    async (request) => {
-      const user = requireUser(request);
-      const userAssistants = listAssistants("user", user.id);
-      const orgAssistants = user.orgId ? listAssistants("org", user.orgId) : [];
-      return {
-        user: userAssistants.map((a) => ({
-          slug: a.slug,
-          name: a.name,
-          etag: a.etag,
-          isDefault: a.isDefault,
-          updatedAt: a.updatedAt,
-        })),
-        org: orgAssistants.map((a) => ({
-          slug: a.slug,
-          name: a.name,
-          etag: a.etag,
-          isDefault: a.isDefault,
-          updatedAt: a.updatedAt,
-        })),
-      };
-    },
-  );
-
-  const upsertAssistantSchema = z.object({
-    name: z.string().min(1).max(128),
-    yaml: z.string().min(1),
-    isDefault: z.boolean().optional(),
-  });
-
-  app.put<{ Params: { slug: string } }>(
-    "/api/me/assistants/:slug",
-    { preHandler: requireAuth },
-    async (request, reply) => {
-      const user = requireUser(request);
-      if (!effectivePolicyAllowsUserOverride(user)) {
-        return reply.status(403).send({
-          error: "USER_OVERRIDE_NOT_ALLOWED",
-          message:
-            "Your org's policy does not permit per-user assistant overrides.",
-        });
-      }
-      const parse = upsertAssistantSchema.safeParse(request.body);
-      if (!parse.success) {
-        return reply.status(400).send({
-          error: "INVALID_BODY",
-          message: parse.error.message,
-        });
-      }
-      const stored = upsertAssistant({
-        ownerType: "user",
-        ownerId: user.id,
-        slug: request.params.slug,
-        name: parse.data.name,
-        yaml: parse.data.yaml,
-        isDefault: parse.data.isDefault,
-      });
-      return {
-        assistant: {
-          slug: stored.slug,
-          name: stored.name,
-          owner: { type: stored.ownerType, id: stored.ownerId },
-          etag: stored.etag,
-          isDefault: stored.isDefault,
-          updatedAt: stored.updatedAt,
-        },
-      };
-    },
-  );
-
-  app.delete<{ Params: { slug: string } }>(
-    "/api/me/assistants/:slug",
-    { preHandler: requireAuth },
-    async (request, reply) => {
-      const user = requireUser(request);
-      const removed = deleteAssistant("user", user.id, request.params.slug);
-      if (!removed) {
-        return reply.status(404).send({ error: "NOT_FOUND" });
-      }
-      return { deleted: true };
-    },
-  );
-
-  app.post<{ Params: { slug: string } }>(
-    "/api/me/assistants/:slug/default",
-    { preHandler: requireAuth },
-    async (request, reply) => {
-      const user = requireUser(request);
-      const existing = getAssistant("user", user.id, request.params.slug);
-      if (!existing) {
-        return reply.status(404).send({ error: "NOT_FOUND" });
-      }
-      setDefaultAssistant("user", user.id, request.params.slug);
-      return { ok: true };
-    },
-  );
+  // NOTE: the `/api/me/assistants/*` CRUD endpoints (PUT, DELETE,
+  // default, list) were removed when the `assistants` table was
+  // dropped. Rules live in `org_rules`; skills in `org_skills`;
+  // models in `user_models`; personal MCP/prompts are local files.
+  // The singular `/api/me/assistant` endpoint above synthesises a
+  // read-only view from those sources — there's nothing to mutate
+  // here anymore.
 
   // ─── Models (flattened list for clients) ──────────────────────
 
@@ -286,40 +189,31 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
     const available = listAvailableProvidersForUser(user.id, user.orgId);
     const canAddPersonal = effectivePolicyAllowsUserOverride(user);
 
-    // The flat list is built by cross-referencing available
-    // providers against the default assistant's `models:` array.
-    // If the user has no default assistant yet, we still return
-    // the list of available providers so the onboarding wizard
-    // can show "Pick a model" using the upstream provider's
-    // default model list.
-    const assistant = resolveAssistantForUser(user.id, user.orgId);
-
-    // Parse YAML model slugs on demand — we avoid loading the full
-    // YAML parser at module init time by importing lazily.
-    let declaredModels: Array<{
+    // The flat list is built from `user_models` + `model_grants`
+    // (the single source of truth after the refactor) — no longer
+    // derived from an assistant YAML blob.
+    const userModelRows = listUserModels(user.id);
+    const grantsForFlat = user.orgId
+      ? listGrantsForUser(user.orgId, user.id).filter(
+          (g) => g.modelSlug !== "*",
+        )
+      : [];
+    const declaredModels: Array<{
       provider: string;
       model: string;
       displayName?: string;
-    }> = [];
-    if (assistant) {
-      try {
-        const yamlModule = await import("yaml");
-        const parsed = yamlModule.parse(assistant.yaml) as {
-          models?: Array<{
-            provider: string;
-            model: string;
-            name?: string;
-          }>;
-        };
-        declaredModels = (parsed.models ?? []).map((m) => ({
-          provider: m.provider,
-          model: m.model,
-          displayName: m.name,
-        }));
-      } catch {
-        declaredModels = [];
-      }
-    }
+    }> = [
+      ...userModelRows.map((m) => ({
+        provider: m.providerSlug,
+        model: m.modelSlug,
+        displayName: m.displayName ?? undefined,
+      })),
+      ...grantsForFlat.map((g) => ({
+        provider: g.providerSlug,
+        model: g.modelSlug,
+        displayName: undefined,
+      })),
+    ];
 
     // Cross-reference: a declared model is "reachable" only when
     //   1. the user has an available provider for its slug, AND
@@ -361,7 +255,11 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
       availableProviders: available,
       hasAny: reachable.length > 0,
       canAddPersonal,
-      hasAssistant: !!assistant,
+      // Kept for backwards compatibility with callers that expect
+      // this key; post-refactor the IDE's gating is based on
+      // `hasAny` (user_models + grants). Always true since the
+      // synthesised assistant view is never absent.
+      hasAssistant: true,
       grantMode,
     };
   });
@@ -426,70 +324,11 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
       // zero reachable models because the YAML only lists models
       // from the OLD provider.
       //
-      // Strategy:
-      //   1. Load the user's current default assistant YAML (or the
-      //      org default, or a blank template).
-      //   2. Parse it. Check if it already has a model for this
-      //      provider slug.
-      //   3. If not, append one entry using the model slug from the
-      //      request body (or a sensible default like "AUTODETECT").
-      //   4. Re-save.
-      try {
-        const existing = resolveAssistantForUser(user.id, user.orgId);
-        const yamlModule = await import("yaml");
-        let parsed: Record<string, unknown>;
-        if (existing) {
-          parsed = yamlModule.parse(existing.yaml) as Record<string, unknown>;
-        } else {
-          parsed = {
-            name: "personal",
-            schema: "v1",
-            version: "0.0.1",
-            models: [],
-          };
-        }
-
-        const models = Array.isArray(parsed.models)
-          ? (parsed.models as Array<Record<string, unknown>>)
-          : [];
-
-        const providerSlug = request.params.slug;
-        const alreadyHasProvider = models.some(
-          (m) => m.provider === providerSlug,
-        );
-
-        if (!alreadyHasProvider) {
-          const newModelSlug = parse.data.model || "AUTODETECT";
-          const newDisplayName =
-            parse.data.modelDisplayName || `${providerSlug} (${newModelSlug})`;
-          models.push({
-            name: newDisplayName,
-            provider: providerSlug,
-            model: newModelSlug,
-            roles: ["chat", "edit", "apply"],
-          });
-          parsed.models = models;
-
-          const updatedYaml = yamlModule.stringify(parsed);
-          upsertAssistant({
-            ownerType: "user",
-            ownerId: user.id,
-            slug: existing?.slug ?? "default",
-            name: existing?.name ?? "Personal assistant",
-            yaml: updatedYaml,
-            isDefault: true,
-          });
-        }
-      } catch (e) {
-        // Non-fatal — the provider key is already saved, model
-        // sync is best-effort. User can fix via /settings/assistant.
-        console.warn(
-          `[me.route] auto-sync assistant on provider add failed: ${
-            e instanceof Error ? e.message : e
-          }`,
-        );
-      }
-
+      // Models are managed independently via /api/me/models/add —
+      // adding a provider key no longer auto-populates the assistant
+      // YAML (there is no assistants table anymore). Users either
+      // add a model through Settings → Models, or an admin grants
+      // them one via /api/orgs/:id/model-grants.
       return { ok: true };
     },
   );
@@ -504,38 +343,11 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ error: "NOT_FOUND" });
       }
 
-      // Auto-sync: strip this provider's models from the assistant
-      // so stale models don't show up in the CLI after deletion.
-      try {
-        const existing = resolveAssistantForUser(user.id, user.orgId);
-        if (existing) {
-          const yamlModule = await import("yaml");
-          const parsed = yamlModule.parse(existing.yaml) as Record<
-            string,
-            unknown
-          >;
-          const models = Array.isArray(parsed.models)
-            ? (parsed.models as Array<Record<string, unknown>>)
-            : [];
-          const filtered = models.filter(
-            (m) => m.provider !== request.params.slug,
-          );
-          if (filtered.length !== models.length) {
-            parsed.models = filtered;
-            upsertAssistant({
-              ownerType: "user",
-              ownerId: user.id,
-              slug: existing.slug,
-              name: existing.name,
-              yaml: yamlModule.stringify(parsed),
-              isDefault: existing.isDefault,
-            });
-          }
-        }
-      } catch {
-        // best-effort
-      }
-
+      // Models for this provider in `user_models` become orphaned
+      // when the key goes away — but we DON'T delete them here.
+      // They stay listed (with an empty `apiKey`) so the user can
+      // see "add a key for gpt-4o" rather than "your model vanished".
+      // Explicit delete lives under DELETE /api/me/models/:id.
       return { deleted: true };
     },
   );
@@ -572,6 +384,118 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
  *     (Azure, Ollama, Bedrock). We only inject if the YAML
  *     doesn't already have its own `apiBase:` line.
  */
+/**
+ * The canonical, single-source-of-truth shape for a user-visible
+ * model. Built by merging `user_models` (self-added) with
+ * non-wildcard `model_grants` (admin-assigned). This is what every
+ * consumer of `/api/me/assistant` sees as the `models:` block,
+ * regardless of whether the user has an `assistants` row or not.
+ */
+interface CanonicalModel {
+  name: string;
+  providerSlug: string;
+  modelSlug: string;
+  apiBase: string | null;
+  roles: string[];
+}
+
+function buildCanonicalModels(
+  userRows: ReturnType<typeof listUserModels>,
+  grants: ReturnType<typeof listGrantsForUser>,
+): CanonicalModel[] {
+  const seen = new Set<string>();
+  const out: CanonicalModel[] = [];
+
+  // Personal rows first — if both sources mention the same pair the
+  // personal row wins (it carries the user's own display name + base).
+  for (const m of userRows) {
+    const key = `${m.providerSlug}/${m.modelSlug}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      name: m.displayName || m.modelSlug,
+      providerSlug: m.providerSlug,
+      modelSlug: m.modelSlug,
+      apiBase: m.apiBase ?? null,
+      roles: m.roles && m.roles.length > 0 ? m.roles : ["chat"],
+    });
+  }
+
+  for (const g of grants) {
+    const key = `${g.providerSlug}/${g.modelSlug}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      name: g.modelSlug,
+      providerSlug: g.providerSlug,
+      modelSlug: g.modelSlug,
+      apiBase: null,
+      roles: ["chat", "edit", "apply"],
+    });
+  }
+  return out;
+}
+
+function serialiseModelsBlock(models: CanonicalModel[]): string {
+  if (models.length === 0) return "models: []\n";
+  const lines: string[] = ["models:"];
+  for (const m of models) {
+    lines.push(`  - name: ${JSON.stringify(m.name)}`);
+    lines.push(`    provider: ${m.providerSlug}`);
+    lines.push(`    model: ${m.modelSlug}`);
+    if (m.apiBase) {
+      lines.push(`    apiBase: ${m.apiBase}`);
+    }
+    lines.push("    roles:");
+    for (const r of m.roles) {
+      lines.push(`      - ${r}`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+/**
+ * Build the fallback assistant YAML when no `assistants` row exists
+ * for a user. Produces a minimal but complete Continue-compatible
+ * document — `name`/`schema`/`version` + canonical models + any
+ * installed org rules.
+ */
+function buildFallbackAssistantYaml(
+  models: CanonicalModel[],
+  rules: ReturnType<typeof listSubscribedItems>,
+): string {
+  const header = "name: Personal assistant\nschema: v1\nversion: 0.0.1\n";
+  let body = header + serialiseModelsBlock(models);
+  if (rules.length > 0) {
+    body += serialiseRulesBlock(rules);
+  }
+  return body;
+}
+
+function serialiseRulesBlock(
+  rules: ReturnType<typeof listSubscribedItems>,
+): string {
+  const lines: string[] = ["rules:"];
+  for (const r of rules) {
+    // Continue accepts either strings or objects; the object form
+    // with `name` + `rule` keeps the catalogue labels visible in
+    // logs and debug dumps. Use block-literal (`|`) so newlines in
+    // the markdown body are preserved without re-escaping.
+    lines.push(`  - name: ${JSON.stringify(r.title)}`);
+    lines.push("    rule: |");
+    for (const l of r.body.split("\n")) {
+      lines.push(`      ${l}`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+// Dead code removed: `appendSubscribedRules`, `replaceModelsBlock`,
+// `stripModelsBlock` — all three supported the (retired) `assistants`
+// table's stored-YAML path. Post-refactor the synthesised YAML is
+// built from scratch every time via `buildFallbackAssistantYaml`,
+// so none of the merge/strip helpers have callers.
+
 async function injectProviderKeys(
   yaml: string,
   userId: number,

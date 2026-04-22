@@ -3,6 +3,7 @@ import {
   saveAuthFile,
   loadAuthFile,
   deleteAuthFile,
+  clearUserArtefacts,
   getAuthFilePath,
   type SharedAuthFile,
   type AuthSource,
@@ -96,6 +97,19 @@ export async function registerAuthHandoffRoutes(
       const proxyUrl =
         process.env.AI_FIREWALL_PUBLIC_URL ||
         `http://localhost:${env.PORT || 8080}`;
+
+      // If the handoff is for a different user than whatever is
+      // currently on disk, wipe the previous user's artefacts first
+      // so the IDE / CLI don't keep resolving stale models +
+      // sessions against the new bearer token.
+      try {
+        const previous = loadAuthFile();
+        if (previous?.user?.id && previous.user.id !== ctx.user.id) {
+          clearUserArtefacts();
+        }
+      } catch {
+        /* best-effort */
+      }
 
       // We don't have a cheap way to read users.onboarding_complete from
       // the authContext today — the auth middleware only resolves a minimal
@@ -193,6 +207,19 @@ export async function registerAuthHandoffRoutes(
           message:
             err instanceof Error ? err.message : "Failed to delete file.",
         });
+      }
+
+      // Also wipe every user-bound artefact the local IDE / CLI
+      // wrote under `~/.ai-firewall/` (synced config.yaml, sync
+      // cache, CLI sessions, cli-state.json). Without this, signing
+      // out in the web UI leaves the previous identity's models
+      // and chat history on disk, and the next account that signs
+      // in on this machine keeps seeing them until a manual /sync.
+      // Preserves files marked `# user-managed: true`.
+      try {
+        clearUserArtefacts();
+      } catch {
+        /* best-effort — auth.json was already removed above */
       }
 
       return { ok: true };

@@ -39,8 +39,21 @@ const COOKIE_MAX_AGE_SECONDS = 10 * 60; // 10 minutes
 /**
  * Allowlist of URI schemes we're willing to redirect to after login.
  * Prevents an open-redirect attack via `?callback=https://evil.com`.
+ *
+ * `vscode.env.asExternalUri` in a VS Code fork rewrites the scheme to
+ * whatever the fork uses (`cursor:`, `windsurf:`, `antigravity:`),
+ * so we have to accept each one — otherwise the proxy returns 400
+ * and the IDE sit at "Opening browser..." forever.
  */
-const ALLOWED_CALLBACK_SCHEMES = ["vscode:", "vscode-insiders:", "code:"];
+const ALLOWED_CALLBACK_SCHEMES = [
+  "vscode:",
+  "vscode-insiders:",
+  "code:",
+  "code-oss:",
+  "cursor:",
+  "windsurf:",
+  "antigravity:",
+];
 
 function hmacSecret(): string {
   return env.MASTER_KEY || "dev-only-weak-secret-for-bridge";
@@ -53,7 +66,9 @@ function signPayload(payload: string): string {
 }
 
 function encodeCookie(obj: Record<string, unknown>): string {
-  const payload = Buffer.from(JSON.stringify(obj), "utf8").toString("base64url");
+  const payload = Buffer.from(JSON.stringify(obj), "utf8").toString(
+    "base64url",
+  );
   const sig = signPayload(payload);
   return `${payload}.${sig}`;
 }
@@ -66,9 +81,7 @@ export function decodeCookie<T = Record<string, unknown>>(
   if (!payload || !sig) return null;
   if (signPayload(payload) !== sig) return null;
   try {
-    return JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    ) as T;
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as T;
   } catch {
     return null;
   }
@@ -120,8 +133,7 @@ export async function registerWebLoginBridgeRoutes(
     if (ret !== "cli" && ret !== "vscode" && ret !== "jetbrains") {
       return reply.status(400).send({
         error: "invalid_return",
-        message:
-          "Query param `return` must be one of: cli, vscode, jetbrains.",
+        message: "Query param `return` must be one of: cli, vscode, jetbrains.",
       });
     }
 
@@ -134,7 +146,10 @@ export async function registerWebLoginBridgeRoutes(
         return reply.status(400).send({
           error: "invalid_callback",
           message:
-            "VS Code return requires a `callback` param with a vscode:// URI.",
+            "VS Code return requires a `callback` param using one of the " +
+            "allowed editor URI schemes.",
+          received: q.callback ?? null,
+          allowedSchemes: ALLOWED_CALLBACK_SCHEMES,
         });
       }
       callback = q.callback;

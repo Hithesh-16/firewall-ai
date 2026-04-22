@@ -2,11 +2,14 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { requireAuth, requireCapability } from "../auth/authMiddleware";
+import { CAP } from "../auth/capabilities";
+import { listGrantsForUser } from "../gateway/modelGrantService";
 import {
   addModelForUser,
   addUserModel,
   listUserModels,
   removeUserModelById,
+  type UserModelPublic,
 } from "../gateway/userModelService";
 
 /**
@@ -52,8 +55,51 @@ export async function registerUserModelRoutes(
     { preHandler: requireAuth },
     async (request) => {
       const userId = request.authContext?.user?.id;
+      const orgId = request.authContext?.user?.orgId ?? null;
       if (!userId) throw new Error("Not authenticated");
-      const models = listUserModels(userId);
+
+      // Self-added models (rows in user_models owned by this user).
+      const selfModels = listUserModels(userId);
+
+      // Org-granted models (rows in model_grants). Synthesized into the
+      // same UserModelPublic shape so the client can render one unified
+      // list. We use negative IDs so DELETE /api/me/models/:id (which
+      // validates positive int) cannot clobber a grant — grants are
+      // revoked only via /api/orgs/:orgId/model-grants/:grantId by an
+      // admin, which keeps the "user can't delete what admin assigned"
+      // invariant intact.
+      const grantModels: UserModelPublic[] = orgId
+        ? listGrantsForUser(orgId, userId)
+            // Wildcard grants (model_slug="*") can't be rendered as a
+            // single row without expanding against the org catalogue —
+            // skip them here so the UI doesn't show "openai/*" literally.
+            // The gateway still honours them at request time.
+            .filter((g) => g.modelSlug !== "*")
+            .map((g) => ({
+              id: -g.id,
+              providerSlug: g.providerSlug,
+              modelSlug: g.modelSlug,
+              displayName: null,
+              apiBase: null,
+              enabled: true,
+              roles: ["chat", "edit", "apply"],
+              createdAt: g.grantedAt,
+              updatedAt: g.grantedAt,
+              createdBy: g.grantedBy,
+            }))
+        : [];
+
+      // De-dupe: if a self-added model and a grant name the same
+      // (providerSlug, modelSlug), the self-added one wins (user owns
+      // the key). Grants for pairs the user already has are redundant.
+      const selfKeys = new Set(
+        selfModels.map((m) => `${m.providerSlug}/${m.modelSlug}`),
+      );
+      const grantsDeduped = grantModels.filter(
+        (g) => !selfKeys.has(`${g.providerSlug}/${g.modelSlug}`),
+      );
+
+      const models = [...selfModels, ...grantsDeduped];
       return {
         models,
         hasAny: models.length > 0,
@@ -109,7 +155,7 @@ export async function registerUserModelRoutes(
 
   app.get<{ Params: { userId: string } }>(
     "/api/admin/users/:userId/models",
-    { preHandler: [requireAuth, requireCapability("policies.edit")] },
+    { preHandler: [requireAuth, requireCapability(CAP.policies_edit)] },
     async (request, reply) => {
       const targetUserId = Number(request.params.userId);
       if (!Number.isInteger(targetUserId)) {
@@ -122,7 +168,7 @@ export async function registerUserModelRoutes(
 
   app.post<{ Params: { userId: string } }>(
     "/api/admin/users/:userId/models",
-    { preHandler: [requireAuth, requireCapability("policies.edit")] },
+    { preHandler: [requireAuth, requireCapability(CAP.policies_edit)] },
     async (request, reply) => {
       const adminUserId = request.authContext?.user?.id;
       if (!adminUserId) throw new Error("Not authenticated");
@@ -151,7 +197,7 @@ export async function registerUserModelRoutes(
 
   app.delete<{ Params: { userId: string; id: string } }>(
     "/api/admin/users/:userId/models/:id",
-    { preHandler: [requireAuth, requireCapability("policies.edit")] },
+    { preHandler: [requireAuth, requireCapability(CAP.policies_edit)] },
     async (request, reply) => {
       const targetUserId = Number(request.params.userId);
       const modelId = Number(request.params.id);

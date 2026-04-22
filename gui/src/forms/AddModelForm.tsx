@@ -103,49 +103,60 @@ export function AddModelForm({
       reqInputFields[input.key] = formMethods.watch(input.key);
     }
 
-    // Store API key in proxy vault (encrypted), save only reference in config
-    let apiKeyRef: string | undefined;
-    if (hasValidApiKey && apiKey) {
+    // ── Primary path: persist to proxy `user_models` (shared across IDE, CLI, web) ──
+    // The extension host attaches the bearer token from AiFirewallAuthService and
+    // posts to the proxy's unified /api/me/models/add endpoint. Key never leaves
+    // the extension sandbox. Succeeds for any signed-in user.
+    const modelSlug = selectedModel.params?.model ?? selectedModel.title;
+    const displayName = selectedModel.title;
+    let persistedViaProxy = false;
+    if (hasValidApiKey && apiKey && modelSlug) {
       try {
-        const vaultRes = await fetch("http://localhost:8080/api/providers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: selectedProvider.title || selectedProvider.provider,
-            slug: selectedProvider.provider,
-            baseUrl: selectedProvider.params?.apiBase ?? "",
-            apiKey,
-          }),
+        const proxyRes = await ideMessenger.request("aiFirewall/addUserModel", {
+          providerSlug: selectedProvider.provider ?? "",
+          modelSlug,
+          displayName,
+          apiKey,
+          apiBase: selectedProvider.params?.apiBase,
+          roles: ["chat"],
         });
-        if (vaultRes.ok) {
-          apiKeyRef = `vault://${selectedProvider.provider}/${selectedModel.params?.model ?? selectedModel.title}`;
+        if (proxyRes.status === "success" && proxyRes.content?.ok) {
+          persistedViaProxy = true;
+        } else if (proxyRes.status === "success" && proxyRes.content?.error) {
+          // Non-fatal: log so the user sees why the proxy path was skipped
+          // (most common cause: not signed in to AI Firewall).
+          console.warn(
+            "[AddModelForm] proxy add failed, falling back to local config:",
+            proxyRes.content.error,
+          );
         }
-      } catch {
-        // Proxy not running — fall back to config.yaml storage (backward compat)
+      } catch (err) {
+        console.warn("[AddModelForm] aiFirewall/addUserModel threw:", err);
       }
     }
 
-    const model = {
-      ...selectedProvider.params,
-      ...selectedModel.params,
-      ...reqInputFields,
-      provider: selectedProvider.provider,
-      title: selectedModel.title,
-      // Vault-first: use apiKeyRef if vault succeeded, fall back to raw apiKey
-      ...(apiKeyRef ? { apiKeyRef } : hasValidApiKey ? { apiKey } : {}),
-    };
-
-    ideMessenger.post("config/addModel", { model });
-
-    ideMessenger.post("config/openProfile", {
-      profileId: "local",
-    });
+    // ── Fallback path: local Continue config (offline / not signed in) ──
+    // Only fires when the proxy path didn't persist. Keeps offline users
+    // working; signed-in users skip this so the web/CLI/IDE share one source
+    // of truth (the proxy's user_models table).
+    if (!persistedViaProxy) {
+      const model = {
+        ...selectedProvider.params,
+        ...selectedModel.params,
+        ...reqInputFields,
+        provider: selectedProvider.provider,
+        title: selectedModel.title,
+        ...(hasValidApiKey ? { apiKey } : {}),
+      };
+      ideMessenger.post("config/addModel", { model });
+      ideMessenger.post("config/openProfile", { profileId: "local" });
+    }
 
     void dispatch(
       updateSelectedModelByRole({
         selectedProfile,
         role: "chat",
-        modelTitle: model.title,
+        modelTitle: selectedModel.title,
       }),
     );
 

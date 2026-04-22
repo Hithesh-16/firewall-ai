@@ -166,6 +166,7 @@ async function fetchAssistant(
   proxyUrl: string,
   bearer: string,
   currentEtag: string | null,
+  forceRefresh: boolean = false,
 ): Promise<
   | { kind: "not-modified" }
   | { kind: "fresh"; yaml: string; etag: string }
@@ -176,7 +177,7 @@ async function fetchAssistant(
     const headers: Record<string, string> = {
       Authorization: `Bearer ${bearer}`,
     };
-    if (currentEtag) {
+    if (currentEtag && !forceRefresh) {
       headers["If-None-Match"] = currentEtag;
     }
     const res = await fetch(
@@ -288,7 +289,9 @@ export async function syncLocalConfigYamlToApi(
  * In every other case (offline + cached, ETag match, etc.) this
  * returns a usable YAML string with a message printed to stdout.
  */
-export async function loadAssistantYamlFromApi(): Promise<string> {
+export async function loadAssistantYamlFromApi(
+  forceRefresh: boolean = false,
+): Promise<string> {
   const authFile = loadAuthFile();
   if (!authFile || !authFile.accessToken) {
     throw new Error(
@@ -301,7 +304,12 @@ export async function loadAssistantYamlFromApi(): Promise<string> {
   const cachedEtag = readCachedEtag();
   const cachedYaml = readCachedYaml();
 
-  const result = await fetchAssistant(proxyUrl, bearer, cachedEtag);
+  const result = await fetchAssistant(
+    proxyUrl,
+    bearer,
+    cachedEtag,
+    forceRefresh,
+  );
 
   switch (result.kind) {
     case "not-modified":
@@ -366,6 +374,21 @@ async function loadAssistantYamlFromApiForceFresh(
       ? `Failed to fetch assistant: ${result.message}`
       : `Failed to fetch assistant: kind=${result.kind}`,
   );
+}
+
+/**
+ * Clears the local assistant cache (YAML, ETag, and Meta).
+ * Called during logout to ensure a clean state.
+ */
+export function clearAssistantCache(): void {
+  try {
+    if (fs.existsSync(CACHE_YAML_PATH)) fs.unlinkSync(CACHE_YAML_PATH);
+    if (fs.existsSync(CACHE_ETAG_PATH)) fs.unlinkSync(CACHE_ETAG_PATH);
+    if (fs.existsSync(CACHE_META_PATH)) fs.unlinkSync(CACHE_META_PATH);
+    logger.debug("Assistant cache cleared");
+  } catch (err) {
+    logger.warn("Failed to clear assistant cache", err);
+  }
 }
 
 /**

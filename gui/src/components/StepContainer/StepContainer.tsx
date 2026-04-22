@@ -25,15 +25,28 @@ export default function StepContainer(props: StepContainerProps) {
   const isStreaming = useAppSelector((state) => state.session.isStreaming);
   const uiConfig = useAppSelector(selectUIConfig);
 
-  // Show cost badge on the most recent assistant message using the
-  // latest scan result. We intentionally only show it on the last
-  // assistant message to avoid fragile index-based correlation between
-  // the recentScans array and history items.
   const lastScanResult = useAppSelector((s) => s.security.lastScanResult);
   const isAssistant = props.item.message.role === "assistant";
+
+  let tokensUsed = 0;
+  let cost = 0;
+  if (isAssistant && props.item.promptLogs?.length) {
+    const log = props.item.promptLogs[props.item.promptLogs.length - 1];
+    tokensUsed = (log.promptTokens ?? 0) + (log.completionTokens ?? 0);
+  }
+  if (
+    tokensUsed === 0 &&
+    isAssistant &&
+    props.isLast &&
+    lastScanResult?.tokensUsed
+  ) {
+    tokensUsed = lastScanResult.tokensUsed;
+    cost = lastScanResult.cost || 0;
+  }
+
   const messageCost =
-    isAssistant && props.isLast && lastScanResult?.tokensUsed
-      ? { tokens: lastScanResult.tokensUsed, cost: lastScanResult.cost }
+    isAssistant && tokensUsed > 0
+      ? { tokens: tokensUsed, cost: cost > 0 ? cost : undefined }
       : null;
 
   // Calculate dimming and indicator state based on latest summary index

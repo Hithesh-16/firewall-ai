@@ -132,6 +132,27 @@ export const LLMClasses = [
   zAI,
 ];
 
+export interface ProviderEntry {
+  providerName: string;
+  apiBase?: string;
+  isCustomApi: boolean;
+}
+
+export const PROVIDER_REGISTRY: ProviderEntry[] = LLMClasses.map((cls) => {
+  const apiBase = cls.defaultOptions?.apiBase;
+  const isOpenAICompatible = apiBase?.includes("/v1/");
+  return {
+    providerName: cls.providerName,
+    apiBase: isOpenAICompatible ? apiBase : undefined,
+    isCustomApi: !isOpenAICompatible && !!apiBase,
+  };
+}).filter((entry) => entry.apiBase || entry.isCustomApi);
+
+export {
+  PROVIDER_REGISTRY,
+  getApiBaseForProvider,
+} from "@ai-firewall/openai-adapters";
+
 export async function llmFromDescription(
   desc: JSONModelDescription,
   readFile: (filepath: string) => Promise<string>,

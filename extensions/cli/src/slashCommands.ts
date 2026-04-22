@@ -253,7 +253,7 @@ async function handleSync(): Promise<SlashCommandResult> {
     // from user_models now, not from the assistant YAML.
     let assistantYaml = "";
     try {
-      assistantYaml = await loadAssistantYamlFromApi();
+      assistantYaml = await loadAssistantYamlFromApi(true); // Force refresh to get latest from server
     } catch {
       // No assistant — that's fine for model sync, assistant is
       // only needed for MCP/rules/context.
@@ -383,9 +383,17 @@ async function handleSync(): Promise<SlashCommandResult> {
 
   // ── 3. Reload services ────────────────────────────────────
   try {
+    // Manually update the ConfigService state to trigger the reactive reload
+    // configService.reload() or configService.updateConfigPath() are internal
+    // methods that we can't easily call here. Instead, we use reloadService.
     await reloadService(SERVICE_NAMES.CONFIG);
+
+    // After CONFIG is reloaded, MODEL and MCP should follow because they
+    // depend on CONFIG in the ServiceContainer.
     await reloadService(SERVICE_NAMES.MODEL);
-    lines.push(chalk.green("✓ Config and model services reloaded"));
+    await reloadService(SERVICE_NAMES.MCP);
+
+    lines.push(chalk.green("✓ Config, model, and MCP services reloaded"));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     lines.push(chalk.yellow(`⚠ Service reload failed: ${msg}`));

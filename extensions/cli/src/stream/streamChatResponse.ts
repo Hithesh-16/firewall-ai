@@ -2,8 +2,11 @@ import { ModelConfig } from "@ai-firewall/config-yaml";
 import { BaseLlmApi } from "@ai-firewall/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
 import { firewallPreflightScan } from "core/llm/firewallScan.js";
+import { getThinnedContext } from "core/firewall/thinContext.js";
+import { optimizeMessagesForLLM } from "core/llm/promptOptimizer.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import * as dotenv from "dotenv";
+import { v4 as uuidv4 } from "uuid";
 import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
@@ -37,6 +40,7 @@ import {
 } from "./streamChatResponse.helpers.js";
 import {
   getDefaultCompletionOptions,
+  PlanUpdate,
   StreamCallbacks,
 } from "./streamChatResponse.types.js";
 
@@ -300,7 +304,16 @@ export async function processStreamingResponse(
       }
     };
 
+    // ── Firewall: scan ONLY thinned context (system + last 6 turns) ──────────
+    // The full openaiChatHistory is kept intact for the main LLM call below.
+    // We build a separate thinned payload purely for scanning.
+    const thinnedForScan = getThinnedContext(openaiChatHistory, 6);
     const scanBody = JSON.stringify({
+      messages: thinnedForScan,
+      model: model.model,
+    });
+    // Full body is built separately so we can apply redactions back
+    const fullScanBody = JSON.stringify({
       messages: openaiChatHistory,
       model: model.model,
     });
@@ -328,11 +341,11 @@ export async function processStreamingResponse(
         if (redactScan.blocked) {
           throw new Error(redactScan.blockMessage ?? "Blocked by AI Firewall");
         }
-        applySanitisedMessages(redactScan.finalBody, scanBody);
+        applySanitisedMessages(redactScan.finalBody, fullScanBody);
       }
       // "bypass" — keep openaiChatHistory untouched
     } else {
-      applySanitisedMessages(scan.finalBody, scanBody);
+      applySanitisedMessages(scan.finalBody, fullScanBody);
     }
   } catch (err) {
     if (
@@ -350,21 +363,50 @@ export async function processStreamingResponse(
 
   const requestStartTime = Date.now();
 
+  // ── Prompt caching: inject cache_control breakpoints before the LLM call ───────
+  // Anthropic charges 10% of input tokens for cached reads vs 100% for cold.
+  // We mark the static prefix (system + all-but-last-two turns) as cacheable
+  // so only the newest user turn is billed at full rate each iteration.
+  // Other providers (OpenAI, etc.) silently ignore cache_control fields.
+  // ── Pre-LLM pipeline (blob stubs → cache breakpoints) ───────────────────────
+  // Uses the shared core/llm/promptOptimizer.ts pipeline so CLI and IDE behave identically.
+  const optimizedHistory = optimizeMessagesForLLM(
+    openaiChatHistory,
+  ) as ChatCompletionMessageParam[];
+
+  // Generate or retrieve session ID for OpenAI prompt caching
+  // OpenAI pins cache to prompt_cache_key for improved hit rates
+  const sessionId = services.chatHistory?.getSessionId?.() ?? uuidv4();
+
   const streamFactory = async (retryAbortSignal: AbortSignal) => {
     logger.debug("Creating chat completion stream", {
       model,
       messageCount: chatHistory.length,
       toolCount: tools?.length || 0,
     });
+
+    // Build request options
+    const requestOptions: any = {
+      model: model.model,
+      messages: optimizedHistory,
+      stream: true,
+      tools,
+      ...getDefaultCompletionOptions(model.defaultCompletionOptions),
+    };
+
+    // OpenAI prompt caching: pin cache to session for improved hit rates
+    // Documented improvement: 60% → 87% hit rate with session pinning
+    if (model.provider === "openai") {
+      requestOptions.extra_body = {
+        ...requestOptions.extra_body,
+        prompt_cache_key: sessionId,
+        prompt_cache_retention: "24h",
+      };
+    }
+
     return await chatCompletionStreamWithBackoff(
       llmApi,
-      {
-        model: model.model,
-        messages: openaiChatHistory,
-        stream: true,
-        tools,
-        ...getDefaultCompletionOptions(model.defaultCompletionOptions),
-      },
+      requestOptions as any,
       retryAbortSignal,
     );
   };
@@ -453,6 +495,30 @@ export async function processStreamingResponse(
       cost,
       duration: totalDuration,
     });
+
+    if (!isHeadless) {
+      const yellow = "\x1b[33m";
+      const reset = "\x1b[0m";
+      logger.info(
+        `${yellow}[Tokens: ${inputTokens} in, ${outputTokens} out]${reset}`,
+      );
+    }
+
+    if (callbacks?.onUsageStats) {
+      callbacks.onUsageStats({
+        promptTokens: inputTokens,
+        completionTokens: outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        cost,
+      });
+    }
+
+    if (callbacks?.onPlanUpdate) {
+      const plan = extractPlanFromResponse(aiResponse);
+      if (plan) {
+        callbacks.onPlanUpdate(plan);
+      }
+    }
   } catch (error: any) {
     const errorDuration = Date.now() - requestStartTime;
 
@@ -691,4 +757,58 @@ export async function streamChatResponse(
   // For headless mode, we return only the final response
   // Otherwise, return the full response
   return isHeadless ? finalResponse : fullResponse;
+}
+
+function extractPlanFromResponse(content: string): PlanUpdate | null {
+  const lines = content.split("\n");
+  const tasks: PlanUpdate["tasks"] = [];
+  let title = "Plan";
+  let inList = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (/^#+\s*(plan|tasks?)/i.test(trimmed)) {
+      title = trimmed.replace(/^#+\s*/, "").replace(/[:-]?\s*$/, "") || "Plan";
+      continue;
+    }
+
+    const taskMatch = trimmed.match(/^[-*]\s*(.+)/);
+    if (taskMatch) {
+      inList = true;
+      tasks.push({
+        content: taskMatch[1].trim(),
+        status: "pending",
+      });
+    } else if (/^\d+[.)]\s*(.+)/.test(trimmed)) {
+      const numMatch = trimmed.match(/^\d+[.)]\s*(.+)/);
+      if (numMatch) {
+        inList = true;
+        tasks.push({
+          content: numMatch[1].trim(),
+          status: "pending",
+        });
+      }
+    }
+  }
+
+  if (tasks.length === 0) {
+    const doneMatch = content.match(
+      /##?\s*(Done|Tasks?)\s*[\n:-]?\s*([\s\S]+)/i,
+    );
+    if (doneMatch) {
+      title = doneMatch[1].trim();
+      const items = doneMatch[2].split(/[,;\n]/).slice(0, 10);
+      for (const item of items) {
+        const taskContent = item.trim().replace(/^[-*]\s*/, "");
+        if (taskContent.length > 0) {
+          tasks.push({ content: taskContent, status: "completed" });
+        }
+      }
+    }
+  }
+
+  if (tasks.length === 0) return null;
+
+  return { title, tasks };
 }

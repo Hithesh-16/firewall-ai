@@ -6,7 +6,9 @@ import { env } from "../config";
 const dbPath = path.resolve(process.cwd(), env.DB_PATH);
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
-const db = new Database(dbPath);
+import type { Database as BetterSqlite3Database } from "better-sqlite3";
+
+const db: BetterSqlite3Database = new Database(dbPath);
 
 db.pragma("journal_mode = WAL");
 

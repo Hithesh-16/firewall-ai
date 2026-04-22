@@ -8,3 +8,5 @@ docs/docs/languages
 **/*.diff
 .continue/
 .ai-firewall/
+.kilocode/
+

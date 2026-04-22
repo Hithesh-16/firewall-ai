@@ -32,6 +32,7 @@ const external = [
   "react-reconciler",
   "react",
   "react-devtools-core",
+  "*.node",
 ];
 
 console.log("Building CLI with esbuild...");

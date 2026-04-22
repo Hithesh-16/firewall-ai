@@ -330,12 +330,22 @@ class Gemini extends BaseLLM {
       body.generationConfig = this.convertArgs(options);
     }
 
-    // https://ai.google.dev/gemini-api/docs/api-versions
     if (!isV1API) {
       if (systemMessage) {
-        body.systemInstruction = {
-          parts: [{ text: stripImages(systemMessage) }],
-        };
+        let sysText = "";
+        if (typeof systemMessage === "string") {
+          sysText = systemMessage;
+        } else if (Array.isArray(systemMessage)) {
+          sysText = (systemMessage as any[])
+            .filter((p: any) => p.type === "text")
+            .map((p: any) => p.text || "")
+            .join("\\n");
+        }
+        if (sysText) {
+          body.systemInstruction = {
+            parts: [{ text: stripImages(sysText) as string }],
+          };
+        }
       }
       // Convert and add tools if present
       if (options.tools?.length) {

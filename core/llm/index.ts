@@ -2,9 +2,11 @@ import { ModelRole } from "@ai-firewall/config-yaml";
 import { fetchwithRequestOptions } from "@ai-firewall/fetch";
 import { findLlmInfo } from "@ai-firewall/llm-info";
 import {
-  firewallPreflightScan,
+  firewallCascade,
   FirewallBlockedRequestError,
 } from "./firewallScan.js";
+import { getThinnedContext } from "../firewall/thinContext.js";
+import { optimizeMessagesForLLM } from "./promptOptimizer.js";
 import { firewallResponseScan } from "./firewallResponseScan.js";
 import {
   BaseLlmApi,
@@ -438,6 +440,7 @@ export abstract class BaseLLM implements ILLM {
       apiBase: this.apiBase,
       requestOptions: this.requestOptions,
       env: this._llmOptions.env,
+      ...(this.providerName === "anthropic" ? { cachingStrategy: "none" } : {}),
     });
   }
 
@@ -822,10 +825,15 @@ export abstract class BaseLLM implements ILLM {
       }
     }
 
+    const promptTokens = this.countTokens(fimLog);
+    const completionTokens = this.countTokens(completion);
+
     return {
       prompt: fimLog,
       completion,
       completionOptions,
+      promptTokens,
+      completionTokens,
     };
   }
 
@@ -954,12 +962,17 @@ export abstract class BaseLLM implements ILLM {
       }
     }
 
+    const promptTokens = interaction ? this.countTokens(prompt) : 0; // Usage is not yielded in streamComplete usually
+    const completionTokens = interaction ? this.countTokens(completion) : 0;
+
     return {
       modelTitle: this.title ?? completionOptions.model,
       modelProvider: this.underlyingProviderName,
       prompt,
       completion,
       completionOptions,
+      promptTokens,
+      completionTokens,
     };
   }
 
@@ -1175,6 +1188,38 @@ export abstract class BaseLLM implements ILLM {
       const chatChunk = fromChatCompletionChunk(chunk as any);
       if (chatChunk) {
         yield chatChunk;
+      } else if ((chunk as any).usage) {
+        // Usage-only chunk (e.g. from Gemini / Anthropic adapters via usageChatChunk).
+        // fromChatCompletionChunk returns undefined for these because choices[] is empty.
+        // Propagate as a usage-carrying assistant message so processChatChunk picks it up.
+        const u = (chunk as any).usage as {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          prompt_tokens_details?: {
+            cached_tokens?: number;
+            cache_write_tokens?: number;
+          };
+          completion_tokens_details?: { reasoning_tokens?: number };
+        };
+        yield {
+          role: "assistant",
+          content: "",
+          usage: {
+            promptTokens: u.prompt_tokens ?? 0,
+            completionTokens: u.completion_tokens ?? 0,
+            ...(u.prompt_tokens_details && {
+              promptTokensDetails: {
+                cachedTokens: u.prompt_tokens_details.cached_tokens,
+                cacheWriteTokens: u.prompt_tokens_details.cache_write_tokens,
+              },
+            }),
+            ...(u.completion_tokens_details && {
+              completionTokensDetails: {
+                reasoningTokens: u.completion_tokens_details.reasoning_tokens,
+              },
+            }),
+          },
+        };
       }
       if ((chunk as any).citations && Array.isArray((chunk as any).citations)) {
         onCitations((chunk as any).citations);
@@ -1281,17 +1326,22 @@ export abstract class BaseLLM implements ILLM {
 
     // AI Firewall pre-flight scan — check for secrets/PII/injection before sending to LLM.
     //
+    // IMPORTANT: We scan ONLY the thinned context (system + last 6 turns) to avoid
+    // sending full chat history to the firewall. The full `messages` array is still
+    // forwarded to the main LLM untouched — only the scan payload is reduced.
+    //
     // The GUI consent dialog may set `messageOptions.firewallOverride`:
     //   "bypass" — user accepted the risk, skip scanning entirely.
     //   "redact" — user asked to send a sanitised version of the prompt.
-    // Both are one-shot overrides cleared by the GUI after the request.
     const firewallOverride = messageOptions?.firewallOverride;
     if (signal && !signal.aborted && firewallOverride !== "bypass") {
+      // Build thinned payload for the firewall (system + last 6 turns only)
+      const thinnedMessages = getThinnedContext(messages, 6);
       const scanBody = JSON.stringify({
-        messages,
+        messages: thinnedMessages,
         model: completionOptions.model,
       });
-      const scanResult = await firewallPreflightScan(
+      const scanResult = await firewallCascade(
         scanBody,
         completionOptions.model,
         firewallOverride === "redact",
@@ -1324,7 +1374,12 @@ export abstract class BaseLLM implements ILLM {
       }
     }
 
-    const messagesCopy = [...messages]; // templateMessages may modify messages.
+    // ── Pre-LLM pipeline (blob stubs → cache breakpoints) ───────────────────────
+    // Uses the shared prompt optimizer to shrink old tool outputs into metadata
+    // stubs and inject Anthropic cache_control breakpoints (20/50/80% + system).
+    const optimizedMessages = optimizeMessagesForLLM(messages);
+
+    const messagesCopy = [...optimizedMessages]; // templateMessages may modify messages.
 
     const prompt = this.templateMessages
       ? this.templateMessages(messagesCopy)
@@ -1521,11 +1576,17 @@ export abstract class BaseLLM implements ILLM {
   requests when not using tools, so it's the simplest option to always add to history.
   */
 
+    const promptTokens = usage?.promptTokens ?? this.countTokens(prompt);
+    const completionTokens =
+      usage?.completionTokens ?? this.countTokens(completion.join(""));
+
     return {
       modelTitle: this.title ?? completionOptions.model,
       modelProvider: this.underlyingProviderName,
       prompt,
       completion: completion.join(""),
+      promptTokens,
+      completionTokens,
     };
   }
 

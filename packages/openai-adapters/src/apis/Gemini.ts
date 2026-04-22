@@ -237,13 +237,23 @@ export class GeminiApi implements BaseLlmApi {
       .filter((c) => c !== null);
 
     const sysMsg = oaiBody.messages.find((msg) => msg.role === "system");
+    let sysMsgText = "";
+    if (sysMsg) {
+      if (typeof sysMsg.content === "string") {
+        sysMsgText = sysMsg.content;
+      } else if (Array.isArray(sysMsg.content)) {
+        sysMsgText = sysMsg.content.map((p: any) => p.text || "").join("\n");
+      }
+    }
+
     const finalBody: any = {
       generationConfig,
       contents,
       // if there is a system message, reformat it for Gemini API
-      ...(sysMsg &&
+      // Must be a Content object {parts:[{text}]}, NOT a raw string.
+      ...(sysMsgText &&
         !isV1API && {
-          systemInstruction: { parts: [{ text: sysMsg.content }] },
+          systemInstruction: { parts: [{ text: sysMsgText }] },
         }),
     };
 

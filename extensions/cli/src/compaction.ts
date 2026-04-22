@@ -4,6 +4,10 @@ import type { ChatHistoryItem } from "core/index.js";
 import { encode } from "gpt-tokenizer";
 import { ChatCompletionTool } from "openai/resources.mjs";
 
+import {
+  prepareCheapCompaction,
+  resolveWeakModel,
+} from "../../../core/compaction/compactWithCheapModel.js";
 import { streamChatResponse } from "./stream/streamChatResponse.js";
 import { StreamCallbacks } from "./stream/streamChatResponse.types.js";
 import { logger } from "./util/logger.js";
@@ -15,9 +19,12 @@ import {
   getModelMaxTokens,
 } from "./util/tokenizer.js";
 
-// Buffer cap/ratio for auto-compaction threshold calculation
+// Buffer cap/ratio for auto-compaction threshold calculation.
+// Soft trigger at 60% — compact at task boundaries when context is clean.
+// Hard trigger at 75% — forced floor before we run out of space.
 export const AUTO_COMPACT_BUFFER_CAP = 15_000;
-export const AUTO_COMPACT_BUFFER_RATIO = 0.8;
+export const AUTO_COMPACT_BUFFER_RATIO = 0.6;
+export const AUTO_COMPACT_HARD_RATIO = 0.75; // Forced compaction threshold
 
 export interface CompactionResult {
   compactedHistory: ChatHistoryItem[];
@@ -40,7 +47,7 @@ export interface CompactionOptions {
 const COMPACTION_PROMPT =
   "Please provide a concise summary of our conversation so far, capturing the key context, decisions made, and current state. Format this as a single comprehensive message that preserves all important information needed to continue our work. You do not need to recap the system message, as this will remain. Make sure it is clear what the current stream of work was at the very end prior to compaction so that you can continue exactly where you left off without missing any information.";
 
-const COMPACTION_PROMPT_TOKENS = 150; // rough generous token count of ^
+const COMPACTION_PROMPT_TOKENS = 250; // generous estimate for the structured template prompt
 
 /**
  * Compacts a chat history into a summarized form
@@ -57,18 +64,34 @@ export async function compactChatHistory(
   options?: CompactionOptions,
 ): Promise<CompactionResult> {
   const { callbacks, abortController, systemMessageTokens = 0 } = options || {};
-  // Create a prompt to summarize the conversation
-  const compactionPrompt: ChatHistoryItem = {
+
+  // ── Layer 1+2: Microcompact tool outputs + build structured prompt ───────
+  const {
+    microcompactedHistory,
+    compactionPrompt,
+    weakModel,
+    systemPrompt,
+    rehydrationSuffix,
+  } = prepareCheapCompaction(chatHistory, model.model);
+
+  // Create a compaction request using the structured template prompt
+  const compactionPromptItem: ChatHistoryItem = {
     message: {
       role: "user" as const,
-      content: COMPACTION_PROMPT,
+      content: compactionPrompt,
     },
     contextItems: [],
   };
 
+  // Override the model to the cheap/weak model for this compaction call
+  const weakModelConfig: ModelConfig = {
+    ...model,
+    model: weakModel,
+  };
+
   // Check if the history with compaction prompt is too long, prune if necessary
-  let historyToUse = chatHistory;
-  let historyForCompaction = [...historyToUse, compactionPrompt];
+  let historyToUse = microcompactedHistory;
+  let historyForCompaction = [...historyToUse, compactionPromptItem];
 
   const contextLimit = getModelContextLimit(model);
   const maxTokens = getModelMaxTokens(model);
@@ -110,7 +133,7 @@ export async function compactChatHistory(
     }
 
     historyToUse = prunedHistory;
-    historyForCompaction = [...historyToUse, compactionPrompt];
+    historyForCompaction = [...historyToUse, compactionPromptItem];
   }
 
   // Stream the compaction response (service drives updates; this collects content locally)
@@ -130,24 +153,25 @@ export async function compactChatHistory(
   try {
     await streamChatResponse(
       historyForCompaction,
-      model,
+      weakModelConfig, // ← cheap model, not the flagship
       llmApi,
       controller,
       streamCallbacks,
       true,
     );
 
-    // Create the compacted history with a special marker
+    // Create the compacted history with the summary + rehydration suffix
     const systemMessage = chatHistory.find(
       (item) => item.message.role === "system",
     );
+    const finalSummary = compactionContent + rehydrationSuffix;
     const compactionMessage: ChatHistoryItem = {
       message: {
         role: "assistant",
-        content: compactionContent,
+        content: finalSummary,
       },
       contextItems: [],
-      conversationSummary: compactionContent,
+      conversationSummary: finalSummary,
     };
 
     const compactedHistory: ChatHistoryItem[] = systemMessage
@@ -261,9 +285,13 @@ export function getAutoCompactMessage(model: ModelConfig): string {
  * Check if the chat history exceeds the auto-compact threshold.
  * Accounts for system message and tool definitions in the calculation.
  * @param params Object containing chatHistory, model, optional systemMessage, and optional tools
+ * @param level "soft" for opportunistic compaction at task boundaries, "hard" for forced (default)
  * @returns Whether auto-compacting should be triggered
  */
-export function shouldAutoCompact(params: AutoCompactParams): boolean {
+export function shouldAutoCompact(
+  params: AutoCompactParams,
+  level: "soft" | "hard" = "hard",
+): boolean {
   const { chatHistory, model, systemMessage, tools } = params;
 
   const inputTokens = countTotalInputTokens({
@@ -275,9 +303,13 @@ export function shouldAutoCompact(params: AutoCompactParams): boolean {
   const contextLimit = getModelContextLimit(model);
   const maxTokens = getModelMaxTokens(model);
 
+  // Determine which ratio to use based on level
+  const ratio =
+    level === "soft" ? AUTO_COMPACT_BUFFER_RATIO : AUTO_COMPACT_HARD_RATIO;
+
   // Additional buffer matching the auto-compaction threshold formula
   const ratioCompactionBuffer = Math.ceil(
-    (1 - AUTO_COMPACT_BUFFER_RATIO) * (contextLimit - maxTokens),
+    (1 - ratio) * (contextLimit - maxTokens),
   );
   const safeCompactionBuffer = Math.max(maxTokens, ratioCompactionBuffer);
   const compactionBuffer = Math.min(
@@ -308,8 +340,24 @@ export function shouldAutoCompact(params: AutoCompactParams): boolean {
     reservedForOutput: maxTokens,
     compactionBuffer,
     compactionThreshold,
+    level,
     shouldCompact,
   });
 
   return shouldCompact;
+}
+
+/**
+ * Get the current compaction level for the chat history.
+ * Useful for determining whether to compact opportunistically or wait.
+ */
+export function getCompactionLevel(
+  params: AutoCompactParams,
+): "none" | "soft" | "hard" {
+  const softThreshold = shouldAutoCompact(params, "soft");
+  const hardThreshold = shouldAutoCompact(params, "hard");
+
+  if (hardThreshold) return "hard";
+  if (softThreshold) return "soft";
+  return "none";
 }

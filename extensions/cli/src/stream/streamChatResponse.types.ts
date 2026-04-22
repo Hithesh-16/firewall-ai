@@ -12,6 +12,23 @@ import { ToolCallPreview } from "../tools/types.js";
  */
 export type FirewallConsentChoice = "bypass" | "redact" | "cancel";
 
+export interface UsageStats {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost?: number;
+  contextUtilization?: number;
+  maxContextTokens?: number;
+}
+
+export interface PlanUpdate {
+  title: string;
+  tasks: Array<{
+    content: string;
+    status: "pending" | "in_progress" | "completed";
+  }>;
+}
+
 export interface StreamCallbacks {
   onContent?: (content: string) => void;
   onContentComplete?: (content: string) => void;
@@ -25,6 +42,8 @@ export interface StreamCallbacks {
     preview?: ToolCallPreview[],
   ) => void;
   onSystemMessage?: (message: string) => void;
+  onUsageStats?: (stats: UsageStats) => void;
+  onPlanUpdate?: (plan: PlanUpdate) => void;
   /**
    * Fired when the firewall flags a prompt that would otherwise be blocked.
    * The UI surfaces a consent prompt and resolves with the user's choice.

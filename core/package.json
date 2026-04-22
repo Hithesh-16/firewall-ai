@@ -66,6 +66,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.931.0",
     "@aws-sdk/client-sagemaker-runtime": "^3.894.0",
     "@aws-sdk/credential-providers": "^3.974.0",
+    "@huggingface/transformers": "^4.1.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@mozilla/readability": "^0.5.0",
     "@octokit/rest": "^20.1.1",

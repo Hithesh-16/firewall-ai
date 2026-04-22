@@ -218,3 +218,7 @@ proxy/data/
 *.db-wal
 *.sqlite
 *.sqlite3
+
+#kilocode
+.kilcode
+kilcode/

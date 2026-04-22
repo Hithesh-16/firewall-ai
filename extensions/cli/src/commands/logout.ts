@@ -1,6 +1,7 @@
 import { deleteAuthFile, loadAuthFile } from "@ai-firewall/shared-auth";
 import chalk from "chalk";
 
+import { clearAssistantCache } from "../apiAssistantLoader.js";
 import { logout as legacyWorkosLogout } from "../auth/workos.js";
 
 /**
@@ -62,6 +63,11 @@ export async function logout(): Promise<void> {
     deleteAuthFile();
   } catch {
     /* ignore — maybe the file wasn't there */
+  }
+  try {
+    clearAssistantCache();
+  } catch {
+    /* ignore */
   }
   try {
     legacyWorkosLogout();

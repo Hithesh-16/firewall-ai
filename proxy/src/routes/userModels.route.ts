@@ -8,6 +8,7 @@ import {
   addModelForUser,
   addUserModel,
   listUserModels,
+  listUserModelsPaginated,
   removeUserModelById,
   type UserModelPublic,
 } from "../gateway/userModelService";
@@ -37,7 +38,18 @@ const addModelSchema = z.object({
   providerSlug: z.string().min(1),
   modelSlug: z.string().min(1),
   displayName: z.string().optional(),
-  apiKey: z.string().min(1),
+  // API key must not be empty and must not be our own opt-out marker.
+  // Users sometimes paste `user-managed: true` from the config.yaml
+  // header by mistake; that then looks like a valid non-empty string
+  // to Zod but makes every upstream LLM call 401. Reject at the
+  // boundary so no client can seed a broken row.
+  apiKey: z
+    .string()
+    .min(1)
+    .refine((v) => !/user-managed/i.test(v.trim()), {
+      message:
+        "apiKey looks like an AI Firewall marker string — paste the actual provider key instead.",
+    }),
   apiBase: z.string().optional(),
   roles: z.array(z.string()).optional(),
 });
@@ -57,6 +69,16 @@ export async function registerUserModelRoutes(
       const userId = request.authContext?.user?.id;
       const orgId = request.authContext?.user?.orgId ?? null;
       if (!userId) throw new Error("Not authenticated");
+
+      // Pagination + search, BE-driven. Web's `useServerTable` hook
+      // sends `?page=&pageSize=&search=`; default to returning the
+      // full list when none are supplied so legacy callers (the IDE
+      // sync, older dashboards) keep working.
+      const query = (request.query as Record<string, unknown>) || {};
+      const hasPageParams =
+        typeof query.page !== "undefined" ||
+        typeof query.pageSize !== "undefined" ||
+        typeof query.search !== "undefined";
 
       // Self-added models (rows in user_models owned by this user).
       const selfModels = listUserModels(userId);
@@ -100,6 +122,43 @@ export async function registerUserModelRoutes(
       );
 
       const models = [...selfModels, ...grantsDeduped];
+
+      if (hasPageParams) {
+        // BE-paginated response — filter + slice the merged list
+        // rather than going back to the DB, because the grant set
+        // is tiny (one row per {provider, model} per user) and we
+        // already have everything in memory.
+        const page = Math.max(1, Math.floor(Number(query.page) || 1));
+        const pageSize = Math.min(
+          100,
+          Math.max(1, Math.floor(Number(query.pageSize) || 20)),
+        );
+        const search =
+          typeof query.search === "string" ? query.search.trim() : "";
+        const filtered = search
+          ? models.filter((m) => {
+              const hay =
+                `${m.displayName || ""} ${m.modelSlug} ${m.providerSlug}`.toLowerCase();
+              return hay.includes(search.toLowerCase());
+            })
+          : models;
+        const total = filtered.length;
+        const start = (page - 1) * pageSize;
+        const items = filtered.slice(start, start + pageSize);
+        return {
+          items,
+          // Kept for backwards compat with callers that don't yet
+          // read `items` (older web bundle, CLI /sync). Will be
+          // dropped once every consumer switches to `items`.
+          models: items,
+          total,
+          page,
+          pageSize,
+          hasMore: start + items.length < total,
+          hasAny: models.length > 0,
+        };
+      }
+
       return {
         models,
         hasAny: models.length > 0,

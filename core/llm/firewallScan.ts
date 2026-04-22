@@ -366,13 +366,27 @@ async function runCascade(
       extractScanHeaders(scanResp);
 
       if (scanResp.status === 403) {
-        const d = (await scanResp.json()) as {
+        // Read as text first, then try to parse. A bare
+        // `scanResp.json()` throws a cryptic V8
+        // "Unexpected non-whitespace character after JSON at
+        // position N" when the proxy returns anything that isn't
+        // valid JSON (broken build, upstream proxy, HTML error
+        // page). Surface those the same way we fail-open below
+        // instead of killing the whole chat with a useless stack.
+        const rawText = await scanResp.text().catch(() => "");
+        let d: {
           riskScore?: number;
           reasons?: string[];
           findings?: FirewallFinding[];
           secrets?: Array<{ type: string; severity?: string; masked?: string }>;
           pii?: Array<{ type: string; severity?: string; masked?: string }>;
-        };
+        } = {};
+        try {
+          if (rawText.trim()) d = JSON.parse(rawText);
+        } catch {
+          // Block with an empty detail — better than crashing.
+          d = { reasons: ["AI Firewall scan returned non-JSON"] };
+        }
         const detail: BlockDetail = {
           action: "BLOCK",
           riskScore: d.riskScore ?? 0,
@@ -400,7 +414,17 @@ async function runCascade(
       }
 
       if (scanResp.ok) {
-        const d = (await scanResp.json()) as any;
+        // Same read-as-text-then-parse pattern as the 403 branch
+        // above — defend against a proxy that streams or otherwise
+        // returns a body JSON.parse rejects. An unparseable 200 is
+        // treated as "no scan signal" (fail-open).
+        const rawText = await scanResp.text().catch(() => "");
+        let d: any = {};
+        try {
+          if (rawText.trim()) d = JSON.parse(rawText);
+        } catch {
+          d = {};
+        }
         if (d.action === "REDACT" && d.sanitizedMessages) {
           const result = {
             finalBody: JSON.stringify({

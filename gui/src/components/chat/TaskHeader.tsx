@@ -1,11 +1,15 @@
-import { ChevronDownIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  BoltIcon,
+  ChevronDownIcon,
+} from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState } from "react";
 
 import { useAppSelector } from "../../redux/hooks";
 import { selectSelectedChatModel } from "../../redux/slices/configSlice";
 import { ContextBar } from "./ContextBar";
 import { TokenBreakdown } from "./TokenBreakdown";
-import { TodoStrip } from "./TodoStrip";
 
 /**
  * Sticky chat header — session cost + context window at a glance,
@@ -60,8 +64,6 @@ export function TaskHeader() {
       ? `$${stats.totalCost.toFixed(stats.totalCost < 0.01 ? 4 : 2)}`
       : null;
 
-  const caching = stats.cacheReadTokens > 0;
-
   // UI-1: match the parent surface. The chat uses
   // var(--vscode-background) as its backdrop (via vscBackground in
   // Chat.tsx), but `bg-editor` resolves to `--vscode-editor-background`
@@ -71,26 +73,20 @@ export function TaskHeader() {
   // the sticky header is invisible against the backdrop until it
   // overlaps scrolling content.
   return (
-    <div className="border-border bg-background sticky top-0 z-10 border-b">
+    <div className="border-border bg-background border-b">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="text-description hover:text-foreground text-af-caption flex w-full items-center gap-2 px-3 py-1.5 transition-colors"
+        className="text-description hover:text-foreground hover:bg-list-hover/30 text-af-caption flex w-full items-center gap-2 border-0 bg-transparent px-3 py-1.5 transition-colors"
         aria-expanded={expanded}
         aria-label="Toggle session details"
       >
         {costLabel && (
-          <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
-            {caching && (
-              <span
-                className="bg-af-accent h-1.5 w-1.5 rounded-full"
-                style={{ boxShadow: "0 0 4px var(--af-accent-glow)" }}
-                aria-label="Prompt caching active"
-              />
-            )}
-            <span>{costLabel}</span>
+          <span className="text-foreground inline-flex shrink-0 items-center gap-1 font-medium tabular-nums">
+            {costLabel}
           </span>
         )}
+        <InlineTokenStats />
         <div className="min-w-0 flex-1">
           <ContextBar />
         </div>
@@ -126,8 +122,6 @@ export function TaskHeader() {
           </div>
         </div>
       )}
-
-      <TodoStrip />
     </div>
   );
 }
@@ -163,6 +157,62 @@ function isDefaultSessionTitle(title: string): boolean {
     trimmed === "new session" ||
     trimmed === "new conversation"
   );
+}
+
+/**
+ * Compact input/output/cached token trio shown inline in the sticky
+ * header. The expanded `TokenBreakdown` row kept these values hidden
+ * behind the chevron, so users never noticed that caching was saving
+ * them money or that the context was inflating. Surfacing all three as
+ * coloured chips keeps the signal visible without stealing space — each
+ * chip auto-hides when its value is zero.
+ */
+function InlineTokenStats() {
+  const s = useAppSelector((st) => st.security.sessionStats);
+  const { inputTokens, outputTokens, cacheReadTokens } = s;
+
+  if (!inputTokens && !outputTokens && !cacheReadTokens) return null;
+
+  return (
+    <span
+      className="text-description text-af-caption inline-flex shrink-0 items-center gap-2 tabular-nums"
+      aria-label="Session token breakdown"
+    >
+      {inputTokens > 0 && (
+        <span
+          className="inline-flex items-center gap-0.5"
+          title="Prompt / input tokens"
+        >
+          <ArrowUpIcon className="text-info h-3 w-3" />
+          {fmtK(inputTokens)}
+        </span>
+      )}
+      {outputTokens > 0 && (
+        <span
+          className="inline-flex items-center gap-0.5"
+          title="Completion / output tokens"
+        >
+          <ArrowDownIcon className="text-warning h-3 w-3" />
+          {fmtK(outputTokens)}
+        </span>
+      )}
+      {cacheReadTokens > 0 && (
+        <span
+          className="text-success inline-flex items-center gap-0.5 font-medium"
+          title="Cache-read tokens — served at the discounted rate"
+        >
+          <BoltIcon className="h-3 w-3" />
+          {fmtK(cacheReadTokens)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function fmtK(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toString();
 }
 
 function ElapsedTime({ since }: { since: number }) {

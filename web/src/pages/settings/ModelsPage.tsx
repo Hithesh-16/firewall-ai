@@ -6,7 +6,7 @@ import {
   TrashIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { apiClient } from "../../api/client";
 import { ENDPOINTS } from "../../api/endpoints";
@@ -16,6 +16,8 @@ import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBanner } from "../../components/ui/ErrorBanner";
+import { Pagination } from "../../components/ui/Pagination";
+import { SearchInput } from "../../components/ui/SearchInput";
 import { SkeletonList } from "../../components/ui/Skeleton";
 import {
   findProvider,
@@ -24,6 +26,7 @@ import {
   type CatalogueProvider,
 } from "../../data/providerCatalogue";
 import { ModelPicker, ProviderPicker } from "../../components/shared/ModelPickers";
+import { useServerTable } from "../../hooks/useServerTable";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { showToast } from "../../store/slices/uiSlice";
 
@@ -64,11 +67,6 @@ interface UserModelRow {
   createdBy: number | null;
 }
 
-interface ListResponse {
-  models: UserModelRow[];
-  hasAny: boolean;
-}
-
 export default function ModelsPage() {
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((s) => s.auth.user);
@@ -78,38 +76,41 @@ export default function ModelsPage() {
     return Number.isFinite(n) ? n : null;
   }, [currentUser]);
 
-  const [models, setModels] = useState<UserModelRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // BE-driven pagination + search via the shared hook.
+  // `/api/me/models/list` returns `{items, total, page, pageSize, hasMore}`
+  // when `page` is in the query string (legacy callers that don't
+  // send pagination still get the unpaged `{models, hasAny}` shape).
+  const {
+    items: models,
+    total,
+    page,
+    totalPages,
+    loading,
+    error,
+    search,
+    setPage,
+    setSearch,
+    refetch,
+  } = useServerTable<UserModelRow>({
+    endpoint: ENDPOINTS.me.modelsList,
+    pageSize: 20,
+  });
 
-  // Add-model form state (self-serve only — admin-assign lives in Org Settings).
+  // Auto-open the add form on the very first visit so the page is
+  // not a dead "No models" screen.
   const [showForm, setShowForm] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<UserModelRow | null>(null);
-
-  const loadModels = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiClient.get<ListResponse>(ENDPOINTS.me.modelsList);
-      setModels(res.models);
-      // Auto-open the add form on the very first visit so the page is
-      // not a dead "No models" screen.
-      if (res.models.length === 0) setShowForm(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    void loadModels();
-  }, [loadModels]);
+    if (!loading && total === 0 && !search) {
+      setShowForm(true);
+    }
+  }, [loading, total, search]);
+
+  const [deleteTarget, setDeleteTarget] = useState<UserModelRow | null>(null);
 
   async function handleDelete(m: UserModelRow) {
     try {
       await apiClient.del(ENDPOINTS.me.model(String(m.id)));
-      setModels((prev) => prev.filter((x) => x.id !== m.id));
+      refetch();
       dispatch(
         showToast({
           id: `model-del-${Date.now()}`,
@@ -142,16 +143,6 @@ export default function ModelsPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  if (loading) {
-    // P3 polish: skeleton placeholders instead of centered spinner —
-    // feels live rather than stalled.
-    return (
-      <div className="mx-auto max-w-5xl space-y-4 p-6">
-        <SkeletonList count={4} withAvatar={false} />
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="flex items-start justify-between">
@@ -167,7 +158,7 @@ export default function ModelsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => void loadModels()}>
+          <Button size="sm" variant="ghost" onClick={() => refetch()}>
             <ArrowPathIcon className="h-4 w-4" />
             Refresh
           </Button>
@@ -191,12 +182,24 @@ export default function ModelsPage() {
         <span className="font-mono">Settings → Assistant</span>.
       </div>
 
+      <div className="flex items-center gap-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search models…"
+          className="max-w-sm flex-1"
+        />
+        <span className="text-description-muted text-xs">
+          {total} {total === 1 ? "model" : "models"}
+        </span>
+      </div>
+
       {showForm && (
         <AddModelForm
           onCancel={() => setShowForm(false)}
           onSuccess={(added) => {
             setShowForm(false);
-            setModels((prev) => [added, ...prev]);
+            refetch();
             dispatch(
               showToast({
                 id: `model-add-${Date.now()}`,
@@ -217,11 +220,17 @@ export default function ModelsPage() {
         />
       )}
 
-      {models.length === 0 && !showForm ? (
+      {loading ? (
+        <SkeletonList count={4} withAvatar={false} />
+      ) : models.length === 0 && !showForm ? (
         <EmptyState
           icon={<CubeTransparentIcon className="h-12 w-12" />}
-          title="No models yet"
-          description="Add your first provider + model, or ask your org admin to assign you access."
+          title={search ? `No models match "${search}"` : "No models yet"}
+          description={
+            search
+              ? "Try a different search term, or clear the search to see everything."
+              : "Add your first provider + model, or ask your org admin to assign you access."
+          }
         />
       ) : (
         <div className="space-y-3">
@@ -274,6 +283,10 @@ export default function ModelsPage() {
             );
           })}
         </div>
+      )}
+
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={total} />
       )}
 
       <ConfirmDialog

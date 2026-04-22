@@ -271,12 +271,33 @@ class Anthropic extends BaseLLM {
     }
 
     if (!response.ok) {
-      const json = await response.json();
-      if (json.type === "error") {
+      // Anthropic *usually* returns JSON errors, but anything in the
+      // path (a proxy, gateway, misconfigured intermediary) can
+      // reply with HTML / plain text / a partial body. Calling
+      // `response.json()` on those throws a raw V8 JSON parse error
+      // ("Unexpected non-whitespace character after JSON at position
+      // N") which the user sees as a cryptic "Error handling model
+      // response". Read as text first, then *try* to parse, so we
+      // always surface something actionable.
+      const raw = await response.text();
+      let json: any = null;
+      try {
+        json = raw ? JSON.parse(raw) : null;
+      } catch {
+        /* keep `json` null — the raw text path below handles it */
+      }
+      if (json && json.type === "error") {
         throw new Error(getAnthropicErrorMessage(json));
       }
+      if (json) {
+        throw new Error(
+          `Anthropic API sent back ${response.status}: ${JSON.stringify(json)}`,
+        );
+      }
+      // Non-JSON body — trim and clip so the error surface stays readable.
+      const preview = raw.trim().slice(0, 240);
       throw new Error(
-        `Anthropic API sent back ${response.status}: ${JSON.stringify(json)}`,
+        `Anthropic API returned HTTP ${response.status} with a non-JSON body — check that your API key is valid, the proxy in front of Anthropic isn't mangling the response, and the model slug is correct. First bytes of response: ${preview || "<empty>"}`,
       );
     }
 
@@ -442,15 +463,91 @@ class Anthropic extends BaseLLM {
           ]
         : systemMessage,
     };
+    enforceCacheControlLimit(body);
 
-    const response = await this.fetch(new URL("messages", this.apiBase), {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal,
-    });
+    const response = await this.fetch(
+      new URL("messages", normalizeAnthropicApiBase(this.apiBase)),
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal,
+      },
+    );
 
     yield* this.handleResponse(response, options.stream);
+  }
+}
+
+/**
+ * Anthropic rejects any request carrying more than 4 `cache_control`
+ * breakpoints with a 400 `invalid_request_error`. Long agent sessions
+ * accumulate breakpoints because:
+ *   - `shouldCacheSystemMessage` tags the system message (1)
+ *   - `addCacheControlToLastTwoUserMessages` tags two user turns (2)
+ *   - tool_result blocks inherited from earlier turns can re-carry the
+ *     ephemeral tag depending on how the conversation was shaped
+ *
+ * We prefer the most *recent* breakpoints (system + last two users +
+ * newest tool result) because they are the most useful for cache
+ * re-use. Strip any extras beyond the 4-most-recent from the start of
+ * the message list toward the end.
+ */
+function enforceCacheControlLimit(body: MessageCreateParams): void {
+  const MAX = 4;
+  type Tagged = { cache_control?: unknown };
+  const tagged: Tagged[] = [];
+
+  if (Array.isArray(body.system)) {
+    for (const s of body.system)
+      if ((s as Tagged).cache_control) tagged.push(s as Tagged);
+  }
+  if (Array.isArray(body.tools)) {
+    for (const t of body.tools)
+      if ((t as Tagged).cache_control) tagged.push(t as Tagged);
+  }
+  for (const msg of body.messages) {
+    if (typeof msg.content === "string") continue;
+    for (const block of msg.content) {
+      if ((block as Tagged).cache_control) tagged.push(block as Tagged);
+    }
+  }
+
+  if (tagged.length <= MAX) return;
+  // Drop the oldest (earliest in the list) first.
+  const toRemove = tagged.length - MAX;
+  for (let i = 0; i < toRemove; i++) {
+    delete tagged[i].cache_control;
+  }
+}
+
+/**
+ * Anthropic's canonical base is `https://api.anthropic.com/v1/`, but the
+ * model-catalogue sync (and users editing `~/.ai-firewall/config.yaml`
+ * by hand) routinely drop the `/v1/` suffix. Without it
+ * `new URL("messages", apiBase)` resolves to `/messages`, Anthropic
+ * serves its HTML 404 page, and the adapter crashes in JSON.parse with
+ * "Unexpected non-whitespace character after JSON at position 4". This
+ * normalizer catches the three common shapes before URL construction
+ * and leaves any other host (custom proxy, self-hosted gateway)
+ * untouched except for the trailing slash `new URL` needs.
+ */
+function normalizeAnthropicApiBase(apiBase: string | undefined): string {
+  const fallback = "https://api.anthropic.com/v1/";
+  if (!apiBase) return fallback;
+  let base = apiBase.trim();
+  if (!base) return fallback;
+  try {
+    const u = new URL(base);
+    const isAnthropicHost = u.hostname === "api.anthropic.com";
+    if (isAnthropicHost && !/\/v\d+(\/|$)/.test(u.pathname)) {
+      u.pathname = "/v1/";
+    } else if (!u.pathname.endsWith("/")) {
+      u.pathname = `${u.pathname}/`;
+    }
+    return u.toString();
+  } catch {
+    return fallback;
   }
 }
 

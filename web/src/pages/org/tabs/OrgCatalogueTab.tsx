@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { PencilSquareIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 import { apiClient } from "../../../api/client";
@@ -9,23 +9,23 @@ import { Card } from "../../../components/ui/Card";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorBanner } from "../../../components/ui/ErrorBanner";
+import { Pagination } from "../../../components/ui/Pagination";
+import { SearchInput } from "../../../components/ui/SearchInput";
 import { SkeletonList } from "../../../components/ui/Skeleton";
+import { useServerTable } from "../../../hooks/useServerTable";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import { showToast } from "../../../store/slices/uiSlice";
 
 /**
  * Admin CRUD for the org-curated rules / skills catalogue.
  *
- * Shape: one markdown body per item. Users in the same org browse
- * the same list under Settings → Rules / Settings → Skills and
- * click "Install" to add it to their account. Installed items
- * are mirrored by the proxy to `~/.ai-firewall/rules/<slug>.md`
- * and `~/.ai-firewall/skills/<slug>/SKILL.md` so the IDE + CLI
- * pick them up directly from disk.
+ * Pagination + search are BE-driven via `useServerTable`:
+ *   GET /api/orgs/:orgId/{rules,skills}?page=N&pageSize=M&search=...
  *
- * Personal rules / MCP servers / prompts are NOT shown here — those
- * live as local files under the user's `~/.ai-firewall/` and never
- * round-trip through the backend.
+ * Shape: one markdown body per item. Users in the same org browse the
+ * same list under Settings → Rules / Settings → Skills and click
+ * "Install" to add it to their account. Personal rules / MCP servers
+ * / prompts live as local files and never round-trip through here.
  */
 
 type Kind = "rule" | "skill";
@@ -42,51 +42,31 @@ interface CatalogueItem {
   updatedAt: number;
 }
 
-interface ListResponse {
-  items: CatalogueItem[];
-}
-
 export function OrgCatalogueTab({ kind }: { kind: Kind }) {
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((s) => s.auth.user);
-  const orgId =
-    typeof currentUser?.orgId === "number"
-      ? String(currentUser.orgId)
-      : currentUser?.orgId
-        ? String(currentUser.orgId)
-        : null;
+  const orgId = currentUser?.orgId ? String(currentUser.orgId) : null;
 
-  const [items, setItems] = useState<CatalogueItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const endpoint =
+    kind === "rule" && orgId
+      ? ENDPOINTS.orgs.rules(orgId)
+      : kind === "skill" && orgId
+        ? ENDPOINTS.orgs.skills(orgId)
+        : "";
+
+  const { items, total, page, totalPages, loading, error, search, setPage, setSearch, refetch } =
+    useServerTable<CatalogueItem>({
+      endpoint,
+      pageSize: 20,
+      enabled: !!endpoint,
+    });
+
   const [editing, setEditing] = useState<CatalogueItem | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CatalogueItem | null>(null);
 
-  const endpointList = kind === "rule" ? "rules" : "skills";
-
-  const load = useCallback(async () => {
-    if (!orgId) {
-      setError("You are not a member of an organization.");
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const url = kind === "rule" ? ENDPOINTS.orgs.rules(orgId) : ENDPOINTS.orgs.skills(orgId);
-      const res = await apiClient.get<ListResponse>(url);
-      setItems(res.items);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [kind, orgId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const label = kind === "rule" ? "Rule" : "Skill";
+  const labelPlural = kind === "rule" ? "rules" : "skills";
 
   async function handleDelete(item: CatalogueItem) {
     if (!orgId) return;
@@ -96,7 +76,6 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
           ? ENDPOINTS.orgs.rule(orgId, item.slug)
           : ENDPOINTS.orgs.skill(orgId, item.slug);
       await apiClient.del(url);
-      setItems((prev) => prev.filter((x) => x.id !== item.id));
       dispatch(
         showToast({
           id: `cat-del-${Date.now()}`,
@@ -104,6 +83,7 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
           message: `Removed ${item.title}`,
         }),
       );
+      refetch();
     } catch (e) {
       dispatch(
         showToast({
@@ -117,16 +97,13 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
     }
   }
 
-  if (loading) {
+  if (!orgId) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 p-6">
-        <SkeletonList count={4} withAvatar={false} />
+      <div className="mx-auto max-w-5xl p-6">
+        <ErrorBanner message="You are not a member of an organization." />
       </div>
     );
   }
-
-  const label = kind === "rule" ? "Rule" : "Skill";
-  const labelPlural = kind === "rule" ? "rules" : "skills";
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -136,11 +113,11 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
             Org {labelPlural.charAt(0).toUpperCase() + labelPlural.slice(1)}
           </h2>
           <p className="text-description mt-1 text-sm">
-            Admin-curated {labelPlural} your team can install. Each item is a markdown document —
-            pick a slug, title, and body below. When a user clicks Install, the file appears on
-            their machine at{" "}
+            Admin-curated {labelPlural} your team can install. Each item is a markdown document.
+            When a user clicks Install, the file appears on their machine at{" "}
             <span className="font-mono">
-              ~/.ai-firewall/{kind === "rule" ? "rules/<slug>.md" : "skills/<slug>/SKILL.md"}
+              ~/.ai-firewall/
+              {kind === "rule" ? "rules/<slug>.md" : "skills/<slug>/SKILL.md"}
             </span>
             .
           </p>
@@ -157,6 +134,18 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
         </Button>
       </div>
 
+      <div className="flex items-center gap-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={`Search ${labelPlural}…`}
+          className="max-w-sm flex-1"
+        />
+        <span className="text-description-muted text-xs">
+          {total} {total === 1 ? label.toLowerCase() : labelPlural}
+        </span>
+      </div>
+
       {error && <ErrorBanner message={error} />}
 
       {showForm && (
@@ -168,10 +157,10 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
             setShowForm(false);
             setEditing(null);
           }}
-          onSaved={async () => {
+          onSaved={() => {
             setShowForm(false);
             setEditing(null);
-            await load();
+            refetch();
             dispatch(
               showToast({
                 id: `cat-save-${Date.now()}`,
@@ -192,10 +181,16 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
         />
       )}
 
-      {items.length === 0 && !showForm ? (
+      {loading ? (
+        <SkeletonList count={4} withAvatar={false} />
+      ) : items.length === 0 && !showForm ? (
         <EmptyState
-          title={`No ${labelPlural} yet`}
-          description={`Create a ${label.toLowerCase()} to share it with everyone in your org.`}
+          title={search ? `No ${labelPlural} match "${search}"` : `No ${labelPlural} yet`}
+          description={
+            search
+              ? "Try a different search term or clear it to see everything."
+              : `Create a ${label.toLowerCase()} to share it with everyone in your org.`
+          }
         />
       ) : (
         <div className="space-y-3">
@@ -238,6 +233,10 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
         </div>
       )}
 
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={total} />
+      )}
+
       <ConfirmDialog
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
@@ -251,9 +250,6 @@ export function OrgCatalogueTab({ kind }: { kind: Kind }) {
         confirmLabel="Remove"
         variant="danger"
       />
-
-      {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
-      <span className="hidden">{endpointList}</span>
     </div>
   );
 }
@@ -279,7 +275,12 @@ function CatalogueForm({ kind, orgId, initial, onCancel, onSaved, onError }: For
     if (!orgId) return;
     setSubmitting(true);
     try {
-      const payload = { title, slug: slug.trim() || undefined, description, body };
+      const payload = {
+        title,
+        slug: slug.trim() || undefined,
+        description,
+        body,
+      };
       if (initial) {
         const url =
           kind === "rule"

@@ -34,12 +34,16 @@ export function SearchInput({
   return (
     <div className={cn("relative", className)}>
       <MagnifyingGlassIcon className="text-description-muted absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+      {/* Height locked at 40 px (h-10) — matches the `md` Button so
+          search bars and primary actions line up pixel-perfect when
+          rendered side-by-side in a toolbar. Part of the 32/40/48
+          height system defined in ui-design-plan §2. */}
       <input
         type="text"
         value={local}
         onChange={handleChange}
         placeholder={placeholder}
-        className="border-input-border bg-input text-input-foreground placeholder:text-input-placeholder focus:border-border-focus focus:ring-border-focus w-full rounded-md border py-1.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-1"
+        className="border-input-border bg-input text-input-foreground placeholder:text-input-placeholder focus:border-border-focus focus:ring-border-focus h-10 w-full rounded-md border pl-9 pr-3 text-sm focus:outline-none focus:ring-1"
       />
     </div>
   );

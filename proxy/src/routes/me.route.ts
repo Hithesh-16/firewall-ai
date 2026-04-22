@@ -18,7 +18,11 @@ import {
   resolveProviderForUser,
   upsertUserProvider,
 } from "../gateway/userProviderService";
-import { listUserModels } from "../gateway/userModelService";
+import {
+  canonicalProviderApiBase,
+  listUserModels,
+  listUserModelsWithKeys,
+} from "../gateway/userModelService";
 import {
   listSubscribedItems,
   reconcileCatalogueFiles,
@@ -125,7 +129,12 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
       // authors directly into `~/.ai-firewall/` are read by the
       // IDE/CLI locally and merged after this response — the
       // proxy does NOT store them.
-      const userRows = listUserModels(user.id);
+      // Need decrypted per-model keys here so the synthesised
+      // assistant YAML can embed each model's own apiKey inline — the
+      // `user_providers` fallback in `injectProviderKeys` can't tell
+      // apart two rows that share a provider slug but were added with
+      // different keys (e.g. personal vs company Groq account).
+      const userRows = listUserModelsWithKeys(user.id);
       const grants = user.orgId
         ? listGrantsForUser(user.orgId, user.id).filter(
             (g) => g.modelSlug !== "*",
@@ -396,11 +405,24 @@ interface CanonicalModel {
   providerSlug: string;
   modelSlug: string;
   apiBase: string | null;
+  /**
+   * Per-model API key decrypted from `user_models.api_key_encrypted`.
+   * Populated for rows the user added via `/api/me/models/add`; grants
+   * leave it null and fall through to `injectProviderKeys` which pulls
+   * an org-wide key from `user_providers` / `org_providers`.
+   *
+   * Keeping the key on the canonical model (instead of re-resolving
+   * from `user_providers` like the pre-refactor path did) is what lets
+   * users add two models on the same provider with different keys —
+   * e.g. a personal Groq key for chat + a company Groq key for edits —
+   * without one clobbering the other.
+   */
+  apiKey: string | null;
   roles: string[];
 }
 
 function buildCanonicalModels(
-  userRows: ReturnType<typeof listUserModels>,
+  userRows: ReturnType<typeof listUserModelsWithKeys>,
   grants: ReturnType<typeof listGrantsForUser>,
 ): CanonicalModel[] {
   const seen = new Set<string>();
@@ -417,6 +439,7 @@ function buildCanonicalModels(
       providerSlug: m.providerSlug,
       modelSlug: m.modelSlug,
       apiBase: m.apiBase ?? null,
+      apiKey: m.apiKey || null,
       roles: m.roles && m.roles.length > 0 ? m.roles : ["chat"],
     });
   }
@@ -430,6 +453,7 @@ function buildCanonicalModels(
       providerSlug: g.providerSlug,
       modelSlug: g.modelSlug,
       apiBase: null,
+      apiKey: null,
       roles: ["chat", "edit", "apply"],
     });
   }
@@ -445,6 +469,9 @@ function serialiseModelsBlock(models: CanonicalModel[]): string {
     lines.push(`    model: ${m.modelSlug}`);
     if (m.apiBase) {
       lines.push(`    apiBase: ${m.apiBase}`);
+    }
+    if (m.apiKey) {
+      lines.push(`    apiKey: ${m.apiKey}`);
     }
     lines.push("    roles:");
     for (const r of m.roles) {
@@ -552,9 +579,14 @@ async function injectProviderKeys(
       m.apiKey = hit.apiKey;
     }
     // Only inject apiBase if the user/org explicitly set one and
-    // the YAML didn't already declare one.
+    // the YAML didn't already declare one. `user_providers.base_url`
+    // is stored as whatever the user typed — including bare origins
+    // like `https://api.anthropic.com` that need `/v1/` appended
+    // before an SDK client can resolve `new URL("messages", apiBase)`
+    // correctly. Canonicalise here so every consumer of the synthesised
+    // YAML (CLI sync, IDE config, etc.) sees a usable prefix.
     if (!m.apiBase && hit.baseUrl) {
-      m.apiBase = hit.baseUrl;
+      m.apiBase = canonicalProviderApiBase(slug, hit.baseUrl) ?? hit.baseUrl;
     }
   }
 

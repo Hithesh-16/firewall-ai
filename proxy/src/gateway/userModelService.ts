@@ -82,7 +82,7 @@ function rowToModel(row: RawRow): UserModel {
     modelSlug: row.model_slug,
     displayName: row.display_name,
     apiKey: decrypt(row.api_key_encrypted),
-    apiBase: row.api_base,
+    apiBase: canonicalProviderApiBase(row.provider_slug, row.api_base),
     enabled: row.enabled === 1,
     roles: parseRoles(row.roles),
     createdAt: row.created_at,
@@ -97,7 +97,7 @@ function rowToPublic(row: RawRow): UserModelPublic {
     providerSlug: row.provider_slug,
     modelSlug: row.model_slug,
     displayName: row.display_name,
-    apiBase: row.api_base,
+    apiBase: canonicalProviderApiBase(row.provider_slug, row.api_base),
     enabled: row.enabled === 1,
     roles: parseRoles(row.roles),
     createdAt: row.created_at,
@@ -117,6 +117,66 @@ export function listUserModels(userId: number): UserModelPublic[] {
     )
     .all(userId) as RawRow[];
   return rows.map(rowToPublic);
+}
+
+/**
+ * Paginated + searchable variant. Used by the web dashboard's
+ * Settings → Models page so the client never has to filter or
+ * page through rows in memory.
+ *
+ * Search is case-insensitive and matches against `display_name`,
+ * `model_slug`, and `provider_slug`.
+ */
+export interface PaginatedUserModels {
+  items: UserModelPublic[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export function listUserModelsPaginated(
+  userId: number,
+  opts: { page?: number; pageSize?: number; search?: string } = {},
+): PaginatedUserModels {
+  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  const pageSize = Math.min(100, Math.max(1, Math.floor(opts.pageSize ?? 20)));
+  const offset = (page - 1) * pageSize;
+  const search = (opts.search ?? "").trim();
+
+  const whereClauses: string[] = ["user_id = ?", "enabled = 1"];
+  const params: unknown[] = [userId];
+  if (search.length > 0) {
+    const like = `%${search.replace(/[\\%_]/g, "\\$&")}%`;
+    whereClauses.push(
+      "(LOWER(IFNULL(display_name, '')) LIKE LOWER(?) ESCAPE '\\' OR " +
+        "LOWER(model_slug) LIKE LOWER(?) ESCAPE '\\' OR " +
+        "LOWER(provider_slug) LIKE LOWER(?) ESCAPE '\\')",
+    );
+    params.push(like, like, like);
+  }
+  const whereSql = whereClauses.join(" AND ");
+
+  const totalRow = raw
+    .prepare(`SELECT COUNT(*) AS n FROM user_models WHERE ${whereSql}`)
+    .get(...params) as { n: number };
+
+  const rows = raw
+    .prepare(
+      `SELECT * FROM user_models
+        WHERE ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?`,
+    )
+    .all(...params, pageSize, offset) as RawRow[];
+
+  return {
+    items: rows.map(rowToPublic),
+    total: totalRow.n,
+    page,
+    pageSize,
+    hasMore: offset + rows.length < totalRow.n,
+  };
 }
 
 export function listUserModelsWithKeys(userId: number): UserModel[] {
@@ -238,6 +298,10 @@ export function addUserModel(input: {
   const now = Date.now();
   const encrypted = encrypt(input.apiKey);
   const rolesStr = (input.roles ?? ["chat", "edit", "apply"]).join(",");
+  const canonicalBase = canonicalProviderApiBase(
+    input.providerSlug,
+    input.apiBase ?? null,
+  );
 
   raw
     .prepare(
@@ -260,7 +324,7 @@ export function addUserModel(input: {
       input.modelSlug,
       input.displayName ?? null,
       encrypted,
-      input.apiBase ?? null,
+      canonicalBase,
       rolesStr,
       now,
       now,
@@ -335,6 +399,44 @@ export function addModelForUser(
     roles: input.roles,
     createdBy: adminUserId,
   });
+}
+
+/**
+ * Normalise the `api_base` we persist so SDK clients that treat it as
+ * a URL prefix (Continue/Anthropic do `new URL("messages", apiBase)`)
+ * don't end up hitting `https://api.anthropic.com/messages` — the
+ * origin without `/v1/` — which serves Anthropic's HTML 404 page and
+ * breaks JSON parsing at the caller. Keeping the DB canonical means
+ * every future /sync writes a usable yaml without a migration.
+ *
+ * Returns `null` when input is empty so callers store nothing and the
+ * adapter's built-in default applies.
+ */
+export function canonicalProviderApiBase(
+  providerSlug: string,
+  apiBase: string | null | undefined,
+): string | null {
+  const trimmed = (apiBase ?? "").trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  const slug = providerSlug.toLowerCase();
+  const needsV1 =
+    (slug === "anthropic" && url.hostname === "api.anthropic.com") ||
+    (slug === "openai" && url.hostname === "api.openai.com");
+  if (needsV1) {
+    if (!/\/v\d+(\/|$)/.test(url.pathname)) {
+      url.pathname = "/v1/";
+    } else if (!url.pathname.endsWith("/")) {
+      url.pathname = `${url.pathname}/`;
+    }
+    return url.toString();
+  }
+  return url.toString().replace(/\/+$/, "");
 }
 
 // ─── Provider URL builder (moved from gatewayRouter.ts) ───────────

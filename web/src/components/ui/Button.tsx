@@ -1,13 +1,7 @@
 import React from "react";
 import { cn } from "../../utils/cn";
 
-type ButtonVariant =
-  | "primary"
-  | "secondary"
-  | "outline"
-  | "ghost"
-  | "danger"
-  | "icon";
+type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "icon";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -23,17 +17,19 @@ const variantClasses: Record<ButtonVariant, string> = {
     "bg-secondary text-secondary-foreground hover:bg-secondary-hover focus:ring-2 focus:ring-secondary/50",
   outline:
     "border border-border bg-transparent text-foreground hover:bg-secondary focus:ring-2 focus:ring-border-focus",
-  ghost:
-    "bg-transparent text-foreground hover:bg-list-hover focus:ring-2 focus:ring-border-focus",
-  danger:
-    "bg-error text-primary-foreground hover:opacity-90 focus:ring-2 focus:ring-error/50",
+  ghost: "bg-transparent text-foreground hover:bg-list-hover focus:ring-2 focus:ring-border-focus",
+  danger: "bg-error text-primary-foreground hover:opacity-90 focus:ring-2 focus:ring-error/50",
   icon: "bg-transparent text-description hover:text-foreground hover:bg-list-hover rounded-lg focus:ring-2 focus:ring-border-focus p-1.5",
 };
 
+// AI Firewall height system (ui-design-plan §2): 32 / 40 / 48 px.
+// Keeps buttons, inputs, and dropdowns visually aligned on every
+// form row — the old `py-` values drifted by 2-4 px depending on
+// text size which made side-by-side elements look mismatched.
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "px-2.5 py-1 text-xs",
-  md: "px-4 py-2 text-sm",
-  lg: "px-6 py-2.5 text-base",
+  sm: "h-8 px-3 text-xs", //  32 px
+  md: "h-10 px-4 text-sm", //  40 px (default)
+  lg: "h-12 px-6 text-base", //  48 px
 };
 
 export function Button({
@@ -60,12 +56,7 @@ export function Button({
       {...props}
     >
       {loading && (
-        <svg
-          className="h-4 w-4 animate-spin"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden="true"
-        >
+        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <circle
             className="opacity-25"
             cx="12"

@@ -474,11 +474,13 @@ const TUIChat: React.FC<TUIChatProps> = ({
             even while the assistant is still streaming a response. */}
         <CLITodoStrip />
 
-        {/* Status */}
+        {/* Status — terminal-native equivalent of the IDE's shimmer
+            "Thinking…" label. Same wording so users moving between
+            the two surfaces recognise the state instantly. */}
         <ActionStatus
           visible={isWaitingForResponse && !!responseStartTime}
           startTime={responseStartTime || 0}
-          message=""
+          message="Thinking…"
           showSpinner={true}
           additionalHint={
             isBashToolRunning ? "ctrl+b to background" : undefined

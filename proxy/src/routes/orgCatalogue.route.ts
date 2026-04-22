@@ -39,6 +39,26 @@ const upsertSchema = z.object({
   body: z.string().min(1).max(200_000),
 });
 
+/**
+ * Every list endpoint in the dashboard takes the same three query
+ * params: `page` (1-based), `pageSize` (clamped [1, 100]), and
+ * `search` (free-text). The proxy does the work — no client-side
+ * filtering. Keeps the wire contract identical across every table
+ * surface (users, roles, rules, skills) so `useServerTable` on the
+ * web can stay generic.
+ */
+function parsePaginate(q: unknown): {
+  page: number;
+  pageSize: number;
+  search: string;
+} {
+  const obj = (q as Record<string, unknown>) || {};
+  const page = Number(obj.page) || 1;
+  const pageSize = Number(obj.pageSize) || 20;
+  const search = typeof obj.search === "string" ? obj.search : "";
+  return { page, pageSize, search };
+}
+
 function checkOrgMembership(
   request: { authContext?: { user: { orgId: number | null } } },
   paramOrgId: string,
@@ -68,7 +88,7 @@ function registerAdminRoutes(
       const check = checkOrgMembership(request, request.params.orgId);
       if (!check.ok)
         return reply.status(check.status).send({ error: check.error });
-      return { items: listCatalogue(kind, check.orgId) };
+      return listCatalogue(kind, check.orgId, parsePaginate(request.query));
     },
   );
 
@@ -158,8 +178,15 @@ function registerUserRoutes(
   app.get(base, { preHandler: requireAuth }, async (request, reply) => {
     const user = request.authContext?.user;
     if (!user) return reply.status(401).send({ error: "UNAUTHENTICATED" });
-    if (!user.orgId) return { items: [] };
-    return { items: listCatalogueForUser(kind, user.id, user.orgId) };
+    if (!user.orgId) {
+      return { items: [], total: 0, page: 1, pageSize: 20, hasMore: false };
+    }
+    return listCatalogueForUser(
+      kind,
+      user.id,
+      user.orgId,
+      parsePaginate(request.query),
+    );
   });
 
   // Get a single item by slug (for dashboard detail views + IDE

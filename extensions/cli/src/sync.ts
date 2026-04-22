@@ -92,8 +92,9 @@ export async function syncFromProxy(
       lines2.push(`  - name: ${JSON.stringify(m.displayName || m.modelSlug)}`);
       lines2.push(`    provider: ${m.providerSlug}`);
       lines2.push(`    model: ${m.modelSlug}`);
-      if (m.apiBase) {
-        lines2.push(`    apiBase: ${m.apiBase}`);
+      const canonicalBase = canonicalApiBase(m.providerSlug, m.apiBase);
+      if (canonicalBase) {
+        lines2.push(`    apiBase: ${canonicalBase}`);
       }
       lines2.push(`    roles:`);
       for (const r of m.roles) {
@@ -223,4 +224,54 @@ export async function syncFromProxy(
   }
 
   return result;
+}
+
+/**
+ * Rewrites an `apiBase` into the form each provider's SDK expects,
+ * because the proxy's `user_models` table historically stored bare
+ * origins (`https://api.anthropic.com`) that then made it into
+ * `~/.ai-firewall/config.yaml` verbatim. The IDE / CLI Anthropic
+ * adapter resolves `new URL("messages", apiBase)` — which for a bare
+ * origin becomes `/messages` — and Anthropic replies with an HTML 404,
+ * surfacing as "Unexpected non-whitespace character after JSON at
+ * position 4". Normalising here keeps /sync idempotent instead of
+ * re-writing a known-broken value every run.
+ *
+ * Returns `null` when the value is empty / unparseable so the caller
+ * omits the `apiBase:` line entirely and lets the adapter fall back to
+ * its built-in default.
+ */
+function canonicalApiBase(
+  providerSlug: string,
+  apiBase: string | null | undefined,
+): string | null {
+  const trimmed = (apiBase ?? "").trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  const slug = providerSlug.toLowerCase();
+  if (slug === "anthropic" && url.hostname === "api.anthropic.com") {
+    if (!/\/v\d+(\/|$)/.test(url.pathname)) {
+      url.pathname = "/v1/";
+    } else if (!url.pathname.endsWith("/")) {
+      url.pathname = `${url.pathname}/`;
+    }
+  } else if (slug === "openai" && url.hostname === "api.openai.com") {
+    if (!/\/v\d+(\/|$)/.test(url.pathname)) {
+      url.pathname = "/v1/";
+    } else if (!url.pathname.endsWith("/")) {
+      url.pathname = `${url.pathname}/`;
+    }
+  }
+  // Strip the trailing slash for everything else — matches how the
+  // pre-refactor yaml rendered and avoids churn in diffs.
+  let out = url.toString();
+  if (slug !== "anthropic" && slug !== "openai") {
+    out = out.replace(/\/+$/, "");
+  }
+  return out;
 }

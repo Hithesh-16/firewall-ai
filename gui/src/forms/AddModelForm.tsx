@@ -41,6 +41,17 @@ export function AddModelForm({
   const formMethods = useForm();
   const ideMessenger = useContext(IdeMessengerContext);
 
+  // Submission-level error state for when the proxy write fails.
+  // We used to silently fall back to writing into the local
+  // `config.yaml`; that let offline and not-signed-in users create
+  // models that the DB never knew about, which then drifted out of
+  // sync and eventually got either overwritten by the next sync
+  // (models disappear) or left as dead entries with invalid keys
+  // (which is what produced the `apiKey: "user-managed: true"` bug
+  // in the wild). Post-refactor the DB is the ONLY write path.
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
   // Initialize OpenRouter models from API on component mount
   useEffect(() => {
     void initializeOpenRouterModels();
@@ -95,24 +106,48 @@ export function AddModelForm({
   }, [selectedProvider]);
 
   async function onSubmit() {
-    const apiKey = formMethods.watch("apiKey");
-    const hasValidApiKey = apiKey !== undefined && apiKey !== "";
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const apiKey = (formMethods.watch("apiKey") ?? "").trim();
+      const modelSlug = selectedModel.params?.model ?? selectedModel.title;
+      const displayName = selectedModel.title;
+      const needsKey = !!selectedProvider.apiKeyUrl;
 
-    const reqInputFields: Record<string, any> = {};
-    for (let input of selectedProvider.collectInputFor ?? []) {
-      reqInputFields[input.key] = formMethods.watch(input.key);
-    }
+      // ── Validation ──────────────────────────────────────────
+      // Reject the opt-out marker as a key value. This was a real
+      // user-error footgun: people read our config.yaml header
+      // ("# user-managed: true on the first line opts out…"), copied
+      // the literal string into the key field, and saved it. Every
+      // subsequent LLM call then hit auth failures that surfaced as
+      // "Unexpected non-whitespace character after JSON".
+      if (needsKey && apiKey === "") {
+        setSubmitError("Enter the API key for this provider.");
+        return;
+      }
+      if (/user-managed/i.test(apiKey)) {
+        setSubmitError(
+          "That isn't an API key — `user-managed: true` is a marker " +
+            "used in config.yaml headers. Paste the actual key from the provider.",
+        );
+        return;
+      }
+      if (!modelSlug) {
+        setSubmitError("Pick a model before saving.");
+        return;
+      }
 
-    // ── Primary path: persist to proxy `user_models` (shared across IDE, CLI, web) ──
-    // The extension host attaches the bearer token from AiFirewallAuthService and
-    // posts to the proxy's unified /api/me/models/add endpoint. Key never leaves
-    // the extension sandbox. Succeeds for any signed-in user.
-    const modelSlug = selectedModel.params?.model ?? selectedModel.title;
-    const displayName = selectedModel.title;
-    let persistedViaProxy = false;
-    if (hasValidApiKey && apiKey && modelSlug) {
+      // ── The ONLY write path: proxy → user_models DB. ────────
+      //
+      // We used to fall back to Continue's native `config/addModel`
+      // here when the proxy call failed. That was wrong — it let
+      // offline users create models the DB never saw, which then
+      // drifted (next sync wiped them) or silently carried bogus
+      // keys. Post-refactor the contract is: DB is the single source
+      // of truth, and "couldn't reach the DB" means "couldn't save".
+      let proxyRes: Awaited<ReturnType<typeof ideMessenger.request>>;
       try {
-        const proxyRes = await ideMessenger.request("aiFirewall/addUserModel", {
+        proxyRes = await ideMessenger.request("aiFirewall/addUserModel", {
           providerSlug: selectedProvider.provider ?? "",
           modelSlug,
           displayName,
@@ -120,47 +155,52 @@ export function AddModelForm({
           apiBase: selectedProvider.params?.apiBase,
           roles: ["chat"],
         });
-        if (proxyRes.status === "success" && proxyRes.content?.ok) {
-          persistedViaProxy = true;
-        } else if (proxyRes.status === "success" && proxyRes.content?.error) {
-          // Non-fatal: log so the user sees why the proxy path was skipped
-          // (most common cause: not signed in to AI Firewall).
-          console.warn(
-            "[AddModelForm] proxy add failed, falling back to local config:",
-            proxyRes.content.error,
-          );
-        }
       } catch (err) {
-        console.warn("[AddModelForm] aiFirewall/addUserModel threw:", err);
+        setSubmitError(
+          `Couldn't reach the AI Firewall proxy to save this model (${
+            err instanceof Error ? err.message : String(err)
+          }). Sign in / start the proxy and try again.`,
+        );
+        return;
       }
+
+      if (proxyRes.status !== "success") {
+        // Some error message types don't carry a `content` field —
+        // cast through `any` to read the optional error bag the
+        // extension host attaches on failure.
+        const reason =
+          (proxyRes as unknown as { error?: string }).error ??
+          "Unknown error — check that you are signed in.";
+        setSubmitError(
+          `Model not saved: ${reason}\n\nModels are stored in your AI Firewall account, not in a local file. If you can't sign in, add the model from the web dashboard under Settings → Models.`,
+        );
+        return;
+      }
+      const content = (
+        proxyRes as { content?: { ok?: boolean; error?: string } }
+      ).content;
+      if (!content?.ok) {
+        setSubmitError(
+          `Model not saved: ${content?.error ?? "Unknown error"}\n\nModels are stored in your AI Firewall account, not in a local file. If you can't sign in, add the model from the web dashboard under Settings → Models.`,
+        );
+        return;
+      }
+
+      // DB write succeeded — switch the currently-selected model to
+      // the one we just created. The config-handler reloads on the
+      // auth-change + the next scheduled sync will pull the fresh
+      // YAML into ~/.ai-firewall/config.yaml.
+      void dispatch(
+        updateSelectedModelByRole({
+          selectedProfile,
+          role: "chat",
+          modelTitle: selectedModel.title,
+        }),
+      );
+      onDone();
+    } finally {
+      setSubmitting(false);
     }
-
-    // ── Fallback path: local Continue config (offline / not signed in) ──
-    // Only fires when the proxy path didn't persist. Keeps offline users
-    // working; signed-in users skip this so the web/CLI/IDE share one source
-    // of truth (the proxy's user_models table).
-    if (!persistedViaProxy) {
-      const model = {
-        ...selectedProvider.params,
-        ...selectedModel.params,
-        ...reqInputFields,
-        provider: selectedProvider.provider,
-        title: selectedModel.title,
-        ...(hasValidApiKey ? { apiKey } : {}),
-      };
-      ideMessenger.post("config/addModel", { model });
-      ideMessenger.post("config/openProfile", { profileId: "local" });
-    }
-
-    void dispatch(
-      updateSelectedModelByRole({
-        selectedProfile,
-        role: "chat",
-        modelTitle: selectedModel.title,
-      }),
-    );
-
-    onDone();
   }
 
   function onClickDownloadProvider() {
@@ -319,8 +359,20 @@ export function AddModelForm({
           </div>
 
           <div className="mt-4 w-full">
-            <Button type="submit" className="w-full" disabled={isDisabled()}>
-              Connect
+            {submitError && (
+              <div
+                role="alert"
+                className="text-error border-error/30 bg-error/10 mb-2 whitespace-pre-line rounded-md border px-3 py-2 text-xs"
+              >
+                {submitError}
+              </div>
+            )}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isDisabled() || submitting}
+            >
+              {submitting ? "Saving…" : "Connect"}
             </Button>
 
             <span className="text-description-muted block w-full text-center text-xs">

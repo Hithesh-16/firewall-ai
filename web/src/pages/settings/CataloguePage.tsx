@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowDownTrayIcon,
   BookOpenIcon,
@@ -13,21 +13,18 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBanner } from "../../components/ui/ErrorBanner";
+import { Pagination } from "../../components/ui/Pagination";
+import { SearchInput } from "../../components/ui/SearchInput";
 import { SkeletonList } from "../../components/ui/Skeleton";
+import { useServerTable } from "../../hooks/useServerTable";
 import { useAppDispatch } from "../../store/hooks";
 import { showToast } from "../../store/slices/uiSlice";
 
 /**
  * User-facing catalogue for org-curated rules + skills.
  *
- * The same component renders both pages — pass `kind="rule"` for
- * /settings/rules and `kind="skill"` for /settings/skills. Each
- * item shows the admin-authored title + description + markdown
- * preview plus an Install / Uninstall toggle.
- *
- * When installed:
- *   - rule  → proxy writes `~/.ai-firewall/rules/<slug>.md`
- *   - skill → proxy writes `~/.ai-firewall/skills/<slug>/SKILL.md`
+ * Pagination + search are BE-driven via `useServerTable`:
+ *   GET /api/me/{rules,skills}?page=N&pageSize=M&search=...
  *
  * Personal rules / MCP / prompts you author yourself live as local
  * files under `~/.ai-firewall/` and don't appear here — they're
@@ -50,18 +47,11 @@ interface CatalogueItemWithSub {
   enabled: boolean;
 }
 
-interface ListResponse {
-  items: CatalogueItemWithSub[];
-}
-
 export default function CataloguePage({ kind }: { kind: Kind }) {
   const dispatch = useAppDispatch();
-  const [items, setItems] = useState<CatalogueItemWithSub[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const listUrl = kind === "rule" ? ENDPOINTS.me.rules : ENDPOINTS.me.skills;
+  const endpoint = kind === "rule" ? ENDPOINTS.me.rules : ENDPOINTS.me.skills;
   const installUrl = (id: number) =>
     kind === "rule" ? ENDPOINTS.me.installRule(id) : ENDPOINTS.me.installSkill(id);
 
@@ -70,29 +60,12 @@ export default function CataloguePage({ kind }: { kind: Kind }) {
   const localPath =
     kind === "rule" ? "~/.ai-firewall/rules/<slug>.md" : "~/.ai-firewall/skills/<slug>/SKILL.md";
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiClient.get<ListResponse>(listUrl);
-      setItems(res.items);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [listUrl]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { items, total, page, totalPages, loading, error, search, setPage, setSearch, refetch } =
+    useServerTable<CatalogueItemWithSub>({ endpoint, pageSize: 20 });
 
   async function install(item: CatalogueItemWithSub) {
     try {
       await apiClient.post(installUrl(item.id), {});
-      setItems((prev) =>
-        prev.map((x) => (x.id === item.id ? { ...x, installed: true, enabled: true } : x)),
-      );
       dispatch(
         showToast({
           id: `cat-inst-${Date.now()}`,
@@ -100,6 +73,7 @@ export default function CataloguePage({ kind }: { kind: Kind }) {
           message: `Installed ${item.title}`,
         }),
       );
+      refetch();
     } catch (e) {
       dispatch(
         showToast({
@@ -114,9 +88,6 @@ export default function CataloguePage({ kind }: { kind: Kind }) {
   async function uninstall(item: CatalogueItemWithSub) {
     try {
       await apiClient.del(installUrl(item.id));
-      setItems((prev) =>
-        prev.map((x) => (x.id === item.id ? { ...x, installed: false, enabled: false } : x)),
-      );
       dispatch(
         showToast({
           id: `cat-un-${Date.now()}`,
@@ -124,6 +95,7 @@ export default function CataloguePage({ kind }: { kind: Kind }) {
           message: `Uninstalled ${item.title}`,
         }),
       );
+      refetch();
     } catch (e) {
       dispatch(
         showToast({
@@ -133,14 +105,6 @@ export default function CataloguePage({ kind }: { kind: Kind }) {
         }),
       );
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-4 p-6">
-        <SkeletonList count={4} withAvatar={false} />
-      </div>
-    );
   }
 
   return (
@@ -163,13 +127,31 @@ export default function CataloguePage({ kind }: { kind: Kind }) {
         . They're picked up automatically, never uploaded.
       </div>
 
+      <div className="flex items-center gap-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={`Search ${labelPlural}…`}
+          className="max-w-sm flex-1"
+        />
+        <span className="text-description-muted text-xs">
+          {total} {total === 1 ? label.toLowerCase() : labelPlural}
+        </span>
+      </div>
+
       {error && <ErrorBanner message={error} />}
 
-      {items.length === 0 ? (
+      {loading ? (
+        <SkeletonList count={4} withAvatar={false} />
+      ) : items.length === 0 ? (
         <EmptyState
           icon={<BookOpenIcon className="h-12 w-12" />}
-          title={`No ${labelPlural} available`}
-          description="Ask your org admin to add some under Organization Settings."
+          title={search ? `No ${labelPlural} match "${search}"` : `No ${labelPlural} available`}
+          description={
+            search
+              ? "Try a different search term, or clear the search to see everything."
+              : "Ask your org admin to add some under Organization Settings."
+          }
         />
       ) : (
         <div className="space-y-3">
@@ -223,6 +205,10 @@ export default function CataloguePage({ kind }: { kind: Kind }) {
             </Card>
           ))}
         </div>
+      )}
+
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={total} />
       )}
     </div>
   );

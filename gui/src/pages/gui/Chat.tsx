@@ -15,6 +15,8 @@ import {
 } from "react";
 import StickyPromptHeader from "../../components/chat/StickyPromptHeader";
 import { TaskHeader } from "../../components/chat/TaskHeader";
+import { TodoStrip } from "../../components/chat/TodoStrip";
+import { TokenUsageBar } from "../../components/chat/TokenUsageBar";
 import { PlanPanel } from "./PlanPanel";
 import { useActivePromptTracking } from "../../hooks/useActivePromptTracking";
 import { ErrorBoundary } from "react-error-boundary";
@@ -85,7 +87,9 @@ const StepsDiv = styled.div`
   position: relative;
   background-color: transparent;
 
-  & > *:not([role="toolbar"]) {
+  /* Direct children render in-flow except for our sticky header stack,
+   * which opts out via data-sticky so position: sticky actually sticks. */
+  & > *:not([role="toolbar"]):not([data-sticky]) {
     position: relative;
   }
 
@@ -524,16 +528,31 @@ export function Chat() {
         ref={stepsDivRef}
         className={`flex-1 overflow-y-scroll ${showScrollbar ? "thin-scrollbar" : "no-scrollbar"}`}
       >
-        <TaskHeader />
-        <StickyPromptHeader
-          activePromptIndex={activePromptIndex}
-          isVisible={stickyVisible}
-          onEdit={handleStickyEdit}
-          onRetry={handleStickyRetry}
-          onRevert={handleStickyRevert}
-          canRevert={canRevert}
-          isStreaming={isStreaming}
-        />
+        {/* Sticky stack — these four components stay pinned as the
+            chat scrolls. Each auto-hides when empty so an unused slot
+            doesn't reserve space. Order by intent hierarchy:
+              1. TaskHeader   — session + elapsed + cache-active dot
+              2. TokenUsageBar — thin context-window indicator
+              3. StickyPromptHeader — user's last message while streaming
+              4. TodoStrip    — current plan (only when agent issued one) */}
+        <div
+          data-sticky
+          style={{ backgroundColor: vscBackground }}
+          className="border-border/60 sticky top-0 z-20 border-b shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
+        >
+          <TaskHeader />
+          <TokenUsageBar />
+          <StickyPromptHeader
+            activePromptIndex={activePromptIndex}
+            isVisible={stickyVisible}
+            onEdit={handleStickyEdit}
+            onRetry={handleStickyRetry}
+            onRevert={handleStickyRevert}
+            canRevert={canRevert}
+            isStreaming={isStreaming}
+          />
+          <TodoStrip />
+        </div>
         <div className="pt-[8px]" />
         {highlights}
         <PlanPanel />

@@ -1,43 +1,40 @@
 import { ChatHistoryItem } from "core";
-import { useEffect, useState } from "react";
 import { useAppSelector } from "../../redux/hooks";
-import { selectSelectedChatModel } from "../../redux/slices/configSlice";
+import { AfTextShimmer } from "../loaders/AfTextShimmer";
 
 interface ThinkingIndicatorProps {
   historyItem: ChatHistoryItem;
 }
-/*
-    Thinking animation
-    Only for reasoning (long load time) models for now
-*/
-const ThinkingIndicator = ({ historyItem }: ThinkingIndicatorProps) => {
-  // Animation for thinking ellipses
-  const [animation, setAnimation] = useState(2);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setAnimation((prevState) => (prevState === 2 ? 0 : prevState + 1));
-    }, 600);
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
 
-  const selectedModel = useAppSelector(selectSelectedChatModel);
+/**
+ * Renders a subtle shimmer in the assistant bubble while the LLM has
+ * accepted the request but hasn't streamed any tokens yet.
+ *
+ * The shimmer replaces the old model-specific "Thinking..." dots
+ * (which only fired on o1). We now show it for *any* model whenever
+ * the assistant turn is `isStreaming && !hasContent`, because the
+ * first-token latency is the highest-friction moment in the UX —
+ * without a visible signal the user assumes the request hung.
+ *
+ * Once a single token arrives the bubble's markdown preview takes
+ * over and this component unmounts itself via the `hasContent` gate.
+ * While the context-gathering phase is running we defer to
+ * `ContextBar` / firewall scan UI — showing both would be noise.
+ */
+const ThinkingIndicator = ({ historyItem }: ThinkingIndicatorProps) => {
   const isStreaming = useAppSelector((state) => state.session.isStreaming);
 
   const hasContent = Array.isArray(historyItem.message.content)
     ? !!historyItem.message.content.length
     : !!historyItem.message.content;
-  const isO1 = selectedModel?.model.startsWith("o1");
+
   const isThinking =
     isStreaming && !historyItem.isGatheringContext && !hasContent;
-  if (!isThinking || !isO1) {
-    return null;
-  }
+  if (!isThinking) return null;
 
   return (
     <div className="px-2 py-2">
-      <span className="text-description-muted">{`Thinking.${".".repeat(animation)}`}</span>
+      <AfTextShimmer variant="thinking" />
     </div>
   );
 };

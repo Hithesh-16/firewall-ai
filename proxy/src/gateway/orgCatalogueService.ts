@@ -90,20 +90,102 @@ function slugify(s: string): string {
 
 // ─── Admin CRUD (operates on org_rules / org_skills) ────────────
 
+/**
+ * Contract for every paginated list returned by this service.
+ * Mirrors the shape used by `/api/admin/users` and `/api/roles` so
+ * the web's `useServerTable` hook can consume either endpoint
+ * without branching.
+ */
+export interface PaginatedCatalogue {
+  items: CatalogueItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export interface PaginatedCatalogueWithSub extends Omit<
+  PaginatedCatalogue,
+  "items"
+> {
+  items: CatalogueItemWithSub[];
+}
+
+export interface PaginateOptions {
+  page?: number; // 1-based
+  pageSize?: number; // clamped [1, 100]
+  search?: string; // case-insensitive match on title / slug / description
+}
+
+function resolvePagination(opts: PaginateOptions): {
+  page: number;
+  pageSize: number;
+  offset: number;
+  search: string;
+} {
+  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  const pageSize = Math.min(100, Math.max(1, Math.floor(opts.pageSize ?? 20)));
+  const offset = (page - 1) * pageSize;
+  const search = (opts.search ?? "").trim();
+  return { page, pageSize, offset, search };
+}
+
+/**
+ * Server-side escape for LIKE wildcards. The API accepts an arbitrary
+ * user search string; we still bind it as a parameter to avoid SQL
+ * injection, but `%` and `_` inside the string would surprise users
+ * (they mean "any chars" / "any char" in SQL) so we escape them.
+ */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, "\\$&");
+}
+
 export function listCatalogue(
   kind: CatalogueKind,
   orgId: number,
-): CatalogueItem[] {
+  opts: PaginateOptions = {},
+): PaginatedCatalogue {
+  const { page, pageSize, offset, search } = resolvePagination(opts);
+  const table = tableFor(kind);
+
+  const whereClauses: string[] = ["org_id = ?"];
+  const whereParams: unknown[] = [orgId];
+  if (search.length > 0) {
+    const like = `%${escapeLike(search)}%`;
+    whereClauses.push(
+      "(LOWER(title) LIKE LOWER(?) ESCAPE '\\' OR " +
+        "LOWER(slug) LIKE LOWER(?) ESCAPE '\\' OR " +
+        "LOWER(IFNULL(description, '')) LIKE LOWER(?) ESCAPE '\\')",
+    );
+    whereParams.push(like, like, like);
+  }
+
+  const whereSql = whereClauses.join(" AND ");
+
+  const totalRow = raw
+    .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${whereSql}`)
+    .get(...whereParams) as { n: number };
+
   const rows = raw
     .prepare(
       `SELECT id, org_id, slug, title, description, body,
               created_by, created_at, updated_at
-         FROM ${tableFor(kind)}
-        WHERE org_id = ?
-        ORDER BY title`,
+         FROM ${table}
+        WHERE ${whereSql}
+        ORDER BY title
+        LIMIT ? OFFSET ?`,
     )
-    .all(orgId) as Array<Parameters<typeof rowToItem>[0]>;
-  return rows.map(rowToItem);
+    .all(...whereParams, pageSize, offset) as Array<
+    Parameters<typeof rowToItem>[0]
+  >;
+
+  return {
+    items: rows.map(rowToItem),
+    total: totalRow.n,
+    page,
+    pageSize,
+    hasMore: offset + rows.length < totalRow.n,
+  };
 }
 
 export function getCatalogueItem(
@@ -202,26 +284,60 @@ export function listCatalogueForUser(
   kind: CatalogueKind,
   userId: number,
   orgId: number,
-): CatalogueItemWithSub[] {
+  opts: PaginateOptions = {},
+): PaginatedCatalogueWithSub {
+  const { page, pageSize, offset, search } = resolvePagination(opts);
+  const table = tableFor(kind);
+  const subTable = subTableFor(kind);
+  const refCol = refColFor(kind);
+
+  const whereClauses: string[] = ["c.org_id = ?"];
+  const whereParams: unknown[] = [orgId];
+  if (search.length > 0) {
+    const like = `%${escapeLike(search)}%`;
+    whereClauses.push(
+      "(LOWER(c.title) LIKE LOWER(?) ESCAPE '\\' OR " +
+        "LOWER(c.slug) LIKE LOWER(?) ESCAPE '\\' OR " +
+        "LOWER(IFNULL(c.description, '')) LIKE LOWER(?) ESCAPE '\\')",
+    );
+    whereParams.push(like, like, like);
+  }
+
+  const whereSql = whereClauses.join(" AND ");
+
+  const totalRow = raw
+    .prepare(`SELECT COUNT(*) AS n FROM ${table} c WHERE ${whereSql}`)
+    .get(...whereParams) as { n: number };
+
   const rows = raw
     .prepare(
       `SELECT c.id, c.org_id, c.slug, c.title, c.description, c.body,
               c.created_by, c.created_at, c.updated_at,
               s.enabled AS sub_enabled
-         FROM ${tableFor(kind)} c
-    LEFT JOIN ${subTableFor(kind)} s
-           ON s.${refColFor(kind)} = c.id AND s.user_id = ?
-        WHERE c.org_id = ?
-        ORDER BY c.title`,
+         FROM ${table} c
+    LEFT JOIN ${subTable} s
+           ON s.${refCol} = c.id AND s.user_id = ?
+        WHERE ${whereSql}
+        ORDER BY c.title
+        LIMIT ? OFFSET ?`,
     )
-    .all(userId, orgId) as Array<
+    .all(userId, ...whereParams, pageSize, offset) as Array<
     Parameters<typeof rowToItem>[0] & { sub_enabled: number | null }
   >;
-  return rows.map((r) => ({
+
+  const items = rows.map((r) => ({
     ...rowToItem(r),
     installed: r.sub_enabled !== null,
     enabled: r.sub_enabled === 1,
   }));
+
+  return {
+    items,
+    total: totalRow.n,
+    page,
+    pageSize,
+    hasMore: offset + items.length < totalRow.n,
+  };
 }
 
 export function listSubscribedItems(

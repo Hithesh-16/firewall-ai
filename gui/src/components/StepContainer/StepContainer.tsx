@@ -8,6 +8,7 @@ import { deleteMessage } from "../../redux/slices/sessionSlice";
 import { MessageCostBadge } from "../security/CostBadge";
 import ThinkingBlockPeek from "../mainInput/belowMainInput/ThinkingBlockPeek";
 import StyledMarkdownPreview from "../StyledMarkdownPreview";
+import { ResponsePhases } from "../chat/ResponsePhases";
 import ConversationSummary from "./ConversationSummary";
 import ResponseActions from "./ResponseActions";
 import ThinkingIndicator from "./ThinkingIndicator";
@@ -110,6 +111,14 @@ export default function StepContainer(props: StepContainerProps) {
           </pre>
         ) : (
           <>
+            {/* Firewall pipeline visibility for the currently-
+                streaming assistant turn. Shows Scan → Policy stages
+                then collapses once the LLM starts streaming so the
+                phases view doesn't fight the markdown stream for
+                attention. */}
+            {props.isLast && isStreaming && (
+              <ResponsePhases visible={!props.item.message.content} />
+            )}
             {props.item.reasoning?.text && (
               <ThinkingBlockPeek
                 content={props.item.reasoning.text}

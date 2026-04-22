@@ -17,6 +17,47 @@ import { ThunkApiType } from "../store";
 import { findToolCallById, logToolUsage } from "../util";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
+/**
+ * Guard against agents that loop on the same tool + args. Scans the
+ * tail of history for consecutive completed tool calls with identical
+ * (name, args) tuples and returns true once the threshold is hit. Any
+ * assistant text or different tool in between breaks the streak.
+ */
+const LOOP_THRESHOLD = 3;
+
+function isLoopingToolCall(
+  history: ReadonlyArray<{
+    message: { role: string };
+    toolCallStates?: Array<{
+      status: string;
+      toolCall: { function: { name: string; arguments?: string } };
+    }>;
+  }>,
+  candidate: { name: string; arguments?: string },
+): boolean {
+  let streak = 1;
+  for (let i = history.length - 1; i >= 0 && streak < LOOP_THRESHOLD; i--) {
+    const item = history[i];
+    if (item.message.role !== "assistant") continue;
+    const states = item.toolCallStates ?? [];
+    if (states.length === 0) continue;
+    for (const st of states) {
+      if (st.status !== "done") return streak >= LOOP_THRESHOLD;
+      const fn = st.toolCall.function;
+      if (
+        fn.name === candidate.name &&
+        (fn.arguments ?? "") === (candidate.arguments ?? "")
+      ) {
+        streak += 1;
+        if (streak >= LOOP_THRESHOLD) return true;
+      } else {
+        return false;
+      }
+    }
+  }
+  return streak >= LOOP_THRESHOLD;
+}
+
 export const callToolById = createAsyncThunk<
   void,
   { toolCallId: string; isAutoApproved?: boolean; depth?: number },
@@ -32,6 +73,46 @@ export const callToolById = createAsyncThunk<
   }
 
   if (toolCallState.status !== "generated") {
+    return;
+  }
+
+  // Loop guard: if the agent has just completed the same (name, args)
+  // tool call LOOP_THRESHOLD times in a row, fail this invocation with
+  // an error context item so the model stops retrying and responds to
+  // the user instead of burning another round-trip.
+  const toolName = toolCallState.toolCall.function.name;
+  const toolArgs = toolCallState.toolCall.function.arguments;
+  if (
+    isLoopingToolCall(state.session.history, {
+      name: toolName,
+      arguments: toolArgs,
+    })
+  ) {
+    dispatch(
+      updateToolCallOutput({
+        toolCallId,
+        contextItems: [
+          {
+            icon: "problems",
+            name: "Tool call loop detected",
+            description: "Same tool + arguments repeated too many times",
+            content:
+              `The ${toolName} tool has been called ${LOOP_THRESHOLD}+ consecutive times with the same arguments ` +
+              `and has produced no new information. Do NOT call this tool again. ` +
+              `Answer the user from the context you already have, or try a different approach.`,
+            hidden: false,
+          },
+        ],
+      }),
+    );
+    dispatch(errorToolCall({ toolCallId }));
+    const wrapped = await dispatch(
+      streamResponseAfterToolCall({
+        toolCallId,
+        depth: depth + 1,
+      }),
+    );
+    unwrapResult(wrapped);
     return;
   }
 

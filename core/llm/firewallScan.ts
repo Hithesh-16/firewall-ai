@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import {
   extractScanHeaders,
   fetchwithRequestOptions,
@@ -12,6 +13,7 @@ import {
   firewallLocalCache,
   firewallSimHashCache,
   firewallMetrics,
+  maybeLogFirewallMetrics,
 } from "../firewall/cache.js";
 import { getThinnedContextWithHash } from "../firewall/thinContext.js";
 import { classifyWithPromptGuard2 } from "../firewall/classifiers/promptGuard2.js";
@@ -19,9 +21,59 @@ import { classifyWithPromptGuard2 } from "../firewall/classifiers/promptGuard2.j
 const SCAN_URL = "http://127.0.0.1:8080/api/scan";
 const SCAN_TIMEOUT_MS = 5000;
 
-// Module-level state hash for delta scanning
-// Tracks the previous scan's state hash to detect unchanged contexts
-let previousStateHash: string | undefined = undefined;
+// ── Session-scoped delta-scan state ───────────────────────────────────────────
+// Previously this was a single module-level `let`, which meant the IDE path
+// (core/llm/index.ts) and the CLI path (extensions/cli/src/stream/*) shared one
+// slot and poisoned each other whenever both were active. We now key by
+// sessionId with LRU + TTL so concurrent sessions each keep their own state
+// without growing unbounded.
+const DELTA_STATE_TTL_MS = 30 * 60 * 1000; // 30 min
+const DELTA_STATE_MAX_SESSIONS = 1000;
+const DEFAULT_SESSION_KEY = "__global__";
+
+interface DeltaStateEntry {
+  hash: string;
+  at: number;
+}
+
+const deltaStateBySession = new Map<string, DeltaStateEntry>();
+
+function getDeltaState(sessionId: string): string | undefined {
+  const entry = deltaStateBySession.get(sessionId);
+  if (!entry) return undefined;
+  if (Date.now() - entry.at > DELTA_STATE_TTL_MS) {
+    deltaStateBySession.delete(sessionId);
+    return undefined;
+  }
+  return entry.hash;
+}
+
+function setDeltaState(sessionId: string, hash: string): void {
+  if (deltaStateBySession.size >= DELTA_STATE_MAX_SESSIONS) {
+    const oldestKey = deltaStateBySession.keys().next().value;
+    if (oldestKey) deltaStateBySession.delete(oldestKey);
+  }
+  deltaStateBySession.set(sessionId, { hash, at: Date.now() });
+}
+
+// ── In-flight scan coalescing ─────────────────────────────────────────────────
+// Agentic loops can trigger the same scan from multiple code paths in the same
+// tick. Dedup concurrent identical scans so only one pays the L1/L2/L3 cost.
+// Pattern adapted from kilocode's withInFlightCache util.
+const inFlightScans = new Map<string, Promise<PreflightScanResult>>();
+
+function inFlightKey(
+  sessionId: string,
+  body: string,
+  forceRedact: boolean,
+): string {
+  const bodyHash = crypto
+    .createHash("sha256")
+    .update(body)
+    .digest("hex")
+    .slice(0, 16);
+  return `${sessionId}:${forceRedact ? "R" : "N"}:${bodyHash}`;
+}
 
 /**
  * Compact finding shape mirrored from the proxy's `X-AF-Findings`
@@ -96,6 +148,31 @@ export async function firewallCascade(
   body: string,
   model: string,
   forceRedact = false,
+  sessionId: string = DEFAULT_SESSION_KEY,
+): Promise<PreflightScanResult> {
+  // ── In-flight coalescing ────────────────────────────────────────────────
+  // If another caller is already scanning the same (sessionId, body, redact)
+  // combo, share that promise instead of doing the work twice. The cache key
+  // is intentionally identical across callers (IDE and CLI) so cross-consumer
+  // duplicate scans also collapse.
+  const key = inFlightKey(sessionId, body, forceRedact);
+  const pending = inFlightScans.get(key);
+  if (pending) return pending;
+
+  const task = runCascade(body, model, forceRedact, sessionId);
+  inFlightScans.set(key, task);
+  try {
+    return await task;
+  } finally {
+    inFlightScans.delete(key);
+  }
+}
+
+async function runCascade(
+  body: string,
+  model: string,
+  forceRedact: boolean,
+  sessionId: string,
 ): Promise<PreflightScanResult> {
   try {
     const parsed = JSON.parse(body);
@@ -106,19 +183,20 @@ export async function firewallCascade(
 
     // Track total scan attempts for metrics
     firewallMetrics.totalScans++;
+    // Best-effort: emit a metrics snapshot to the debug logger every N scans.
+    maybeLogFirewallMetrics();
 
     // Step L0: Cache Lookup
     // We cache based on the normalized raw body
     const cachedVerdict = firewallLocalCache.get(body);
     if (cachedVerdict) {
-      if (!cachedVerdict.blocked) {
-        // Return benign cache hit (never cache negatives/blocks indefinitely without TTL)
-        return { ...cachedVerdict, cachedHit: true };
-      }
+      // Blocks are cached with a short TTL (60s) so rapid retries of the same
+      // blocked prompt don't re-run L1+L2. Honour both verdict kinds.
+      return { ...cachedVerdict, cachedHit: true };
     }
 
     // Step L0b: SimHash Near-Duplicate Lookup (fallback)
-    // Uses fuzzy matching for 5-20% additional hits
+    // Uses fuzzy matching for 5-20% additional hits. Never returns blocks.
     const simHashResult = await firewallSimHashCache.getNearMatch(body);
     if (simHashResult && !simHashResult.blocked) {
       return { ...simHashResult, cachedHit: true };
@@ -136,13 +214,16 @@ export async function firewallCascade(
       )
       .join("\n");
 
-    // Delta scanning: If context state hasn't changed, skip the full cascade
-    if (previousStateHash && stateHash === previousStateHash) {
+    // Delta scanning: If this session's last-scanned state matches, skip the
+    // full cascade. Scoped per-session so concurrent sessions don't poison
+    // each other's state.
+    const priorHash = getDeltaState(sessionId);
+    if (priorHash && stateHash === priorHash) {
       return { finalBody: body, blocked: false, cachedHit: true };
     }
 
-    // Update state hash for next call
-    previousStateHash = stateHash;
+    // Update state hash for next call (per session)
+    setDeltaState(sessionId, stateHash);
 
     // ── Step L1: Static scanning via @ai-firewall/scanner (zero-cost, <2ms) ────────
     // Uses the canonical shared scanner package — the same one the proxy uses.
@@ -169,13 +250,18 @@ export async function firewallCascade(
           masked,
         })),
       };
-      return {
+      const result: PreflightScanResult = {
         finalBody: body,
         blocked: true,
         blockMessage: `AI Firewall blocked this request — ${topSecret.type} detected.`,
         blockDetail: detail,
         cachedHit: false,
       };
+      // Cache with short TTL (see BLOCK_TTL_MS in firewall/cache.ts) so a
+      // rapid retry doesn't re-run L1. SimHash cache is intentionally skipped
+      // for blocks (security: never fuzzy-match a block).
+      firewallLocalCache.set(body, result);
+      return result;
     }
 
     // PII check (soft-block: can be redacted but not fail-closed by default)
@@ -197,13 +283,15 @@ export async function firewallCascade(
         ],
         findings: [],
       };
-      return {
+      const result: PreflightScanResult = {
         finalBody: body,
         blocked: true,
         blockMessage: `AI Firewall blocked this request — prompt injection detected.`,
         blockDetail: detail,
         cachedHit: false,
       };
+      firewallLocalCache.set(body, result);
+      return result;
     }
 
     // ── Step L2: Local ONNX Classifier (5–20ms, zero tokens) ──────────────────
@@ -220,13 +308,15 @@ export async function firewallCascade(
         ],
         findings: [],
       };
-      return {
+      const result: PreflightScanResult = {
         finalBody: body,
         blocked: true,
         blockMessage: `AI Firewall blocked this request — prompt injection detected.`,
         blockDetail: detail,
         cachedHit: false,
       };
+      firewallLocalCache.set(body, result);
+      return result;
     }
 
     if (l2Result.decision === "ALLOW") {
@@ -350,3 +440,13 @@ export async function firewallCascade(
  * @deprecated Use firewallCascade instead.
  */
 export const firewallPreflightScan = firewallCascade;
+
+/**
+ * Test-only hooks. Not part of the public API — used by
+ * `core/llm/firewallScan.test.ts` to reset cross-test state so the replay
+ * regression test observes a deterministic cold → warm cache transition.
+ */
+export function __resetFirewallStateForTests(): void {
+  deltaStateBySession.clear();
+  inFlightScans.clear();
+}

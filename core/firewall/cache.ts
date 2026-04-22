@@ -36,6 +36,56 @@ export const firewallMetrics: FirewallCacheMetrics = {
 };
 
 /**
+ * Returns an immutable snapshot of the current metrics plus derived rates.
+ * Safe to expose to GUI / CLI / tests without leaking the mutable singleton.
+ */
+export interface FirewallMetricsSnapshot extends FirewallCacheMetrics {
+  cacheHitRate: number; // 0..1 — exact + simhash hits / totalScans
+  l3EscapeRate: number; // 0..1 — l3Escapes / totalScans
+}
+
+export function getFirewallMetricsSnapshot(): FirewallMetricsSnapshot {
+  const total = Math.max(firewallMetrics.totalScans, 1);
+  return {
+    ...firewallMetrics,
+    cacheHitRate:
+      (firewallMetrics.exactCacheHits + firewallMetrics.simHashHits) / total,
+    l3EscapeRate: firewallMetrics.l3Escapes / total,
+  };
+}
+
+export function resetFirewallMetrics(): void {
+  firewallMetrics.totalScans = 0;
+  firewallMetrics.exactCacheHits = 0;
+  firewallMetrics.simHashHits = 0;
+  firewallMetrics.l1Blocks = 0;
+  firewallMetrics.l2Blocks = 0;
+  firewallMetrics.l3Escapes = 0;
+}
+
+// Opt-in periodic debug dump. Gated behind an env var so production runs
+// stay quiet by default. Set AI_FIREWALL_METRICS_DEBUG=1 to enable.
+const METRICS_LOG_EVERY = Number.parseInt(
+  process.env.AI_FIREWALL_METRICS_EVERY ?? "50",
+  10,
+);
+let scansSinceLastLog = 0;
+
+export function maybeLogFirewallMetrics(): void {
+  if (process.env.AI_FIREWALL_METRICS_DEBUG !== "1") return;
+  scansSinceLastLog++;
+  if (scansSinceLastLog < METRICS_LOG_EVERY) return;
+  scansSinceLastLog = 0;
+  const snap = getFirewallMetricsSnapshot();
+  process.stderr.write(
+    `[firewall-metrics] scans=${snap.totalScans} ` +
+      `cache_hit=${(snap.cacheHitRate * 100).toFixed(1)}% ` +
+      `l1=${snap.l1Blocks} l2=${snap.l2Blocks} l3=${snap.l3Escapes} ` +
+      `simhash=${snap.simHashHits} exact=${snap.exactCacheHits}\n`,
+  );
+}
+
+/**
  * A fast, exact-match LRU cache for Firewall verdicts with TTL support.
  * Saves 5-50% tokens/latency on edit-run-edit identical repeats.
  *

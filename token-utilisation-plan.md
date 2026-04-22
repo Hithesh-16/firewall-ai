@@ -1,5 +1,37 @@
 # Cutting 90% of firewall tokens without breaking security
 
+> **Status update — 2026-04-22.** A codebase audit (this branch: `code-refactor`) shows the bulk of this plan has already shipped in `core/`. The shared pipeline powers both the VS Code extension and the CLI via `core/llm/firewallScan.ts` + `core/llm/promptOptimizer.ts` + `core/compaction/compactWithCheapModel.ts`. Cross-reference of the plan's optimization stack against the current tree:
+>
+> | Tier | Technique                                                                | Status                                                   | Location                                                  |
+> | ---- | ------------------------------------------------------------------------ | -------------------------------------------------------- | --------------------------------------------------------- |
+> | 1    | Context thinning (system + last 6 turns)                                 | ✅ shipped                                               | `core/firewall/thinContext.ts:36`                         |
+> | 1    | Exact-hash LRU verdict cache (10K, TTL, policy-versioned)                | ✅ shipped                                               | `core/firewall/cache.ts:47` (`FirewallExactHashCache`)    |
+> | 2    | Prompt Guard 2 86M ONNX local classifier                                 | ✅ shipped                                               | `core/firewall/classifiers/promptGuard2.ts`               |
+> | 2    | Regex L1 (secrets / PII / injection / entropy) via shared scanner        | ✅ shipped                                               | `packages/scanner/src/*` → `core/llm/firewallScan.ts:151` |
+> | 3    | 3-tier cascade (L1 → L2 → L3 proxy escalation)                           | ✅ shipped                                               | `core/llm/firewallScan.ts:95` (`firewallCascade`)         |
+> | 5    | Delta scan via session-state hash                                        | ⚠️ shipped but module-global — **needs session scoping** | `core/llm/firewallScan.ts:24`                             |
+> | 7    | SimHash near-duplicate benign cache                                      | ✅ shipped                                               | `core/firewall/cache.ts:203` (`FirewallSimHashCache`)     |
+> | —    | Blob metadata replacement (old >2KB assistant turns)                     | ✅ shipped                                               | `core/llm/promptOptimizer.ts:60`                          |
+> | —    | Anthropic cache_control breakpoints (20/50/80% + system 1h + rolling 5m) | ✅ shipped                                               | `core/llm/promptOptimizer.ts:105`                         |
+> | —    | OpenAI `prompt_cache_key = sessionId` + `prompt_cache_retention: 24h`    | ✅ shipped                                               | `extensions/cli/src/stream/streamChatResponse.ts:399`     |
+> | —    | Weak-model compaction (Haiku / gpt-4o-mini, **not** flagship)            | ✅ shipped                                               | `core/compaction/compactWithCheapModel.ts:39`             |
+> | —    | Microcompaction (tool outputs >2KB stubbed, keep last 3)                 | ✅ shipped                                               | `core/compaction/compactWithCheapModel.ts:61`             |
+> | —    | Structured-checklist summarization + rehydration suffix                  | ✅ shipped                                               | `core/compaction/compactWithCheapModel.ts:121`            |
+> | —    | 60% soft / 75% hard compaction thresholds                                | ✅ shipped                                               | `extensions/cli/src/compaction.ts:25`                     |
+> | —    | Post-flight response leak scanning                                       | ✅ shipped                                               | `core/llm/firewallResponseScan.ts`                        |
+>
+> **Remaining gap list — these are what this document now drives.** Each is scoped to `core/` so both IDE and CLI inherit the fix without consumer-specific wiring:
+>
+> 1. **Session-scoped delta-scan state.** The `previousStateHash` at `core/llm/firewallScan.ts:24` is a module-level `let`. When the IDE and CLI run concurrently, or when two chat sessions interleave, they share (and poison) this single slot. Not a security bug (worst case: falls back to a full scan), but it silently defeats the delta optimization in exactly the multi-session case it was meant to accelerate. Replace with a bounded `Map<sessionId, {hash, at}>` plus LRU eviction.
+> 2. **In-flight request coalescing** (pattern lifted from `kilocode/packages/opencode/src/kilo-sessions/inflight-cache.ts`). Agentic loops trigger the same scan from multiple code paths in the same tick. Dedup concurrent scans on the same body with a `Map<key, Promise<result>>` that clears on settle.
+> 3. **Firewall metrics surfaced.** Counters already accumulate in `firewallMetrics` at `core/firewall/cache.ts:29`, but nothing logs them. Add an opt-in debug dump + a tiny accessor so the GUI / CLI can show hit-rate and cascade-escape stats.
+> 4. **Replay regression test.** The plan's cache-regression guard — "same request twice, assert cache hit on the second" — has no test. Add one in Jest against `firewallCascade` so a stray normalisation change can't silently destroy the L0 hit rate for weeks.
+> 5. **Cache L2 BLOCK verdicts with short TTL.** Current L1 and L2 block paths skip the cache (only ALLOW/REDACT are cached). With the existing `BLOCK_TTL_MS = 60s` in `FirewallExactHashCache`, caching blocks is safe and stops a blocked prompt from re-running L1+L2 on every keystroke retry.
+>
+> Everything below this line is the original research report that produced the plan. It remains a useful reference for _why_ each decision was made and for the competitor landscape, but the architectural heavy lifting described is already in place.
+
+---
+
 **Your preflight-scans-the-whole-history design is doing the right thing for the wrong reason — and doubling your bill to do it.** You can keep every real security property you care about while eliminating 80–95% of the firewall-side LLM tokens by doing three things: move the bulk of detection to a local BERT-class classifier (Prompt Guard 2 86M via ONNX), switch from "scan full history" to "scan system + last N turns + delta," and stop using Sonnet/GPT-4o for compaction. The evidence from every major commercial gateway — Cloudflare, Lakera, Protect AI, Azure, Bedrock, Meta's own LlamaFirewall — is that **nobody in production relies on a big LLM for the first line of defense**. They run a BERT-sized classifier, a regex layer, and escalate to an LLM only on ambiguity. Your double-LLM-call architecture is a greenfield mistake, not an industry norm. This report lays out why preflight scanning remains architecturally necessary (you cannot un-send bytes once OpenAI logs them), what competitors actually do, and a prioritized roadmap that should get your firewall cost-per-request down to the noise floor.
 
 ## Why preflight exists, and when you can skip it

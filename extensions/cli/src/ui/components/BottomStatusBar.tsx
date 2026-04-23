@@ -10,6 +10,7 @@ import type { NavigationScreen } from "../context/NavigationContext.js";
 import { FreeTrialStatus } from "../FreeTrialStatus.js";
 import { UpdateNotification } from "../UpdateNotification.js";
 
+import { formatCost } from "../../util/sessionMetrics.js";
 import { ContextPercentageDisplay } from "./ContextPercentageDisplay.js";
 import { ModeIndicator } from "./ModeIndicator.js";
 import { ResponsiveRepoDisplay } from "./ResponsiveRepoDisplay.js";
@@ -87,7 +88,7 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
               •{" "}
             </Text>
             <Text key="cost-display" color="dim">
-              Cost: ${totalCost.toFixed(4)}
+              Cost: {formatCost(totalCost)}
             </Text>
           </React.Fragment>
         )}

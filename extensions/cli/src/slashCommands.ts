@@ -17,6 +17,12 @@ import { getCurrentSession, updateSessionTitle } from "./session.js";
 import { posthogService } from "./telemetry/posthogService.js";
 import { telemetryService } from "./telemetry/telemetryService.js";
 import { SlashCommandResult } from "./ui/hooks/useChat.types.js";
+import {
+  loadCliSettings,
+  settingsFilePath,
+  updateStatusLineSettings,
+  type StatusLineSettings,
+} from "./util/settings.js";
 
 type CommandHandler = (
   args: string[],
@@ -217,6 +223,109 @@ function handleSessions() {
  *   4. Report what changed in a concise summary.
  */
 /**
+ * `/statusline` — configure the user-configurable status line rendered
+ * above the input bar. Modes:
+ *
+ *   /statusline                    → show current config + help
+ *   /statusline default            → revert to the built-in statusline
+ *   /statusline off                → hide the statusline entirely
+ *   /statusline on                 → re-enable after `/statusline off`
+ *   /statusline set /path/to/.sh   → run the script on every tick and
+ *                                    render its first stdout line
+ *
+ * Writes through to `~/.ai-firewall/settings.json`; the StatusLine
+ * component polls settings every 5s so changes take effect without a
+ * TUI restart.
+ */
+function handleStatusLine(args: string[]): SlashCommandResult {
+  const sub = (args[0] ?? "").toLowerCase();
+
+  if (sub === "" || sub === "status" || sub === "show") {
+    const current = loadCliSettings().statusLine;
+    const lines = [
+      chalk.bold("Status line"),
+      "",
+      formatStatusLineDescription(current),
+      "",
+      chalk.dim(`settings file: ${settingsFilePath()}`),
+      "",
+      chalk.dim("Usage:"),
+      chalk.dim("  /statusline default            Built-in format"),
+      chalk.dim("  /statusline off                Hide entirely"),
+      chalk.dim("  /statusline on                 Re-enable"),
+      chalk.dim("  /statusline set <script path>  Run a custom script"),
+      "",
+      chalk.dim(
+        "Script receives a JSON context on stdin: { model, cwd, sessionId, contextPercentage, totalCost, user, hostname }. Print one line on stdout.",
+      ),
+    ];
+    return { output: lines.join("\n") };
+  }
+
+  if (sub === "default") {
+    updateStatusLineSettings(() => ({ type: "default", enabled: true }));
+    return { output: chalk.green("Status line reset to default format.") };
+  }
+
+  if (sub === "off" || sub === "hide" || sub === "disable") {
+    updateStatusLineSettings((current) => {
+      if (!current) return { type: "default", enabled: false };
+      return { ...current, enabled: false };
+    });
+    return { output: chalk.yellow("Status line hidden.") };
+  }
+
+  if (sub === "on" || sub === "show" || sub === "enable") {
+    updateStatusLineSettings((current) => {
+      if (!current) return { type: "default", enabled: true };
+      return { ...current, enabled: true };
+    });
+    return { output: chalk.green("Status line enabled.") };
+  }
+
+  if (sub === "set" || sub === "command") {
+    const scriptPath = args.slice(1).join(" ").trim();
+    if (!scriptPath) {
+      return {
+        output: chalk.red("Usage: /statusline set /path/to/script.sh"),
+      };
+    }
+    updateStatusLineSettings(() => ({
+      type: "command",
+      enabled: true,
+      command: scriptPath,
+      updateIntervalMs: 2000,
+    }));
+    return {
+      output: chalk.green(
+        `Status line now runs: ${scriptPath}\n(refreshes every 2s; edit ${settingsFilePath()} to change the interval).`,
+      ),
+    };
+  }
+
+  return {
+    output: chalk.red(
+      `Unknown /statusline subcommand: "${sub}". Run /statusline for help.`,
+    ),
+  };
+}
+
+function formatStatusLineDescription(
+  current: StatusLineSettings | undefined,
+): string {
+  if (!current) return chalk.dim("  (using built-in default)");
+  if (current.enabled === false) return chalk.yellow("  hidden");
+  if (current.type === "command") {
+    return [
+      chalk.cyan(`  type: command`),
+      chalk.cyan(`  script: ${current.command}`),
+      chalk.cyan(`  interval: ${current.updateIntervalMs ?? 2000}ms`),
+    ].join("\n");
+  }
+  return chalk.cyan("  type: default (built-in)");
+}
+
+/**
  * Relay helper: forward a slash command to the proxy's
  * `/api/commands/execute` endpoint and adapt the response.
  *
@@ -372,6 +481,7 @@ const commandHandlers: Record<string, CommandHandler> = {
   },
   jobs: handleJobs,
   sessions: handleSessions,
+  statusline: handleStatusLine,
 
   // ── Proxy-backed commands ─────────────────────────────────────────
   // Relay to POST /api/commands/execute. The proxy owns the actual

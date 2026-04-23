@@ -38,7 +38,7 @@ export interface SessionStats {
 const COST_DECIMAL_PLACES =
   process.env.AI_FIREWALL_COST_DECIMAL_PLACES === "2" ? 2 : 4;
 
-function formatCost(cost: number): string {
+export function formatCost(cost: number): string {
   if (cost === 0) return "$0.0000";
   return cost < 0.01
     ? `$${cost.toFixed(COST_DECIMAL_PLACES)}`

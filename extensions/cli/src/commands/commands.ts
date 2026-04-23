@@ -121,6 +121,12 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
     description: "Sync models and policy from the web dashboard",
     category: "system",
   },
+  {
+    name: "statusline",
+    description:
+      "Configure the bottom status line (default / off / on / set <script>)",
+    category: "system",
+  },
   // ── Proxy-driven prompt/action commands ──────────────────────────
   // These map 1:1 to BUILTIN_COMMANDS in proxy/src/commands/builtinCommands.ts
   // and are what the web dashboard already exposes. Listing them here

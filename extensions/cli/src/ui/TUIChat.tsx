@@ -26,6 +26,7 @@ import { logger } from "../util/logger.js";
 
 import { ActionStatus } from "./components/ActionStatus.js";
 import { BottomStatusBar } from "./components/BottomStatusBar.js";
+import { StatusLine } from "./StatusLine.js";
 import { CLITodoStrip } from "./components/CLITodoStrip.js";
 import { FirewallConsentRequest } from "./components/FirewallConsentRequest.js";
 import { ResourceDebugBar } from "./components/ResourceDebugBar.js";
@@ -538,6 +539,17 @@ const TUIChat: React.FC<TUIChatProps> = ({
         {isVerboseMode && !isRemoteMode && (
           <ResourceDebugBar visible={navState.currentScreen === "chat"} />
         )}
+
+        {/* User-configurable statusline (drives off ~/.ai-firewall/settings.json) */}
+        <StatusLine
+          ctx={{
+            model: services.model?.model?.model,
+            cwd: process.cwd(),
+            sessionId: undefined,
+            contextPercentage: contextData?.percentage,
+            totalCost: getTotalSessionCost(),
+          }}
+        />
 
         {/* Free trial status and AI Firewall CLI info - always show */}
         <BottomStatusBar

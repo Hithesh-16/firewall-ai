@@ -1,6 +1,8 @@
 import { Box, Text } from "ink";
 import React from "react";
 
+import { formatCost } from "../util/sessionMetrics.js";
+
 interface ModelCost {
   model: string;
   requests: number;
@@ -32,7 +34,7 @@ const CostDisplay: React.FC<CostDisplayProps> = ({
           color={totalCost > 1.0 ? "red" : totalCost > 0.1 ? "yellow" : "green"}
           bold
         >
-          ${totalCost.toFixed(4)}
+          {formatCost(totalCost)}
         </Text>
         {sessionDuration && <Text color="dim">({sessionDuration})</Text>}
       </Box>
@@ -49,9 +51,7 @@ const CostDisplay: React.FC<CostDisplayProps> = ({
               <Text>{row.model.slice(0, 27).padEnd(28)}</Text>
               <Text>{String(row.requests).padStart(6)}</Text>
               <Text>{row.tokens.toLocaleString().padStart(10)}</Text>
-              <Text color="yellow">
-                {`$${row.cost.toFixed(4)}`.padStart(10)}
-              </Text>
+              <Text color="yellow">{formatCost(row.cost).padStart(10)}</Text>
             </Box>
           ))}
         </Box>

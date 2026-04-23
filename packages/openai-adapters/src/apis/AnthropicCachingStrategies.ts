@@ -189,6 +189,44 @@ export const CACHING_STRATEGIES = {
   optimized: optimizedStrategy,
 } as const;
 
+// Anthropic rejects any request carrying more than 4 `cache_control`
+// breakpoints with a 400 invalid_request_error. Multiple layers can
+// legitimately tag breakpoints (upstream prompt optimizer in core/,
+// the strategy above, plus addCacheControlToLastTwoUserMessages),
+// and rare combinations push the total past the limit. This safety
+// net walks the final body and drops the OLDEST tags first, keeping
+// the most recent MAX which are the most useful for cache re-use
+// (system + tools + latest user turns).
+export function enforceCacheControlLimit(body: MessageCreateParams): void {
+  const MAX = 4;
+  type Tagged = { cache_control?: unknown };
+  const tagged: Tagged[] = [];
+
+  if (Array.isArray(body.system)) {
+    for (const s of body.system) {
+      if ((s as Tagged).cache_control) tagged.push(s as Tagged);
+    }
+  }
+  if (Array.isArray(body.tools)) {
+    for (const t of body.tools) {
+      if ((t as Tagged).cache_control) tagged.push(t as Tagged);
+    }
+  }
+  for (const msg of body.messages) {
+    if (typeof msg.content === "string") continue;
+    for (const block of msg.content) {
+      if ((block as Tagged).cache_control) tagged.push(block as Tagged);
+    }
+  }
+
+  if (tagged.length <= MAX) return;
+
+  const toRemove = tagged.length - MAX;
+  for (let i = 0; i < toRemove; i++) {
+    delete tagged[i].cache_control;
+  }
+}
+
 export type CachingStrategyName = keyof typeof CACHING_STRATEGIES;
 
 // Helper function to get available strategies

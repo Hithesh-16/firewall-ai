@@ -2,6 +2,7 @@ import { MessageCreateParams, ToolUnion } from "@anthropic-ai/sdk/resources";
 import {
   CACHING_STRATEGIES,
   CachingStrategyName,
+  enforceCacheControlLimit,
   getAvailableStrategies,
   getStrategyDescription,
 } from "./AnthropicCachingStrategies.js";
@@ -728,6 +729,158 @@ describe("AnthropicCachingStrategies", () => {
       });
     });
   });
+  describe("enforceCacheControlLimit", () => {
+    it("leaves the body untouched when total tags <= 4", () => {
+      const body: MessageCreateParams = {
+        system: [
+          {
+            type: "text",
+            text: "sys",
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        tools: [
+          {
+            ...makeTool("t"),
+            cache_control: { type: "ephemeral" },
+          } as ToolUnion,
+        ],
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "u1",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "u2",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+        ],
+        ...body_params,
+      };
+
+      enforceCacheControlLimit(body);
+
+      // All 4 tags are preserved.
+      expect((body.system as any[])[0].cache_control).toEqual({
+        type: "ephemeral",
+      });
+      expect((body.tools as any[])[0].cache_control).toEqual({
+        type: "ephemeral",
+      });
+      expect((body.messages[0].content as any[])[0].cache_control).toEqual({
+        type: "ephemeral",
+      });
+      expect((body.messages[1].content as any[])[0].cache_control).toEqual({
+        type: "ephemeral",
+      });
+    });
+
+    it("drops the oldest tags when total exceeds 4", () => {
+      // 5 tagged blocks: system + 4 user messages with cache_control
+      const body: MessageCreateParams = {
+        system: [
+          {
+            type: "text",
+            text: "sys",
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "u1",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "u2",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "u3",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "u4",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+        ],
+        ...body_params,
+      };
+
+      enforceCacheControlLimit(body);
+
+      // Oldest tag (system, index 0 in walk order) is stripped.
+      expect((body.system as any[])[0].cache_control).toBeUndefined();
+      // The 4 most-recent tags survive (u1..u4).
+      expect((body.messages[0].content as any[])[0].cache_control).toEqual({
+        type: "ephemeral",
+      });
+      expect((body.messages[3].content as any[])[0].cache_control).toEqual({
+        type: "ephemeral",
+      });
+    });
+
+    it("ignores string-content messages (no block to tag)", () => {
+      const body: MessageCreateParams = {
+        messages: [
+          { role: "user", content: "plain string, untagged" },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "u",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+        ],
+        ...body_params,
+      };
+
+      // Should not throw when walking string content; should leave tag intact.
+      expect(() => enforceCacheControlLimit(body)).not.toThrow();
+      expect((body.messages[1].content as any[])[0].cache_control).toEqual({
+        type: "ephemeral",
+      });
+    });
+  });
+
   describe("CachingStrategyName type", () => {
     it("should work with valid strategy names", () => {
       const strategyNames: CachingStrategyName[] = [

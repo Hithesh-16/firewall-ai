@@ -1,0 +1,232 @@
+---
+title: "Agent Tools, Plan Workflow & Web Research"
+description: "Developer reference for propose_plan / spawn_agent / apply_patch / lsp / recall / research_web, the approval UI, loop detector, interrupted-turn handling, and the /v1/web-search proxy routes."
+---
+
+This page covers the agent capabilities added in the 2026-04 development cycle. It is intentionally written for contributors — the end-user version lives under `docs/chat/` and `docs/agents/`.
+
+## Overview
+
+| Layer | Addition |
+|---|---|
+| `core/tools/` | `propose_plan`, `create_plan`, `update_plan`, `spawn_agent`, `list_agents`, `apply_patch`, `lsp`, `recall`, `research_web` |
+| `core/commands/` | `/plan` legacy slash command |
+| `proxy/src/routes/` | `POST /v1/web-search`, `POST /v1/web-extract` |
+| `proxy/src/commands/` | `/plan` prompt command (CLI parity) |
+| `gui/src/components/chat/` | `PlanProposalCard`, token-histogram `TokenUsageBar`, interrupted-turn indicator |
+| `gui/src/redux/` | `pendingPlanProposal` state, loop detector in `callToolById`, `interrupted` flag on `ChatHistoryItem` |
+| `core/llm/defaultSystemMessages.ts` | Loop-avoidance, parallel-delegation, approval-gate, todo-driven, and web-research guidance |
+
+## Plan workflow
+
+The plan workflow has three tools and one UI card.
+
+### Tools
+
+| Tool | When the model should call it | UI behaviour |
+|---|---|---|
+| `propose_plan` | Any multi-file or risky change (auth, schema, CI, deletes) | Shows `PlanProposalCard` with Approve / Revise. Model stops until user acts. |
+| `create_plan` | Low-risk plans the user pre-approved, or plans proposed by `/plan` after Approve | Fills `PlanPanel` immediately. |
+| `update_plan` | Every time a task starts or finishes | Flips the checkbox in `PlanPanel`. |
+
+### Context-item URI types
+
+The implementations at `core/tools/implementations/planTool.ts` emit context items with these URI types. `gui/src/redux/thunks/callToolById.ts` routes them into redux.
+
+| URI type | Redux action | UI |
+|---|---|---|
+| `plan_proposal` | `setPendingPlanProposal` | `PlanProposalCard` |
+| `plan` | `setActivePlan` | `PlanPanel` |
+| `plan_update` | (inline markdown only — no action; the agent owns progress tracking) | N/A |
+
+### Approval flow
+
+```
+agent → propose_plan → uri.type = "plan_proposal"
+callToolById.ts sees the uri type → setPendingPlanProposal(...)
+PlanProposalCard renders above the chat input
+user clicks Approve → approvePendingPlanProposal() → proposal promoted to activePlan
+user clicks Revise → clearPendingPlanProposal() → user types feedback, agent re-plans
+```
+
+### `/plan` slash command
+
+`core/commands/slash/built-in-legacy/plan.ts` (GUI) and `proxy/src/commands/builtinCommands.ts` (CLI) both ship a `/plan` that rewrites the user's task into a directive forcing the model to call `propose_plan` first.
+
+```
+/plan migrate the auth middleware to use JWT
+  ↓
+directive: "The user invoked /plan ... call propose_plan BEFORE any other tool call ... STOP after."
+  ↓
+model responds with propose_plan(...)
+  ↓
+PlanProposalCard appears, user approves/revises
+```
+
+## Sub-agent orchestration
+
+### Tools
+
+- `spawn_agent(task, model?)` — forks an isolated worker via `core/agents/agentOrchestrator.ts`. Max 3 concurrent; additional spawns queue with a 30 s timeout. Each worker runs in its own `worker_thread` so crashes don't take down the main chat.
+- `list_agents()` — polls status + tail output for all known sub-agents.
+
+### When to use
+
+System prompt hint:
+
+> Parallel delegation: for large, independent subtasks (e.g. "audit auth and audit billing"), call `spawn_agent` to fork an isolated worker rather than exploring sequentially. Use `list_agents` to poll results. Max 3 concurrent. Do NOT spawn for trivial, single-tool tasks.
+
+## Power tools
+
+### `apply_patch`
+
+`core/tools/implementations/applyPatch.ts`. Wraps the existing `diff` dependency's `parsePatch` + `applyPatch`. Per-file status with `+N/-M` counts; rejected hunks tell the model to re-read and regenerate. Not for renames, binary diffs, or mode bits — those require `run_terminal_command` with `git apply`.
+
+### `lsp`
+
+`core/tools/implementations/lspTool.ts`. Four actions:
+
+| Action | IDE method |
+|---|---|
+| `definition` | `gotoDefinition(location)` |
+| `type` | `gotoTypeDefinition(location)` |
+| `references` | `getReferences(location)` |
+| `symbols` | `getDocumentSymbols(fileUri)` |
+
+Line / column are 1-based in the tool API and converted to 0-based before calling the IDE surface.
+
+### `recall`
+
+`core/tools/implementations/recall.ts`. Local-only grep over prior saved sessions. Reads `getSessionsListPath()` + `getSessionFilePath(id)` from `core/util/paths.ts`. Returns up to N snippets with session title, turn number, and ±80 chars of context.
+
+## Web research
+
+### Proxy routes
+
+Defined in `proxy/src/routes/webSearch.route.ts`. Both require `requireAuth`.
+
+```
+POST /v1/web-search
+  body: { query: string, n?: 1-20 }
+  → ContextItem[] (name, description = URL, content = snippet)
+
+POST /v1/web-extract
+  body: { urls: string[] (max 10) }
+  → { provider: "tavily" | "direct" | "direct-fallback", items: [{url, title?, content, status, error?}] }
+```
+
+Provider order (first env var that matches wins):
+
+1. `TAVILY_API_KEY` — recommended. Clean markdown content from both `/search` and `/extract`.
+2. `BRAVE_SEARCH_API_KEY` — search only.
+3. `SERPAPI_API_KEY` — search only.
+
+`/v1/web-extract` uses Tavily `/extract` when a key is set; otherwise falls back to parallel direct HTTP fetch with raw HTML passthrough (the caller runs Readability/JSDOM).
+
+### `research_web` tool
+
+`core/tools/implementations/researchWeb.ts`. Composite pipeline:
+
+1. `fetchSearchResults` → `POST /v1/web-search` for top-N URLs.
+2. `POST /v1/web-extract` for every returned URL.
+3. Returns a headline ContextItem + one ContextItem per source with up to 8K chars of extracted markdown.
+
+System prompt guidance:
+
+> Web research: when the user asks you to "search online", "analyse on the web", "find recent information about X", or anything requiring actual page content, call `research_web` — it searches AND extracts page bodies in one step. Prefer it over chaining `search_web` + `fetch_url_content` manually.
+
+## Stream lifecycle — interrupted turns and loop detection
+
+### Interrupted turns
+
+`ChatHistoryItem.interrupted?: boolean` is added in `core/index.d.ts`. Set by `clearDanglingMessages` in `gui/src/redux/slices/sessionSlice.ts` whenever the user hard-stops a stream. The flag is read by:
+
+- `gui/src/redux/util/constructMessages.ts` — filters flagged items out of the next LLM request so Claude can't "continue where it left off".
+- `gui/src/pages/gui/Chat.tsx` — renders the message at `opacity-60` with a small "Cancelled — hidden from model context" caption.
+
+`sendInput` in `Chat.tsx` also dispatches `cancelStream()` when the user submits while `isStreaming` is true, so mid-stream submits get the same clean-slate treatment as explicit stops.
+
+### Loop detector
+
+`gui/src/redux/thunks/callToolById.ts::isLoopingToolCall`. Two triggers, scanning the tail of history:
+
+| Threshold | Rule |
+|---|---|
+| `IDENTICAL_THRESHOLD = 3` | same `(name, args)` completed 3× within `WINDOW_TURNS = 8` |
+| `SAME_NAME_THRESHOLD = 5` | same tool `name` (any args) completed 5× within 8 turns |
+
+Pending / generated tool calls are skipped so the current in-flight call doesn't short-circuit the scan. When tripped, a `"Tool call loop detected"` context item is returned instead of running the tool, and the stream continues so the model can adapt.
+
+### Empty-map guard
+
+`core/tools/implementations/viewRepoMap.ts` strips the `REPO_MAP_PREAMBLE` and returns a "Repo map unavailable" context item if nothing is left. This is the typical cause of the `view_repo_map` loop seen when chatting before indexing completes.
+
+## Sticky chat header
+
+Three linked fixes in `gui/src/pages/gui/Chat.tsx` and `gui/src/components/chat/TaskHeader.tsx`:
+
+1. `StepsDiv`'s CSS `& > *:not([role="toolbar"]):not([data-sticky])` rule previously forced `position: relative` on all children and silently overrode the sticky header.
+2. `TaskHeader`'s `<button>` had no `background` class, so VS Code webviews rendered `buttonface` (light gray) — now `bg-transparent border-0`.
+3. The sticky stack wraps `TaskHeader + TokenUsageBar + StickyPromptHeader + TodoStrip` and inlines `backgroundColor: vscBackground` so it matches the chat surface.
+
+### Token histogram
+
+`gui/src/components/chat/TokenUsageBar.tsx` renders one spike per assistant turn using `promptLogs[i].completionTokens`. Colour tiers:
+
+- BLOCK → `text-error`
+- REDACT / REQUIRE_APPROVAL → `text-warning`
+- turn tokens ≥ 2000 → `text-warning`
+- turn tokens ≥ 500 → `text-info`
+- default → `text-success`
+
+Live-streaming adds a pulsing bar at the tail, with a token counter to the right.
+
+## System-prompt changes
+
+`core/llm/defaultSystemMessages.ts` — Agent and Plan modes gained paragraphs for:
+
+- **Loop avoidance** — don't re-call a tool that already returned.
+- **Parallel delegation** — prefer `spawn_agent` for independent subtasks.
+- **Approval-gated plans** — `propose_plan` before risky multi-file work.
+- **Todo-driven execution** — `todo_write` at the start of any 3+ step task; flip status as work progresses.
+- **Web research** — `research_web` on "search online" / "analyse on the web" cues.
+
+## Configuration
+
+Add the relevant keys to `proxy/.env` (or equivalent env):
+
+```bash
+# One is enough; Tavily is recommended for the richest content.
+TAVILY_API_KEY=tvly-...
+# BRAVE_SEARCH_API_KEY=...
+# SERPAPI_API_KEY=...
+
+# Override the proxy base URL the core targets. Defaults to http://127.0.0.1:8080.
+# AI_FIREWALL_PROXY_URL=http://127.0.0.1:8080
+```
+
+Legacy env `AI_FIREWALL_WEB_CONTEXT_PROXY_URL` is still honoured for deploys that host the old `<base>/web` contract.
+
+## File-by-file reference
+
+| File | Purpose |
+|---|---|
+| `core/tools/builtIn.ts` | Enum entries for every new tool |
+| `core/tools/implementations/planTool.ts` | `createPlanImpl`, `proposePlanImpl`, `updatePlanImpl` |
+| `core/tools/implementations/spawnAgent.ts` | `spawnAgentImpl`, `listAgentsImpl` |
+| `core/tools/implementations/applyPatch.ts` | Unified-diff applicator |
+| `core/tools/implementations/lspTool.ts` | LSP query action router |
+| `core/tools/implementations/recall.ts` | Local session grep |
+| `core/tools/implementations/researchWeb.ts` | search + extract pipeline |
+| `core/tools/definitions/planTools.ts` | Tool definitions for the plan trio |
+| `core/tools/definitions/spawnAgent.ts` | `spawnAgentTool`, `listAgentsTool` |
+| `core/tools/definitions/kilocodeTools.ts` | `applyPatchTool`, `lspTool`, `recallTool`, `researchWebTool` |
+| `core/commands/slash/built-in-legacy/plan.ts` | `/plan` slash command (GUI) |
+| `proxy/src/commands/builtinCommands.ts` | `/plan` prompt command (CLI) |
+| `proxy/src/routes/webSearch.route.ts` | `/v1/web-search`, `/v1/web-extract` |
+| `core/context/providers/WebContextProvider.ts` | Defaults to proxy endpoint, honours override env |
+| `gui/src/components/chat/PlanProposalCard.tsx` | Approve / Revise UI card |
+| `gui/src/redux/thunks/callToolById.ts` | Loop detector + plan-proposal routing |
+| `gui/src/redux/util/constructMessages.ts` | Filters `interrupted` turns |
+| `gui/src/redux/slices/sessionSlice.ts` | `pendingPlanProposal`, `interrupted`-aware `clearDanglingMessages` |
+| `gui/src/pages/gui/Chat.tsx` | Sticky header stack, interrupted indicator, abort-on-submit |

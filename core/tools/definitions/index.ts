@@ -12,6 +12,14 @@ export { readFileTool } from "./readFile";
 
 export { readFileRangeTool } from "./readFileRange";
 export { readSkillTool } from "./readSkill";
+export { createPlanTool, proposePlanTool, updatePlanTool } from "./planTools";
+export { listAgentsTool, spawnAgentTool } from "./spawnAgent";
+export {
+  applyPatchTool,
+  lspTool,
+  recallTool,
+  researchWebTool,
+} from "./kilocodeTools";
 export { taskBoundaryTool } from "./taskBoundary";
 export { requestRuleTool } from "./requestRule";
 export { runTerminalCommandTool } from "./runTerminalCommand";

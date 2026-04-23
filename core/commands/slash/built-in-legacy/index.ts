@@ -8,6 +8,7 @@ import CommitMessageCommand from "./commit";
 import DraftIssueCommand from "./draftIssue";
 import HttpSlashCommand from "./http";
 import OnboardSlashCommand from "./onboard";
+import PlanSlashCommand from "./plan";
 import ReviewMessageCommand from "./review";
 import ShareSlashCommand from "./share";
 
@@ -19,6 +20,7 @@ const LegacyBuiltInSlashCommands: SlashCommand[] = [
   CommitMessageCommand,
   ReviewMessageCommand,
   OnboardSlashCommand,
+  PlanSlashCommand,
 ];
 
 export function getLegacyBuiltInSlashCommandFromDescription(

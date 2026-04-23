@@ -7,22 +7,20 @@ import {
 } from "../..";
 import { getHeaders } from "../../continueServer/stubs/headers";
 
-// Phase H.H1c (SECURITY_HARDENING_PLAN.md) — replaced the hardcoded
-// Continue.dev hosted web-search proxy with an env-driven URL.
-// Self-host the equivalent /web endpoint and set this env var to
-// re-enable the @web context provider.
-const WEB_PROXY_URL_ENV = "AI_FIREWALL_WEB_CONTEXT_PROXY_URL";
+// Web search now defaults to the AI Firewall proxy's /v1/web-search
+// route (wraps Tavily / Brave / SerpAPI behind a single endpoint).
+// Legacy deploys can still override with AI_FIREWALL_WEB_CONTEXT_PROXY_URL
+// which expects the old `<base>/web` contract.
+const LEGACY_WEB_PROXY_URL_ENV = "AI_FIREWALL_WEB_CONTEXT_PROXY_URL";
+const DEFAULT_PROXY_BASE = "http://127.0.0.1:8080";
 
-function getWebContextEndpoint(): URL {
-  const url = process.env[WEB_PROXY_URL_ENV];
-  if (!url) {
-    throw new Error(
-      `@web context provider not configured. Set ${WEB_PROXY_URL_ENV} to a ` +
-        `self-hosted web-search proxy URL (the previous hardcoded Continue.dev ` +
-        `endpoint was removed in SECURITY_HARDENING_PLAN.md Phase H.H1c).`,
-    );
+function getWebContextEndpoint(): { url: URL; legacy: boolean } {
+  const legacy = process.env[LEGACY_WEB_PROXY_URL_ENV];
+  if (legacy) {
+    return { url: new URL("web", legacy), legacy: true };
   }
-  return new URL("web", url);
+  const base = process.env.AI_FIREWALL_PROXY_URL ?? DEFAULT_PROXY_BASE;
+  return { url: new URL("/v1/web-search", base), legacy: false };
 }
 
 export const fetchSearchResults = async (
@@ -30,21 +28,21 @@ export const fetchSearchResults = async (
   n: number,
   fetchFn: FetchFunction,
 ): Promise<ContextItem[]> => {
-  const resp = await fetchFn(getWebContextEndpoint(), {
+  const { url, legacy } = getWebContextEndpoint();
+  const resp = await fetchFn(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(await getHeaders()),
     },
-    body: JSON.stringify({
-      query,
-      n,
-    }),
+    body: JSON.stringify({ query, n }),
   });
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Failed to fetch web context: ${text}`);
+    throw new Error(
+      `Failed to fetch web search from ${legacy ? "legacy endpoint" : "AI Firewall proxy"}: ${text}`,
+    );
   }
   return await resp.json();
 };

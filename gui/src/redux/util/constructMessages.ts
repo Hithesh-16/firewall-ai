@@ -59,6 +59,11 @@ export function constructMessages(
     }
   }
 
+  // Drop interrupted turns — cancelled by the user before completion —
+  // so the model doesn't try to resume where it was cut off. They stay
+  // in redux history for the UI to render with a "cancelled" indicator.
+  filteredHistory = filteredHistory.filter((item) => !item.interrupted);
+
   const historyCopy = [...filteredHistory];
 
   const msgs: MessageWithContextItems[] = [];

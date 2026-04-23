@@ -23,7 +23,16 @@ import { runTerminalCommandImpl } from "./implementations/runTerminalCommand";
 import { searchWebImpl } from "./implementations/searchWeb";
 import { viewDiffImpl } from "./implementations/viewDiff";
 import { saveMemoryImpl, readMemoryImpl } from "./implementations/memory";
-import { createPlanImpl, updatePlanImpl } from "./implementations/planTool";
+import {
+  createPlanImpl,
+  proposePlanImpl,
+  updatePlanImpl,
+} from "./implementations/planTool";
+import { listAgentsImpl, spawnAgentImpl } from "./implementations/spawnAgent";
+import { applyPatchImpl } from "./implementations/applyPatch";
+import { lspImpl } from "./implementations/lspTool";
+import { recallImpl } from "./implementations/recall";
+import { researchWebImpl } from "./implementations/researchWeb";
 import { todoReadImpl, todoWriteImpl } from "./implementations/todoTool";
 import {
   createWorktreeImpl,
@@ -279,6 +288,20 @@ export async function callBuiltInTool(
       return await createPlanImpl(args, extras);
     case BuiltInToolNames.UpdatePlan:
       return await updatePlanImpl(args, extras);
+    case BuiltInToolNames.ProposePlan:
+      return await proposePlanImpl(args, extras);
+    case BuiltInToolNames.SpawnAgent:
+      return await spawnAgentImpl(args, extras);
+    case BuiltInToolNames.ListAgents:
+      return await listAgentsImpl(args, extras);
+    case BuiltInToolNames.ApplyPatch:
+      return await applyPatchImpl(args, extras);
+    case BuiltInToolNames.Lsp:
+      return await lspImpl(args, extras);
+    case BuiltInToolNames.Recall:
+      return await recallImpl(args, extras);
+    case BuiltInToolNames.ResearchWeb:
+      return await researchWebImpl(args, extras);
     case BuiltInToolNames.CreateWorktree:
       return await createWorktreeImpl(args, extras);
     case BuiltInToolNames.RemoveWorktree:

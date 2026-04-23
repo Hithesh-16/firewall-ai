@@ -121,6 +121,65 @@ export const SYSTEM_SLASH_COMMANDS: SystemCommand[] = [
     description: "Sync models and policy from the web dashboard",
     category: "system",
   },
+  // ── Proxy-driven prompt/action commands ──────────────────────────
+  // These map 1:1 to BUILTIN_COMMANDS in proxy/src/commands/builtinCommands.ts
+  // and are what the web dashboard already exposes. Listing them here
+  // ensures the CLI picker shows the same set so users get parity.
+  {
+    name: "plan",
+    description: "Propose an approval-gated plan before changes",
+    category: "system",
+  },
+  {
+    name: "review",
+    description: "Code review on current git diff",
+    category: "system",
+  },
+  {
+    name: "doctor",
+    description: "Diagnostic health check (proxy, DB, scanners)",
+    category: "system",
+  },
+  {
+    name: "cost",
+    description: "Show session cost breakdown",
+    category: "system",
+  },
+  {
+    name: "stats",
+    description: "Show firewall statistics",
+    category: "system",
+  },
+  {
+    name: "memory",
+    description: "List persistent memories",
+    category: "system",
+  },
+  {
+    name: "tasks",
+    description: "List active/all background tasks",
+    category: "system",
+  },
+  {
+    name: "diff",
+    description: "Show the current git diff",
+    category: "system",
+  },
+  {
+    name: "share",
+    description: "Export session as JSON snapshot",
+    category: "system",
+  },
+  {
+    name: "security-audit",
+    description: "Full-repo security scan",
+    category: "system",
+  },
+  {
+    name: "security-review",
+    description: "Security-focused review of pending changes",
+    category: "system",
+  },
 ];
 
 // Remote mode specific commands

@@ -24,8 +24,19 @@ export enum BuiltInToolNames {
   ReadMemory = "read_memory",
   CreatePlan = "create_plan",
   UpdatePlan = "update_plan",
+  ProposePlan = "propose_plan",
   CreateWorktree = "create_worktree",
   RemoveWorktree = "remove_worktree",
+  SpawnAgent = "spawn_agent",
+  ListAgents = "list_agents",
+
+  // Kilocode-parity power tools — patch application, LSP, session recall.
+  ApplyPatch = "apply_patch",
+  Lsp = "lsp",
+  Recall = "recall",
+
+  // Web research pipeline — search + batch-extract composite.
+  ResearchWeb = "research_web",
 
   // Kilocode-parity todo tools — agent writes a checklist that the
   // TaskHeader > TodoStrip renders live. todoRead is how the agent

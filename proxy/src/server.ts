@@ -11,6 +11,7 @@ import { registerAuthRoutes } from "./routes/auth.route";
 import { registerBrowserScanRoute } from "./routes/browserScan.route";
 import { registerCreditRoutes } from "./routes/credit.route";
 import { registerEstimateRoute } from "./routes/estimate.route";
+import { registerWebSearchRoute } from "./routes/webSearch.route";
 import { registerExportRoutes } from "./routes/export.route";
 import { registerHealthRoute } from "./routes/health.route";
 import { registerPermissionRoute } from "./routes/permission.route";
@@ -311,6 +312,9 @@ async function bootstrap(): Promise<void> {
 
   // Pre-flight estimation
   await registerEstimateRoute(app);
+
+  // Agent web-search (Tavily / Brave / SerpAPI)
+  await registerWebSearchRoute(app);
 
   // Privacy settings
   await registerPrivacyRoutes(app);

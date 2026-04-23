@@ -216,6 +216,112 @@ function handleSessions() {
  *   3. Reload the CONFIG service → cascades to MODEL + MCP.
  *   4. Report what changed in a concise summary.
  */
+/**
+ * Relay helper: forward a slash command to the proxy's
+ * `/api/commands/execute` endpoint and adapt the response.
+ *
+ * Used by proxy-backed commands (doctor, cost, stats, memory, tasks,
+ * diff, share, security-audit, security-review, plan, review) so the
+ * CLI picker stays in parity with the web dashboard without
+ * duplicating every command's logic here. Routing decisions:
+ *
+ *   - `type: "local"` → render the returned `output` inline.
+ *   - `type: "prompt"` → feed the prompt back into the chat as if the
+ *     user had typed it, via `newInput`. This is what makes `/plan`
+ *     and `/review` cause the model to respond instead of just
+ *     printing a prompt template.
+ *   - `type: "action"` → show `output`; the web UI handles action
+ *     side-effects, the CLI just surfaces the message.
+ *
+ * Auth is read from the shared auth file — if the user hasn't signed
+ * in we surface a clear "not signed in" message instead of a cryptic
+ * 401.
+ */
+async function runProxyCommand(
+  command: string,
+  args: string[],
+): Promise<SlashCommandResult> {
+  const auth = loadAuthFile();
+  if (!auth?.accessToken) {
+    return {
+      output: chalk.red(`Not signed in. Run /login first, then /${command}.`),
+    };
+  }
+  const proxyUrl = auth.proxyUrl || "http://localhost:8080";
+  const input = `/${command}${args.length > 0 ? " " + args.join(" ") : ""}`;
+
+  try {
+    const resp = await fetch(`${proxyUrl}/api/commands/execute`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ input }),
+    });
+    if (!resp.ok) {
+      // Parse the error body if we can — the proxy returns
+      // { error: string, details?: ... } on 4xx/5xx.
+      let message = `HTTP ${resp.status}`;
+      try {
+        const errBody = (await resp.json()) as { error?: string };
+        if (errBody?.error) message = errBody.error;
+      } catch {
+        const text = await resp.text();
+        if (text) message = text.slice(0, 200);
+      }
+      return {
+        output: chalk.red(`/${command} failed: ${message}`),
+      };
+    }
+    // Proxy returns a FLAT response (see proxy/src/routes/command.route.ts):
+    //   prompt command → { type: "prompt", commandName, prompt, progressMessage }
+    //   local command  → { type: "local",  commandName, result: { output, success, data? } }
+    //   action command → { type: "action", commandName, result: { output, success, data? } }
+    const data = (await resp.json()) as {
+      type?: "prompt" | "local" | "action";
+      commandName?: string;
+      prompt?: string;
+      result?: {
+        output?: string;
+        success?: boolean;
+        data?: Record<string, unknown>;
+      };
+    };
+
+    if (data.type === "prompt" && data.prompt) {
+      // Feed the generated prompt back into the chat — same shape as
+      // an assistant/invokable rule invocation.
+      return { newInput: data.prompt };
+    }
+
+    const result = data.result;
+    if (result?.output) {
+      return { output: result.output };
+    }
+    if (result?.success === false) {
+      return {
+        output: chalk.red(`/${command} reported failure (no message).`),
+      };
+    }
+    return { output: chalk.dim(`/${command} completed.`) };
+  } catch (err) {
+    return {
+      output: chalk.red(
+        `/${command} error: ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    };
+  }
+}
+
+/**
+ * Build a CommandHandler that forwards to `runProxyCommand(name)`.
+ * Using a factory keeps the `commandHandlers` map flat and readable.
+ */
+function proxyCommand(name: string): CommandHandler {
+  return (args) => runProxyCommand(name, args);
+}
+
 async function handleSync(): Promise<SlashCommandResult> {
   const auth = loadAuthFile();
   if (!auth?.accessToken) {
@@ -266,6 +372,23 @@ const commandHandlers: Record<string, CommandHandler> = {
   },
   jobs: handleJobs,
   sessions: handleSessions,
+
+  // ── Proxy-backed commands ─────────────────────────────────────────
+  // Relay to POST /api/commands/execute. The proxy owns the actual
+  // logic; the CLI just forwards args and surfaces output or injects
+  // the returned prompt into the chat. Keeps CLI in parity with the
+  // web dashboard's command set.
+  plan: proxyCommand("plan"),
+  review: proxyCommand("review"),
+  doctor: proxyCommand("doctor"),
+  cost: proxyCommand("cost"),
+  stats: proxyCommand("stats"),
+  memory: proxyCommand("memory"),
+  tasks: proxyCommand("tasks"),
+  diff: proxyCommand("diff"),
+  share: proxyCommand("share"),
+  "security-audit": proxyCommand("security-audit"),
+  "security-review": proxyCommand("security-review"),
 };
 
 export async function handleSlashCommands(

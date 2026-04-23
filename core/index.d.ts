@@ -545,6 +545,14 @@ export interface ChatHistoryItem {
   reasoning?: Reasoning;
   appliedRules?: RuleMetadata[];
   conversationSummary?: string;
+  /**
+   * Set when the user hard-stopped the stream that produced this
+   * message (or the turn it belongs to). Kept in history so the UI can
+   * show "Cancelled", but filtered out of the next LLM request's
+   * context so the model doesn't try to continue where it left off.
+   * Mirrors kilocode's `KiloSessionPromptQueue.scope()` pattern.
+   */
+  interrupted?: boolean;
 }
 
 export interface LLMFullCompletionOptions extends BaseCompletionOptions {

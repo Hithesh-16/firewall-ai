@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { PlanProposalCard } from "../../components/chat/PlanProposalCard";
 import StickyPromptHeader from "../../components/chat/StickyPromptHeader";
 import { TaskHeader } from "../../components/chat/TaskHeader";
 import { TodoStrip } from "../../components/chat/TodoStrip";
@@ -307,6 +308,16 @@ export function Chat() {
           ideMessenger.post("rejectDiff", applyState);
         }
       });
+
+      // If a stream is still running when the user hits send, abort it
+      // first and mark the interrupted turn. Without this the old
+      // stream and the new one race, and the model often resumes its
+      // previous exploration because the partial assistant message is
+      // still the tail of history. Mirrors kilocode's version-counter
+      // cancel before enqueueing a new prompt.
+      if (stateSnapshot.session.isStreaming) {
+        void dispatch(cancelStream());
+      }
       const model = isCurrentlyInEdit
         ? (selectedModelByRole.edit ?? selectedModelByRole.chat)
         : selectedModelByRole.chat;
@@ -555,6 +566,7 @@ export function Chat() {
         </div>
         <div className="pt-[8px]" />
         {highlights}
+        <PlanProposalCard />
         <PlanPanel />
         {history
           .map((item, originalIndex) => ({ item, originalIndex }))
@@ -565,10 +577,17 @@ export function Chat() {
               data-prompt-index={
                 item.message.role === "user" ? originalIndex : undefined
               }
+              className={item.interrupted ? "opacity-60" : undefined}
               style={{
                 minHeight: originalIndex === history.length - 1 ? "200px" : 0,
               }}
             >
+              {item.interrupted && item.message.role === "user" && (
+                <div className="text-description-muted text-af-caption flex items-center gap-1.5 px-3 pt-1">
+                  <span className="bg-description-muted/60 h-1 w-1 rounded-full" />
+                  <span>Cancelled — hidden from model context</span>
+                </div>
+              )}
               <ErrorBoundary
                 FallbackComponent={fallbackRender}
                 onReset={() => {

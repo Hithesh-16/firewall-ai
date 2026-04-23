@@ -38,6 +38,7 @@ import { extractBase64FromDataUrl } from "../util/url.js";
 import {
   CACHING_STRATEGIES,
   CachingStrategyName,
+  enforceCacheControlLimit,
 } from "./AnthropicCachingStrategies.js";
 import {
   addCacheControlToLastTwoUserMessages,
@@ -81,6 +82,13 @@ export class AnthropicApi implements BaseLlmApi {
     if ((this.config.cachingStrategy ?? "systemAndTools") !== "none") {
       addCacheControlToLastTwoUserMessages(result.messages);
     }
+
+    // Step 4: Anthropic hard-caps cache_control at 4 blocks per request.
+    // Upstream callers may have already tagged messages (e.g. the shared
+    // core/llm promptOptimizer) before we ran the strategy above, so the
+    // combined total can exceed 4 even though each layer behaves itself.
+    // Drop the oldest tags until we're within the cap.
+    enforceCacheControlLimit(result);
 
     return result;
   }

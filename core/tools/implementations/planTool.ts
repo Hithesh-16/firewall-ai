@@ -57,6 +57,71 @@ export const createPlanImpl: ToolImpl = async (args, _extras) => {
 };
 
 /**
+ * propose_plan tool — Emits a plan that the UI gates behind user approval
+ * before the agent is allowed to execute it. The agent MUST NOT
+ * continue with other tool calls in the same turn after proposing a
+ * plan; it should stop and wait for the user to approve or revise.
+ *
+ * Parameters:
+ *   - title: Plan title
+ *   - summary: One-paragraph explanation of intent + impact
+ *   - tasks: JSON string array of task objects: [{ content, status }]
+ *   - risk: optional "low" | "medium" | "high" — surfaces in the UI
+ *
+ * The context item carries `uri.type = "plan_proposal"` so the GUI can
+ * render it with Approve / Revise buttons instead of inline markdown.
+ */
+export const proposePlanImpl: ToolImpl = async (args, _extras) => {
+  const title = getStringArg(args, "title");
+  const summary = getStringArg(args, "summary");
+  const tasksRaw = getStringArg(args, "tasks");
+  const risk = (args.risk as string | undefined)?.toLowerCase();
+
+  let tasks: Array<{ content: string; status: string }>;
+  try {
+    tasks = JSON.parse(tasksRaw);
+  } catch {
+    return [
+      {
+        name: "Plan Error",
+        description: "Invalid tasks JSON",
+        content: `Could not parse tasks: ${tasksRaw}`,
+      },
+    ];
+  }
+
+  const riskLabel =
+    risk === "high" || risk === "medium" || risk === "low" ? risk : undefined;
+
+  const taskLines = tasks
+    .map((t, i) => {
+      const checkbox =
+        t.status === "completed"
+          ? "[x]"
+          : t.status === "in_progress"
+            ? "[~]"
+            : "[ ]";
+      return `${i + 1}. ${checkbox} ${t.content}`;
+    })
+    .join("\n");
+
+  const riskHeader = riskLabel ? `_Risk: ${riskLabel}_\n\n` : "";
+  const planContent = `# ${title}\n\n${riskHeader}${summary}\n\n${taskLines}\n\n---\nWaiting for user approval. Do not execute further tool calls until approved.`;
+
+  return [
+    {
+      name: title,
+      description: "Plan awaiting approval",
+      content: planContent,
+      uri: {
+        type: "plan_proposal" as any,
+        value: JSON.stringify({ title, summary, tasks, risk: riskLabel }),
+      },
+    },
+  ];
+};
+
+/**
  * update_plan tool — Updates the status of tasks in an existing plan.
  *
  * Parameters:

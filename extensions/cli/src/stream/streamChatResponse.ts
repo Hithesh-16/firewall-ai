@@ -3,7 +3,6 @@ import { BaseLlmApi } from "@ai-firewall/openai-adapters";
 import type { ChatHistoryItem } from "core/index.js";
 import { firewallPreflightScan } from "core/llm/firewallScan.js";
 import { getThinnedContext } from "core/firewall/thinContext.js";
-import { optimizeMessagesForLLM } from "core/llm/promptOptimizer.js";
 import { convertFromUnifiedHistoryWithSystemMessage } from "core/util/messageConversion.js";
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
@@ -363,16 +362,16 @@ export async function processStreamingResponse(
 
   const requestStartTime = Date.now();
 
-  // ── Prompt caching: inject cache_control breakpoints before the LLM call ───────
-  // Anthropic charges 10% of input tokens for cached reads vs 100% for cold.
-  // We mark the static prefix (system + all-but-last-two turns) as cacheable
-  // so only the newest user turn is billed at full rate each iteration.
-  // Other providers (OpenAI, etc.) silently ignore cache_control fields.
-  // ── Pre-LLM pipeline (blob stubs → cache breakpoints) ───────────────────────
-  // Uses the shared core/llm/promptOptimizer.ts pipeline so CLI and IDE behave identically.
-  const optimizedHistory = optimizeMessagesForLLM(
-    openaiChatHistory,
-  ) as ChatCompletionMessageParam[];
+  // ── Prompt caching ────────────────────────────────────────────────────────
+  // Caching is applied by the provider adapter (openai-adapters), not here.
+  // For Anthropic, AnthropicApi._convertBody runs the systemAndTools strategy
+  // (system + last tool + last-two-user-messages) and enforces the 4-block
+  // cap. Injecting cache_control here as well caused two regressions:
+  //   1. Double-tagging across layers blew past Anthropic's 4-block limit.
+  //   2. Percentage-based anchors (20/50/80%) shift as the history grows,
+  //      mutating the prefix hash and busting cache reads every turn.
+  // For OpenAI, automatic prefix caching handles anything >1024 tokens and
+  // prompt_cache_key (below) pins the session for higher hit rates.
 
   // Generate or retrieve session ID for OpenAI prompt caching
   // OpenAI pins cache to prompt_cache_key for improved hit rates
@@ -388,7 +387,7 @@ export async function processStreamingResponse(
     // Build request options
     const requestOptions: any = {
       model: model.model,
-      messages: optimizedHistory,
+      messages: openaiChatHistory,
       stream: true,
       tools,
       ...getDefaultCompletionOptions(model.defaultCompletionOptions),

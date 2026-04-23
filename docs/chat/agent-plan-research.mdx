@@ -1,0 +1,95 @@
+---
+title: "Plan, Research & Sub-Agents"
+description: "How to use /plan, propose_plan approval cards, sub-agent spawning, and web research in AI Firewall."
+---
+
+AI Firewall's agent mode includes a planning workflow, parallel sub-agents, and a firewall-proxied web-research pipeline. This page covers how to use them from day to day — the developer reference lives in the contributor docs.
+
+## `/plan` — approval-gated task breakdown
+
+Type `/plan` followed by the task you want drafted:
+
+```
+/plan migrate the auth middleware to use JWT and rotate keys on a 24h schedule
+```
+
+The agent will:
+
+1. Not touch any file.
+2. Reply with a numbered plan, a short summary, and a risk level.
+3. Wait.
+
+A **Plan Proposal** card appears above the chat input with two buttons:
+
+- **Approve plan** — the plan becomes the active checklist in the side panel and the agent proceeds.
+- **Revise** — the proposal is dismissed so you can type feedback ("skip step 3", "add a rollback step"). The agent re-plans.
+
+Use `/plan` whenever the change touches multiple files, security-critical code, migrations, CI/CD, or anything you want to sanity-check before it runs.
+
+## Automatic plan proposals
+
+The agent also proposes plans on its own when a request looks risky, even without `/plan`. This is driven by the `propose_plan` tool. You'll see the same card in both cases.
+
+## Todo checklists
+
+For non-risky multi-step work (e.g. "add logging to three files"), the agent writes a todo list instead of a full plan. The **todo strip** at the top of the chat shows the live list; items flip between ⎯ → ◐ → ✓ as work progresses. No approval needed — it's just a progress indicator.
+
+## Sub-agents
+
+When a task has independent parts — e.g. "audit the auth routes AND the billing routes" — the agent may fork a sub-agent so both investigations run in parallel. You'll see entries like:
+
+```
+Sub-agent a8c3f21d spawned — exploring proxy/src/auth/
+```
+
+Up to 3 sub-agents run at once. Extra spawns are queued (30 s timeout). The agent polls them with `list_agents` and folds their results into the final answer. You don't have to interact with sub-agents directly.
+
+## Web research
+
+When you ask the agent to "search online", "analyse on the web", or "find recent info about X", it calls the `research_web` tool. Unlike a plain search, it:
+
+1. Fetches the top N URLs via the configured search provider.
+2. Extracts the full article content for each page.
+3. Hands both the summaries and the extracted markdown to the model.
+
+The reply cites "Source 1 / 2 / 3" — these map 1:1 to the URLs shown in the tool output. Every network call flows through the AI Firewall proxy so sensitive content can be scanned server-side before reaching the LLM.
+
+### Enabling web research
+
+The proxy needs one of these keys in its environment:
+
+| Env var | Provider | Notes |
+|---|---|---|
+| `TAVILY_API_KEY` | [Tavily](https://tavily.com) | **Recommended** — returns clean markdown for search _and_ extract; free tier available. |
+| `BRAVE_SEARCH_API_KEY` | [Brave Search](https://brave.com/search/api/) | Search only; extract falls back to direct fetch. |
+| `SERPAPI_API_KEY` | [SerpAPI](https://serpapi.com) | Search only; extract falls back to direct fetch. |
+
+If none is set, `/v1/web-search` returns a helpful "not configured" message and `/v1/web-extract` falls back to direct HTTP fetch with raw HTML passthrough — degraded but still functional.
+
+See `proxy/.env.example` for the full list.
+
+## Stopping and retrying
+
+- **Stop** mid-stream and send a new prompt → the old, interrupted turn is hidden from the model's context and marked "Cancelled — hidden from model context" in the UI. The new prompt starts on a clean slate.
+- **Submit a new prompt without stopping** → the current stream is aborted first (same treatment as clicking Stop), then the new prompt runs.
+- If the agent appears to loop on the same tool call, a **"Tool call loop detected"** message will appear after 3 identical (or 5 same-name) calls — this tells the model to stop retrying and answer from what it already has.
+
+## Token bar
+
+The top of the chat shows a per-turn spike strip. Each bar is one assistant turn sized by the tokens it produced; colours flag heavy turns (amber > 2K tokens) and firewall actions (red = BLOCK, amber = REDACT). A pulsing bar appears on the right while a response is streaming in.
+
+## Slash-command reference
+
+| Command | What it does |
+|---|---|
+| `/plan <task>` | Force an approval-gated plan before any change |
+| `/review [scope]` | Code review on the current diff |
+| `/compact` | Compact the session so it fits in the context window |
+| `/cost` | Show session cost breakdown |
+| `/stats` | Show firewall statistics |
+| `/memory` | List persistent memories |
+| `/tasks` | List running background tasks |
+| `/share` | Export session as a JSON snapshot |
+| `/resume` | Restore a previous session |
+| `/doctor` | Diagnostic health check |
+| `/help` | List all commands |

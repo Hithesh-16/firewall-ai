@@ -193,9 +193,7 @@ export function handleStreamingToolCallUpdates(
     const curMessage = lastItem.message as
       | AssistantChatMessage
       | ThinkingChatMessage;
-    curMessage.toolCalls = updatedToolCallStates.map(
-      (state) => state.toolCall,
-    );
+    curMessage.toolCalls = updatedToolCallStates.map((state) => state.toolCall);
   }
 }
 
@@ -231,8 +229,27 @@ type SessionState = {
   historySnapshot: ChatHistoryItemWithMessageId[] | null;
   activePlan: {
     title: string;
-    tasks: Array<{ content: string; status: "pending" | "in_progress" | "completed" }>;
+    tasks: Array<{
+      content: string;
+      status: "pending" | "in_progress" | "completed";
+    }>;
     collapsed: boolean;
+  } | null;
+  /**
+   * Plan proposed by the agent (via `propose_plan` tool) that is
+   * waiting for explicit user approval. While set, the ProposePlanCard
+   * renders inline and the user must Approve or Revise before the
+   * agent's next tool call executes. Cleared once either button is
+   * pressed. Mirrors kilocode's plan-mode approval gate.
+   */
+  pendingPlanProposal?: {
+    title: string;
+    summary: string;
+    risk?: string;
+    tasks: Array<{
+      content: string;
+      status: "pending" | "in_progress" | "completed";
+    }>;
   } | null;
 };
 
@@ -256,6 +273,7 @@ export const INITIAL_SESSION_STATE: SessionState = {
   compactionLoading: {},
   historySnapshot: null,
   activePlan: null,
+  pendingPlanProposal: null,
 };
 
 export const sessionSlice = createSlice({
@@ -292,10 +310,14 @@ export const sessionSlice = createSlice({
       }
     },
     clearDanglingMessages: (state) => {
-      // This is used during cancellation
-      // After the last user or tool message, we can have thinking and or valid assitant message (content or generated tool calls) OR nothing.
-      // The only thing allowed after the last assistant message that has either content or generated tool calls
-      // is a user or tool message
+      // Used during cancellation. Behaviour:
+      //  1. Dangling tool calls → mark as "canceled".
+      //  2. Trim placeholder messages after the last valid assistant msg.
+      //  3. Tag the interrupted user turn (and the assistant turn it was
+      //     generating) with `interrupted = true`. The next call to
+      //     constructMessages filters these out so the model doesn't
+      //     pick up where it was cut off — while the UI still shows the
+      //     partial exchange for context.
       if (state.history.length < 2) {
         return;
       }
@@ -313,7 +335,6 @@ export const sessionSlice = createSlice({
         );
         if (message.message.content || hasGeneratedMsg) {
           validAssistantMessageIdx = i;
-          // Cancel any tool calls that are dangling and generated
           if (message.toolCallStates) {
             message.toolCallStates.forEach((toolCallState) => {
               if (
@@ -339,6 +360,21 @@ export const sessionSlice = createSlice({
         }
       } else {
         state.history = state.history.slice(0, validAssistantMessageIdx + 1);
+      }
+
+      // Walk back from the tail, flagging every item that belongs to
+      // the interrupted turn (the last user message + everything after
+      // it that isn't another user message). This turn stays visible
+      // in the UI but constructMessages filters it from the LLM
+      // context on the next request.
+      const finalUserIdx = findLastIndex(
+        state.history,
+        (item) => item.message.role === "user",
+      );
+      if (finalUserIdx >= 0) {
+        for (let i = finalUserIdx; i < state.history.length; i++) {
+          state.history[i].interrupted = true;
+        }
       }
     },
     // Trigger value picked up by editor with isMainInput to set its content
@@ -1045,14 +1081,20 @@ export const sessionSlice = createSlice({
       state,
       action: PayloadAction<{
         title: string;
-        tasks: Array<{ content: string; status: "pending" | "in_progress" | "completed" }>;
+        tasks: Array<{
+          content: string;
+          status: "pending" | "in_progress" | "completed";
+        }>;
       }>,
     ) => {
       state.activePlan = { ...action.payload, collapsed: false };
     },
     updatePlanTask: (
       state,
-      action: PayloadAction<{ index: number; status: "pending" | "in_progress" | "completed" }>,
+      action: PayloadAction<{
+        index: number;
+        status: "pending" | "in_progress" | "completed";
+      }>,
     ) => {
       if (state.activePlan && state.activePlan.tasks[action.payload.index]) {
         state.activePlan.tasks[action.payload.index] = {
@@ -1068,6 +1110,32 @@ export const sessionSlice = createSlice({
     },
     clearActivePlan: (state) => {
       state.activePlan = null;
+    },
+    setPendingPlanProposal: (
+      state,
+      action: PayloadAction<{
+        title: string;
+        summary: string;
+        risk?: string;
+        tasks: Array<{
+          content: string;
+          status: "pending" | "in_progress" | "completed";
+        }>;
+      }>,
+    ) => {
+      state.pendingPlanProposal = action.payload;
+    },
+    approvePendingPlanProposal: (state) => {
+      if (!state.pendingPlanProposal) return;
+      state.activePlan = {
+        title: state.pendingPlanProposal.title,
+        tasks: state.pendingPlanProposal.tasks,
+        collapsed: false,
+      };
+      state.pendingPlanProposal = null;
+    },
+    clearPendingPlanProposal: (state) => {
+      state.pendingPlanProposal = null;
     },
   },
   selectors: {
@@ -1165,6 +1233,9 @@ export const {
   updatePlanTask,
   togglePlanCollapsed,
   clearActivePlan,
+  setPendingPlanProposal,
+  approvePendingPlanProposal,
+  clearPendingPlanProposal,
 } = sessionSlice.actions;
 
 export const { selectIsGatheringContext } = sessionSlice.selectors;

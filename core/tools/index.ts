@@ -16,6 +16,19 @@ export const getBaseToolDefinitions = () => [
   toolDefinitions.taskBoundaryTool,
   toolDefinitions.todoWriteTool,
   toolDefinitions.todoReadTool,
+  // Plan workflow — propose → create → update
+  toolDefinitions.proposePlanTool,
+  toolDefinitions.createPlanTool,
+  toolDefinitions.updatePlanTool,
+  // Sub-agent orchestration — spawn + poll
+  toolDefinitions.spawnAgentTool,
+  toolDefinitions.listAgentsTool,
+  // Kilocode-parity power tools
+  toolDefinitions.applyPatchTool,
+  toolDefinitions.lspTool,
+  toolDefinitions.recallTool,
+  // Firewall-proxied web research pipeline
+  toolDefinitions.researchWebTool,
 ];
 
 export const getConfigDependentToolDefinitions = async (

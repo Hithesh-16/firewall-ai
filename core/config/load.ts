@@ -540,6 +540,44 @@ async function intermediateToFinalConfig({
     }
   }
 
+  // Auto-register the legacy built-in slash commands so they appear in
+  // the IDE/GUI command picker without the user having to list them in
+  // config.yaml. The web dashboard already gets these via the proxy's
+  // /api/commands endpoint; this closes the parity gap for VS Code /
+  // JetBrains / Continue Chat. User-configured duplicates win via the
+  // .name === .name merge above.
+  const defaultLegacyCommands: Array<{ name: string; description: string }> = [
+    {
+      name: "plan",
+      description: "Propose an approval-gated plan before any changes",
+    },
+    { name: "review", description: "Review code changes and give feedback" },
+    {
+      name: "commit",
+      description: "Generate a commit message for current changes",
+    },
+    {
+      name: "cmd",
+      description: "Generate a terminal command from natural language",
+    },
+    { name: "share", description: "Export session as a JSON snapshot" },
+    { name: "onboard", description: "Onboarding walkthrough" },
+  ];
+  const existingNames = new Set(
+    continueConfig.slashCommands.map((c) => c.name),
+  );
+  for (const desc of defaultLegacyCommands) {
+    if (existingNames.has(desc.name)) continue;
+    const cmd = getLegacyBuiltInSlashCommandFromDescription({
+      name: desc.name,
+      description: desc.description,
+    });
+    if (cmd) {
+      continueConfig.slashCommands.push(cmd);
+      existingNames.add(desc.name);
+    }
+  }
+
   if (config.systemMessage) {
     continueConfig.rules.unshift({
       rule: config.systemMessage,

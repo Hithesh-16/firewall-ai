@@ -425,6 +425,36 @@ const reviewCommand: PromptCommand = {
   },
 };
 
+// ── /plan ──────────────────────────────────────────────────────
+
+const planCommand: PromptCommand = {
+  name: "plan",
+  description:
+    "Force the agent to propose an approval-gated plan before touching anything",
+  type: "prompt",
+  source: "builtin",
+  progressMessage: "Drafting plan...",
+
+  async getPrompt(args: string, _context: CommandContext): Promise<string> {
+    const task =
+      args.trim().length > 0
+        ? args.trim()
+        : "(no task provided — ask the user to describe what they want planned)";
+    return [
+      "The user invoked /plan. You are now in structured planning mode for this turn.",
+      "",
+      "Rules:",
+      "  1. Call the `propose_plan` tool BEFORE any other tool call. Do not read files, run commands, or edit anything first.",
+      "  2. After `propose_plan`, STOP and wait for the user to approve or revise. Do not chain additional tool calls in the same turn.",
+      "  3. The plan must include: a short title, a 1-3 sentence summary (intent + impact + files/areas touched), and an ordered task list with {content, status: 'pending'} entries.",
+      "  4. Set an honest risk level: 'high' for auth/schema/CI/deletes, 'medium' for multi-file refactors, 'low' for isolated changes.",
+      "  5. Do NOT write code in this turn. If the task is trivial enough that a plan is overkill, say so in one sentence and ask the user to re-send without /plan.",
+      "",
+      `Task: ${task}`,
+    ].join("\n");
+  },
+};
+
 // ── /help ──────────────────────────────────────────────────────
 
 const helpCommand: LocalCommand = {
@@ -1142,6 +1172,7 @@ export const BUILTIN_COMMANDS: readonly Command[] = [
   memoryCommand,
   tasksCommand,
   reviewCommand,
+  planCommand,
   diffCommand,
   helpCommand,
   shareCommand,

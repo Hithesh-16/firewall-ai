@@ -8,7 +8,9 @@ import { selectSelectedChatModel } from "../slices/configSlice";
 import {
   acceptToolCall,
   errorToolCall,
+  setActivePlan,
   setInactive,
+  setPendingPlanProposal,
   setToolCallCalling,
   updateToolCallOutput,
 } from "../slices/sessionSlice";
@@ -18,12 +20,26 @@ import { findToolCallById, logToolUsage } from "../util";
 import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
 /**
- * Guard against agents that loop on the same tool + args. Scans the
- * tail of history for consecutive completed tool calls with identical
- * (name, args) tuples and returns true once the threshold is hit. Any
- * assistant text or different tool in between breaks the streak.
+ * Guard against agents that spin on the same tool. Two triggers:
+ *
+ *   - IDENTICAL_THRESHOLD = 3 completed calls with identical
+ *     (name, args) within the recent window. Catches "retry the exact
+ *     same view_repo_map" loops even when a different tool call was
+ *     interleaved between repeats.
+ *
+ *   - SAME_NAME_THRESHOLD = 5 completed calls to the same tool name
+ *     (any args) within WINDOW_TURNS assistant turns. Catches
+ *     agents that vary args slightly but still spin — e.g. reading
+ *     10 different files to "understand the codebase" without making
+ *     progress.
+ *
+ * Pending tool calls (status "generated"/"calling") are skipped so the
+ * current in-flight call doesn't short-circuit the scan. Only `done`
+ * and `errored` calls count toward either threshold.
  */
-const LOOP_THRESHOLD = 3;
+const IDENTICAL_THRESHOLD = 3;
+const SAME_NAME_THRESHOLD = 5;
+const WINDOW_TURNS = 8;
 
 function isLoopingToolCall(
   history: ReadonlyArray<{
@@ -35,27 +51,29 @@ function isLoopingToolCall(
   }>,
   candidate: { name: string; arguments?: string },
 ): boolean {
-  let streak = 1;
-  for (let i = history.length - 1; i >= 0 && streak < LOOP_THRESHOLD; i--) {
+  let identical = 0;
+  let sameName = 0;
+  let turnsScanned = 0;
+  const candidateArgs = candidate.arguments ?? "";
+
+  for (let i = history.length - 1; i >= 0; i--) {
     const item = history[i];
     if (item.message.role !== "assistant") continue;
+    turnsScanned += 1;
+    if (turnsScanned > WINDOW_TURNS) break;
+
     const states = item.toolCallStates ?? [];
-    if (states.length === 0) continue;
     for (const st of states) {
-      if (st.status !== "done") return streak >= LOOP_THRESHOLD;
+      if (st.status !== "done" && st.status !== "errored") continue;
       const fn = st.toolCall.function;
-      if (
-        fn.name === candidate.name &&
-        (fn.arguments ?? "") === (candidate.arguments ?? "")
-      ) {
-        streak += 1;
-        if (streak >= LOOP_THRESHOLD) return true;
-      } else {
-        return false;
-      }
+      if (fn.name !== candidate.name) continue;
+      sameName += 1;
+      if ((fn.arguments ?? "") === candidateArgs) identical += 1;
+      if (identical >= IDENTICAL_THRESHOLD) return true;
+      if (sameName >= SAME_NAME_THRESHOLD) return true;
     }
   }
-  return streak >= LOOP_THRESHOLD;
+  return false;
 }
 
 export const callToolById = createAsyncThunk<
@@ -97,7 +115,7 @@ export const callToolById = createAsyncThunk<
             name: "Tool call loop detected",
             description: "Same tool + arguments repeated too many times",
             content:
-              `The ${toolName} tool has been called ${LOOP_THRESHOLD}+ consecutive times with the same arguments ` +
+              `The ${toolName} tool has been called repeatedly (>=${IDENTICAL_THRESHOLD} identical or >=${SAME_NAME_THRESHOLD} total within ${WINDOW_TURNS} turns) ` +
               `and has produced no new information. Do NOT call this tool again. ` +
               `Answer the user from the context you already have, or try a different approach.`,
             hidden: false,
@@ -224,18 +242,75 @@ export const callToolById = createAsyncThunk<
         | { type: string; value: string }
         | null
         | undefined;
-      if (!uri || (uri.type !== "todo_write" && uri.type !== "todo_read")) {
+      if (!uri) continue;
+
+      if (uri.type === "todo_write" || uri.type === "todo_read") {
+        try {
+          const parsed = JSON.parse(uri.value) as TodoItem[];
+          if (Array.isArray(parsed)) {
+            dispatch(setTodos(parsed));
+          }
+        } catch {
+          // Malformed payload — leave the existing list untouched so
+          // the user doesn't see the strip flash empty because of a
+          // single bad emit.
+        }
         continue;
       }
-      try {
-        const parsed = JSON.parse(uri.value) as TodoItem[];
-        if (Array.isArray(parsed)) {
-          dispatch(setTodos(parsed));
+
+      if (uri.type === "plan_proposal") {
+        try {
+          const parsed = JSON.parse(uri.value) as {
+            title: string;
+            summary: string;
+            risk?: string;
+            tasks: Array<{ content: string; status: string }>;
+          };
+          dispatch(
+            setPendingPlanProposal({
+              title: parsed.title,
+              summary: parsed.summary,
+              risk: parsed.risk,
+              tasks: parsed.tasks.map((t) => ({
+                content: t.content,
+                status: (t.status === "completed"
+                  ? "completed"
+                  : t.status === "in_progress"
+                    ? "in_progress"
+                    : "pending") as "pending" | "in_progress" | "completed",
+              })),
+            }),
+          );
+        } catch {
+          // Malformed proposal — just show the markdown fallback.
         }
-      } catch {
-        // Malformed payload — leave the existing list untouched so
-        // the user doesn't see the strip flash empty because of a
-        // single bad emit.
+        continue;
+      }
+
+      if (uri.type === "plan") {
+        // create_plan committed directly without the proposal gate.
+        try {
+          const parsed = JSON.parse(uri.value) as {
+            title: string;
+            tasks: Array<{ content: string; status: string }>;
+          };
+          dispatch(
+            setActivePlan({
+              title: parsed.title,
+              tasks: parsed.tasks.map((t) => ({
+                content: t.content,
+                status: (t.status === "completed"
+                  ? "completed"
+                  : t.status === "in_progress"
+                    ? "in_progress"
+                    : "pending") as "pending" | "in_progress" | "completed",
+              })),
+            }),
+          );
+        } catch {
+          /* fall back to markdown render */
+        }
+        continue;
       }
     }
   }

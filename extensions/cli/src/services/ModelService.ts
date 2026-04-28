@@ -1,7 +1,9 @@
 import { AssistantUnrolled, ModelConfig } from "@ai-firewall/config-yaml";
+import { AuthConfig } from "@ai-firewall/shared-auth";
+import { syncModelToProxy } from "../util/proxyModelSync.js";
 
-import { AuthConfig, getModelName } from "../auth/workos.js";
 import { createLlmApi, getLlmApi } from "../config.js";
+import { getModelName } from "../auth/workos.js";
 import { logger } from "../util/logger.js";
 
 import { BaseService, ServiceWithDependencies } from "./BaseService.js";
@@ -49,9 +51,15 @@ export class ModelService
       assistantModelsCount: assistant?.models?.length || 0,
     });
 
-    this.assistant = assistant;
+    // Expand AUTODETECT models if present
+    const expandedAssistant = await this.expandAssistantModels(
+      assistant,
+      authConfig,
+    );
+
+    this.assistant = expandedAssistant;
     this.authConfig = authConfig;
-    this.availableModels = (assistant.models?.filter(
+    this.availableModels = (expandedAssistant.models?.filter(
       (model) =>
         model && (model.roles?.includes("chat") || model.roles === undefined),
     ) || []) as ModelConfig[];
@@ -80,11 +88,11 @@ export class ModelService
       });
       if (modelIndex === -1) {
         // Preferred model not found, use default model selection
-        const [llmApi, model] = getLlmApi(assistant, authConfig);
+        const [llmApi, model] = getLlmApi(expandedAssistant, authConfig);
         return {
           llmApi,
           model,
-          assistant,
+          assistant: expandedAssistant,
           authConfig,
         };
       } else {
@@ -107,20 +115,119 @@ export class ModelService
         return {
           llmApi,
           model: selectedModel,
-          assistant,
+          assistant: expandedAssistant,
           authConfig,
         };
       }
     } else {
       // Use default model selection
-      const [llmApi, model] = getLlmApi(assistant, authConfig);
+      const [llmApi, model] = getLlmApi(expandedAssistant, authConfig);
       return {
         llmApi,
         model,
-        assistant,
+        assistant: expandedAssistant,
         authConfig,
       };
     }
+  }
+
+  /**
+   * Expands models with model: "AUTODETECT" into all available models from the provider
+   */
+  private async expandAssistantModels(
+    assistant: AssistantUnrolled,
+    authConfig: AuthConfig,
+  ): Promise<AssistantUnrolled> {
+    if (!assistant.models) {
+      return assistant;
+    }
+
+    const expandedModels: ModelConfig[] = [];
+    let modelsChanged = false;
+    for (const model of assistant.models) {
+      let autodetectSuccess = false;
+      if (model && model.model === "AUTODETECT") {
+        try {
+          logger.debug(
+            `Autodetecting models for provider: ${model.provider}...`,
+          );
+          const llmApi = createLlmApi(model, authConfig);
+          if (llmApi) {
+            const detected = await llmApi.list();
+            logger.debug(
+              `Autodetected ${detected.length} models for provider ${model.provider}`,
+            );
+
+            if (detected.length > 0) {
+              autodetectSuccess = true;
+              modelsChanged = true;
+
+              for (const m of detected) {
+                // Use core-style naming: "Title (Model Name)" or just "Model Name"
+                const modelName = m.id;
+                const displayName =
+                  (model as any).name && (model as any).name !== "AUTODETECT"
+                    ? `${(model as any).name} (${modelName})`
+                    : modelName;
+
+                const expandedModel: ModelConfig = {
+                  ...model,
+                  model: modelName,
+                  name: displayName,
+                  title: displayName,
+                  // Default roles if none specified or empty
+                  roles:
+                    model.roles && model.roles.length > 0
+                      ? model.roles
+                      : ["chat", "summarize", "apply"],
+                  isFromAutoDetect: true,
+                };
+
+                expandedModels.push(expandedModel);
+
+                // Sync discovered model back to proxy so it shows up in other IDEs/clients
+                if (authConfig?.accessToken) {
+                  void syncModelToProxy("add", {
+                    providerSlug: model.provider,
+                    modelSlug: modelName,
+                    displayName: displayName,
+                    apiKey: model.apiKey,
+                    apiBase: model.apiBase,
+                  }).catch((e) => {
+                    logger.debug(
+                      `Failed to sync autodetected model ${modelName}:`,
+                      e,
+                    );
+                  });
+                }
+              }
+            }
+          } else {
+            logger.warn(
+              `Could not create LLM API for provider ${model.provider} during autodetection`,
+            );
+          }
+        } catch (e) {
+          logger.warn(
+            `Failed to autodetect models for provider ${model.provider}:`,
+            e,
+          );
+        }
+      }
+
+      if (!autodetectSuccess) {
+        expandedModels.push(model);
+      }
+    }
+
+    if (modelsChanged) {
+      return {
+        ...assistant,
+        models: expandedModels,
+      };
+    }
+
+    return assistant;
   }
 
   /**
@@ -165,7 +272,10 @@ export class ModelService
     // Filter for chat models
     const chatModels = (assistant.models.filter(
       (model) =>
-        model && (model.roles?.includes("chat") || model.roles === undefined),
+        model &&
+        (model.roles === undefined ||
+          model.roles.length === 0 ||
+          model.roles.includes("chat")),
     ) || []) as ModelConfig[];
 
     return chatModels.map((model, index) => ({

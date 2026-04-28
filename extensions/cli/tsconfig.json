@@ -22,8 +22,8 @@
     "jsx": "react",
     "baseUrl": ".",
     "paths": {
-      "core/*": ["../../core/dist/*"],
-      "core": ["../../core/dist/index.js"]
+      "core/*": ["../../core/*"],
+      "core": ["../../core/core.ts"]
     }
   },
   "include": ["src/**/*", "vitest.setup.ts"]

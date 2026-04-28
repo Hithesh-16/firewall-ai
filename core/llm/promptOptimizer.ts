@@ -69,7 +69,22 @@ export function replaceLargeBlobsWithMetadata<
     if (msg.role !== "assistant") return msg; // only stub assistant turns
 
     const text = extractTextContent(msg.content);
-    if (text.length <= BLOB_CHAR_THRESHOLD) return msg; // small enough, keep as-is
+
+    // P1: Never stub messages containing todo/plan tool calls. These are
+    // structural anchors for the agent's state machine. If they are
+    // stubbed, the agent loses track of its progress and starts repeating
+    // the plan implementation.
+    const isPlanUpdate =
+      text.includes("todo_write") ||
+      text.includes("propose_plan") ||
+      text.includes("update_plan") ||
+      (msg as any).toolCalls?.some((tc: any) =>
+        ["todo_write", "propose_plan", "update_plan"].includes(
+          tc.function?.name,
+        ),
+      );
+
+    if (text.length <= BLOB_CHAR_THRESHOLD || isPlanUpdate) return msg;
 
     const estimatedTokens = Math.ceil(text.length / 4);
     const preview = text.slice(0, 120).replace(/\n/g, " ").trim();

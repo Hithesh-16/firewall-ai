@@ -26,7 +26,7 @@ export const proposePlanTool: Tool = {
   function: {
     name: BuiltInToolNames.ProposePlan,
     description:
-      "Emit a step-by-step plan for the user to approve BEFORE making changes. Use for any task that spans multiple files or touches risky surfaces (auth, schema, CI/CD, deletes). The UI blocks further tool calls until the user approves. Do NOT call any other tools in the same turn as propose_plan.",
+      "Emit a step-by-step plan for the user to approve BEFORE making changes. Use for any task that spans multiple files or touches risky surfaces (auth, schema, CI/CD, deletes). After calling this tool, you MUST STOP and wait for user approval. Once the user approves (verbally or via UI), you MUST call create_plan with the finalized tasks to begin implementation. Do NOT call any other tools in the same turn as propose_plan.",
     parameters: {
       type: "object",
       required: ["title", "summary", "tasks"],
@@ -38,9 +38,23 @@ export const proposePlanTool: Tool = {
             "One paragraph describing intent, expected impact, and files/areas touched.",
         },
         tasks: {
-          type: "string",
-          description:
-            'JSON array of {content, status} objects, e.g. [{"content":"Add route handler","status":"pending"}]',
+          type: "array",
+          description: "List of steps to take.",
+          items: {
+            type: "object",
+            required: ["content", "status"],
+            properties: {
+              content: { type: "string" },
+              status: {
+                type: "string",
+                enum: ["pending", "in_progress", "completed", "cancelled"],
+              },
+              phase: {
+                type: "string",
+                description: "Optional grouping heading.",
+              },
+            },
+          },
         },
         risk: {
           type: "string",
@@ -86,8 +100,23 @@ export const createPlanTool: Tool = {
       properties: {
         title: { type: "string" },
         tasks: {
-          type: "string",
-          description: "JSON array of {content, status} objects.",
+          type: "array",
+          description: "List of steps to take.",
+          items: {
+            type: "object",
+            required: ["content", "status"],
+            properties: {
+              content: { type: "string" },
+              status: {
+                type: "string",
+                enum: ["pending", "in_progress", "completed", "cancelled"],
+              },
+              phase: {
+                type: "string",
+                description: "Optional grouping heading.",
+              },
+            },
+          },
         },
       },
     },

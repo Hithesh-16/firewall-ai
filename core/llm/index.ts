@@ -75,6 +75,7 @@ import {
   toFimBody,
 } from "./openaiTypeConverters.js";
 import { applyToolOverrides } from "../tools/applyToolOverrides.js";
+import { getCurrentTodos } from "../tools/implementations/todoTool.js";
 
 export class LLMError extends Error {
   constructor(
@@ -1308,7 +1309,35 @@ export abstract class BaseLLM implements ILLM {
 
     completionOptions = this._modifyCompletionOptions(completionOptions);
 
-    let messages = _messages;
+    let messages = [..._messages];
+
+    // Inject the current todo list into the context so the agent doesn't repeat it.
+    // We append this to the system message (or add a new one if none exists)
+    // so it's always preserved by the context pruner.
+    const currentTodos = getCurrentTodos();
+    if (currentTodos.length > 0) {
+      const todoMarkdown = currentTodos
+        .map(
+          (t, i) =>
+            `${i + 1}. [${t.status === "completed" ? "x" : t.status === "in_progress" ? "~" : " "}] ${t.content}`,
+        )
+        .join("\n");
+      const planContext = `\n\nCURRENT PLAN PROGRESS:\n${todoMarkdown}\n\nMaintain this plan using todo_write. Do not re-propose or re-implement steps that are already completed or in progress.`;
+
+      const systemIdx = messages.findIndex((m) => m.role === "system");
+      if (systemIdx !== -1) {
+        const systemMsg = messages[systemIdx];
+        messages[systemIdx] = {
+          ...systemMsg,
+          content: (systemMsg.content || "") + planContext,
+        };
+      } else {
+        messages.unshift({
+          role: "system",
+          content: planContext,
+        });
+      }
+    }
 
     // If not precompiled, compile the chat messages
     if (!messageOptions?.precompiled) {

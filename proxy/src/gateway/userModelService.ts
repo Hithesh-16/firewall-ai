@@ -487,7 +487,14 @@ export function buildProviderUrl(
     return `${base}/v1beta/models/${modelSlug}:generateContent`;
   }
 
-  const apiPath = PROVIDER_API_PATHS[slug] || "/v1/chat/completions";
+  let apiPath = PROVIDER_API_PATHS[slug] || "/v1/chat/completions";
+  const commonPrefixes = ["/v1", "/api/v1", "/openai/v1"];
+  for (const prefix of commonPrefixes) {
+    if (base.endsWith(prefix) && apiPath.startsWith(prefix + "/")) {
+      apiPath = apiPath.substring(prefix.length);
+      break;
+    }
+  }
   return `${base}${apiPath}`;
 }
 

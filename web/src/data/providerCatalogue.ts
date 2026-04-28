@@ -26,6 +26,9 @@ export interface CatalogueModel {
   roles?: Array<"chat" | "edit" | "apply" | "autocomplete" | "embed" | "rerank">;
 }
 
+export const ALL_ROLES: Array<CatalogueModel["roles"] extends (infer T)[] | undefined ? T : never> =
+  ["chat", "edit", "apply", "autocomplete", "embed", "rerank"];
+
 export interface CatalogueProvider {
   /** Slug used in `/api/me/providers/:slug` and in assistant YAML. */
   slug: string;
@@ -403,6 +406,14 @@ export const PROVIDER_CATALOGUE: CatalogueProvider[] = [
         roles: ["chat"],
       },
     ],
+  },
+  {
+    slug: "custom",
+    title: "Custom / OpenAI Compatible",
+    description: "Connect to any OpenAI-compatible API (NVIDIA, Groq, vLLM, etc.)",
+    requiresApiKey: true,
+    requiresBaseUrl: true,
+    models: [],
   },
 ];
 

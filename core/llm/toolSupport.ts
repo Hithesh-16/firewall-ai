@@ -14,8 +14,8 @@ export const PROVIDER_TOOL_SUPPORT: Record<string, (model: string) => boolean> =
         }
       } catch (e) {}
 
-      return ["claude", "gpt-4", "o3", "gemini", "gemma"].some((part) =>
-        model.toLowerCase().startsWith(part),
+      return ["claude", "gpt-4", "o3", "gemini", "gemma", "llama-3.1"].some(
+        (part) => model.toLowerCase().startsWith(part),
       );
     },
     anthropic: (model) => {
@@ -77,6 +77,15 @@ export const PROVIDER_TOOL_SUPPORT: Record<string, (model: string) => boolean> =
           default:
             return false;
         }
+      }
+
+      if (
+        lower.includes("llama-3.1") ||
+        lower.includes("llama-3.2") ||
+        lower.includes("llama-3.3") ||
+        lower.includes("llama-4")
+      ) {
+        return true;
       }
 
       return false;
@@ -458,6 +467,9 @@ export function isRecommendedAgentModel(modelName: string): boolean {
     [/grok-code/],
     [/grok-4-1|grok-4\.1/],
     [/claude/, /4-5/],
+    [/llama-3\.1/, /70b|405b/],
+    [/llama-3\.2/, /90b/],
+    [/llama-3\.3/, /70b/],
   ];
   for (const combo of recs) {
     if (combo.every((regex) => modelName.toLowerCase().match(regex))) {

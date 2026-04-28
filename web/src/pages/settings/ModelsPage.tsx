@@ -26,6 +26,7 @@ import {
   type CatalogueProvider,
 } from "../../data/providerCatalogue";
 import { ModelPicker, ProviderPicker } from "../../components/shared/ModelPickers";
+import { UnifiedModelForm } from "../../components/shared/UnifiedModelForm";
 import { useServerTable } from "../../hooks/useServerTable";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { showToast } from "../../store/slices/uiSlice";
@@ -195,28 +196,37 @@ export default function ModelsPage() {
       </div>
 
       {showForm && (
-        <AddModelForm
+        <UnifiedModelForm
           onCancel={() => setShowForm(false)}
-          onSuccess={(added) => {
-            setShowForm(false);
-            refetch();
-            dispatch(
-              showToast({
-                id: `model-add-${Date.now()}`,
-                type: "success",
-                message: `Added ${added.displayName || added.modelSlug}`,
-              }),
-            );
+          onSave={async (values) => {
+            try {
+              const res = await apiClient.post<{ model: UserModelRow }>(ENDPOINTS.me.modelsAdd, {
+                providerSlug: values.providerSlug,
+                modelSlug: values.modelSlug,
+                displayName: values.name,
+                apiKey: values.apiKey,
+                apiBase: values.apiBase,
+                roles: values.roles,
+              });
+              setShowForm(false);
+              refetch();
+              dispatch(
+                showToast({
+                  id: `model-add-${Date.now()}`,
+                  type: "success",
+                  message: `Added ${res.model.displayName || res.model.modelSlug}`,
+                }),
+              );
+            } catch (err) {
+              dispatch(
+                showToast({
+                  id: `model-aerr-${Date.now()}`,
+                  type: "error",
+                  message: err instanceof Error ? err.message : "Failed to add model",
+                }),
+              );
+            }
           }}
-          onError={(msg) =>
-            dispatch(
-              showToast({
-                id: `model-aerr-${Date.now()}`,
-                type: "error",
-                message: msg,
-              }),
-            )
-          }
         />
       )}
 
@@ -309,130 +319,5 @@ export default function ModelsPage() {
         session.
       </p>
     </div>
-  );
-}
-
-// ─── AddModelForm (self-serve) ─────────────────────────────────────────────
-
-function AddModelForm({
-  onCancel,
-  onSuccess,
-  onError,
-}: {
-  onCancel: () => void;
-  onSuccess: (model: UserModelRow) => void;
-  onError: (message: string) => void;
-}) {
-  const [provider, setProvider] = useState<CatalogueProvider>(
-    findProvider("openai") ?? POPULAR_PROVIDERS[0],
-  );
-  const [model, setModel] = useState<CatalogueModel>(provider.models[0]);
-  const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState(provider.defaultBaseUrl ?? "");
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    setModel(provider.models[0]);
-    setApiKey("");
-    setBaseUrl(provider.defaultBaseUrl ?? "");
-  }, [provider]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const res = await apiClient.post<{ model: UserModelRow }>(ENDPOINTS.me.modelsAdd, {
-        providerSlug: provider.slug,
-        modelSlug: model.model,
-        displayName: model.displayName,
-        apiKey: !provider.requiresApiKey && !apiKey ? "no-key-needed" : apiKey,
-        apiBase: baseUrl || provider.defaultBaseUrl || undefined,
-        roles: model.roles ?? ["chat"],
-      });
-      onSuccess(res.model);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : "Failed to add model");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Card>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <h3 className="text-foreground mb-1 text-sm font-semibold">Add a model</h3>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="text-description-muted mb-0.5 block text-[11px] font-medium">
-              Provider
-            </label>
-            <ProviderPicker selected={provider} onSelect={setProvider} />
-          </div>
-
-          <div>
-            <label className="text-description-muted mb-0.5 block text-[11px] font-medium">
-              Model
-            </label>
-            <ModelPicker
-              models={provider.models}
-              selected={model}
-              onSelect={setModel}
-              includeAutoDetect
-            />
-          </div>
-        </div>
-
-        {provider.requiresApiKey && (
-          <div>
-            <label className="text-description-muted mb-0.5 block text-[11px] font-medium">
-              API key
-            </label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={provider.keyPlaceholder ?? "Paste your API key"}
-              required
-              className="border-input-border bg-input text-input-foreground placeholder:text-input-placeholder focus:border-border-focus focus:ring-border-focus w-full rounded-md border px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1"
-            />
-            {provider.apiKeyUrl && (
-              <a
-                href={provider.apiKeyUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-info mt-1 block text-xs hover:brightness-110"
-              >
-                Get a {provider.title} API key →
-              </a>
-            )}
-          </div>
-        )}
-
-        {(provider.requiresBaseUrl || provider.defaultBaseUrl) && (
-          <div>
-            <label className="text-description-muted mb-0.5 block text-[11px] font-medium">
-              Base URL {provider.requiresBaseUrl ? "(required)" : "(optional)"}
-            </label>
-            <input
-              type="text"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder={provider.defaultBaseUrl ?? ""}
-              className="border-input-border bg-input text-input-foreground placeholder:text-input-placeholder focus:border-border-focus focus:ring-border-focus w-full rounded-md border px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1"
-            />
-          </div>
-        )}
-
-        <div className="flex justify-end gap-2 pt-1">
-          <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button type="submit" size="sm" loading={submitting}>
-            Add
-          </Button>
-        </div>
-      </form>
-    </Card>
   );
 }

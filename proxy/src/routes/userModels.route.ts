@@ -91,24 +91,18 @@ export async function registerUserModelRoutes(
       // admin, which keeps the "user can't delete what admin assigned"
       // invariant intact.
       const grantModels: UserModelPublic[] = orgId
-        ? listGrantsForUser(orgId, userId)
-            // Wildcard grants (model_slug="*") can't be rendered as a
-            // single row without expanding against the org catalogue —
-            // skip them here so the UI doesn't show "openai/*" literally.
-            // The gateway still honours them at request time.
-            .filter((g) => g.modelSlug !== "*")
-            .map((g) => ({
-              id: -g.id,
-              providerSlug: g.providerSlug,
-              modelSlug: g.modelSlug,
-              displayName: null,
-              apiBase: null,
-              enabled: true,
-              roles: ["chat", "edit", "apply"],
-              createdAt: g.grantedAt,
-              updatedAt: g.grantedAt,
-              createdBy: g.grantedBy,
-            }))
+        ? listGrantsForUser(orgId, userId).map((g) => ({
+            id: -g.id,
+            providerSlug: g.providerSlug,
+            modelSlug: g.modelSlug,
+            displayName: null,
+            apiBase: null,
+            enabled: true,
+            roles: ["chat", "edit", "apply"],
+            createdAt: g.grantedAt,
+            updatedAt: g.grantedAt,
+            createdBy: g.grantedBy,
+          }))
         : [];
 
       // De-dupe: if a self-added model and a grant name the same
@@ -189,6 +183,50 @@ export async function registerUserModelRoutes(
         roles: parsed.data.roles,
       });
       return { model };
+    },
+  );
+
+  app.post(
+    "/api/me/models/detect",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { apiBase, apiKey, providerSlug } = request.body as {
+        apiBase: string;
+        apiKey: string;
+        providerSlug: string;
+      };
+
+      if (!apiBase || !apiKey) {
+        return reply
+          .status(400)
+          .send({ error: "apiBase and apiKey are required" });
+      }
+
+      try {
+        // OpenAI-compatible /v1/models
+        const url = apiBase.replace(/\/+$/, "") + "/models";
+        const resp = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!resp.ok) {
+          const body = await resp.text();
+          throw new Error(`Upstream returned ${resp.status}: ${body}`);
+        }
+
+        const data = (await resp.json()) as { data: { id: string }[] };
+        const models = data.data.map((m) => m.id);
+        return { models };
+      } catch (err) {
+        return reply.status(500).send({
+          error: "DETECTION_FAILED",
+          message:
+            err instanceof Error ? err.message : "Failed to fetch models",
+        });
+      }
     },
   );
 

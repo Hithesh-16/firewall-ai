@@ -40,14 +40,6 @@ export function TaskHeader() {
   const historyLength = useAppSelector((s) => s.session.history.length);
   const sessionStart = useSessionStartRef();
 
-  // D2: show the header as soon as there's anything meaningful to
-  // display. Previously this gated on proxy-driven stats (which don't
-  // populate on local sessions or with providers whose maxContextTokens
-  // aren't registered), making the whole feature feel invisible.
-  //
-  // The new criteria: a chat model is selected AND at least one message
-  // has been sent (so the local-fallback ContextBar has something to
-  // measure), OR any cumulative stat is non-zero, OR todos exist.
   const hasChatModel = !!(selectedChatModel && selectedChatModel.model);
   const hasAnyActivity =
     stats.contextLimit > 0 ||
@@ -73,55 +65,26 @@ export function TaskHeader() {
   // the sticky header is invisible against the backdrop until it
   // overlaps scrolling content.
   return (
-    <div className="border-border bg-background border-b">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="text-description hover:text-foreground hover:bg-list-hover/30 text-af-caption flex w-full items-center gap-2 border-0 bg-transparent px-3 py-1.5 transition-colors"
-        aria-expanded={expanded}
-        aria-label="Toggle session details"
-      >
+    <div className="border-border bg-editor flex items-center justify-between border-b px-3 py-1.5">
+      <div className="flex items-center gap-3 overflow-hidden">
         {costLabel && (
           <span className="text-foreground inline-flex shrink-0 items-center gap-1 font-medium tabular-nums">
             {costLabel}
           </span>
         )}
         <InlineTokenStats />
-        <div className="min-w-0 flex-1">
+      </div>
+
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-3 px-4">
+        <div className="w-full max-w-[200px]">
           <ContextBar />
         </div>
-        <ChevronDownIcon
-          className={`h-3 w-3 shrink-0 transition-transform duration-150 ${
-            expanded ? "rotate-180" : ""
-          }`}
-          aria-hidden
-        />
-      </button>
-
-      {expanded && (
-        <div className="border-border animate-af-slide-down flex flex-col gap-1.5 overflow-hidden border-t px-3 py-1.5">
-          {/* P9: session title row — shows the first user message (or
-               a model-generated summary) so users can identify which
-               conversation they're in at a glance. Omitted when the
-               session is still at its NEW_SESSION_TITLE default. */}
-          {sessionTitle && !isDefaultSessionTitle(sessionTitle) && (
-            <div
-              className="text-foreground text-af-caption truncate font-semibold"
-              title={sessionTitle}
-            >
-              {sessionTitle}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <TokenBreakdown />
-            </div>
-            <div className="text-description-muted text-af-caption flex items-center gap-3 tabular-nums">
-              {sessionStart && <ElapsedTime since={sessionStart} />}
-            </div>
+        {sessionStart && (
+          <div className="text-description-muted text-af-caption tabular-nums">
+            <ElapsedTime since={sessionStart} />
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

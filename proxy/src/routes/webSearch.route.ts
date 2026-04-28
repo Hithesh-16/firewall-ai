@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { requireAuth } from "../auth/authMiddleware";
+import { optionalAuth } from "../auth/authMiddleware";
 
 const MAX_EXTRACT_URLS = 10;
 
@@ -226,7 +226,7 @@ export async function registerWebSearchRoute(
 ): Promise<void> {
   app.post(
     "/v1/web-search",
-    { preHandler: requireAuth },
+    { preHandler: optionalAuth },
     async (request, reply) => {
       const parsed = requestSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -286,7 +286,7 @@ export async function registerWebSearchRoute(
    */
   app.post(
     "/v1/web-extract",
-    { preHandler: requireAuth },
+    { preHandler: optionalAuth },
     async (request, reply) => {
       const parsed = extractRequestSchema.safeParse(request.body);
       if (!parsed.success) {

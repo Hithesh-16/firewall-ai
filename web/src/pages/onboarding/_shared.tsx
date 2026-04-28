@@ -17,12 +17,10 @@ export function WizardCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative rounded-2xl border border-slate-800/80 bg-slate-900/60 p-7 shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+    <div className="relative rounded-2xl border border-slate-800/80 bg-slate-900/60 p-7 shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-md">
       <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
       <h2 className="text-xl font-semibold text-white">{title}</h2>
-      {subtitle && (
-        <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
-      )}
+      {subtitle && <p className="mt-1 text-sm text-slate-400">{subtitle}</p>}
       <div className="mt-6">{children}</div>
     </div>
   );

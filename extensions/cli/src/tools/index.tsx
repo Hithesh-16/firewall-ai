@@ -47,6 +47,7 @@ import {
 import { uploadArtifactTool } from "./uploadArtifact.js";
 import { writeChecklistTool } from "./writeChecklist.js";
 import { writeFileTool } from "./writeFile.js";
+import { createPlanTool, proposePlanTool, updatePlanTool } from "./plan.js";
 
 export type { Tool, ToolCall, ToolParametersSchema };
 
@@ -72,6 +73,9 @@ const BASE_BUILTIN_TOOLS: Tool[] = [
   writeChecklistTool,
   checkBackgroundJobTool,
   askQuestionTool,
+  createPlanTool,
+  proposePlanTool,
+  updatePlanTool,
 ];
 
 // Essential tools for models with limited tool-calling ability (e.g., Groq)

@@ -18,6 +18,7 @@ import { uploadArtifactTool } from "./uploadArtifact.js";
 import { viewDiffTool } from "./viewDiff.js";
 import { writeChecklistTool } from "./writeChecklist.js";
 import { writeFileTool } from "./writeFile.js";
+import { createPlanTool, proposePlanTool, updatePlanTool } from "./plan.js";
 
 // putting in here for circular import issue
 export const ALL_BUILT_IN_TOOLS = [
@@ -42,4 +43,7 @@ export const ALL_BUILT_IN_TOOLS = [
   viewDiffTool,
   writeChecklistTool,
   writeFileTool,
+  createPlanTool,
+  proposePlanTool,
+  updatePlanTool,
 ];

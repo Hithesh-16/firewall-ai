@@ -118,7 +118,11 @@ const IntroMessage: React.FC<IntroMessageProps> = ({
       {model ? (
         <Text color="#10b981">
           <Text bold>Model:</Text>{" "}
-          <Text color="white">{model.name.split("/").pop()}</Text>
+          <Text color="white">
+            {model.name.includes(" (")
+              ? model.name
+              : model.name.split("/").pop()}
+          </Text>
         </Text>
       ) : (
         <Text color="#10b981">
@@ -132,7 +136,11 @@ const IntroMessage: React.FC<IntroMessageProps> = ({
       {model && !modelCapable && (
         <>
           <ModelCapabilityWarning
-            modelName={model.name.split("/").pop() || model.name}
+            modelName={
+              model.name.includes(" (")
+                ? model.name
+                : model.name.split("/").pop() || model.name
+            }
           />
           <Text> </Text>
         </>

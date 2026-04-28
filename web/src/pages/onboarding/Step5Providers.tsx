@@ -89,56 +89,32 @@ interface CreatedProviderResponse {
   slug: string;
 }
 
+import { UnifiedModelForm } from "../../components/shared/UnifiedModelForm";
+
 export function Step5Providers({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
   const dispatch = useAppDispatch();
   const wizard = useAppSelector((s) => s.onboarding);
 
-  const [draft, setDraft] = useState<Omit<OnboardingProviderDraft, "localId">>({
-    kind: "openai",
-    name: "",
-    apiKey: "",
-    baseUrl: "",
-    deploymentName: "",
-  });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const meta = PROVIDER_META[draft.kind];
-
-  function updateKind(kind: Kind) {
-    setDraft({
-      kind,
-      name: PROVIDER_META[kind].label,
-      apiKey: "",
-      baseUrl: PROVIDER_META[kind].defaultBase || "",
-      deploymentName: "",
-    });
-  }
-
-  async function handleAdd() {
+  async function handleSave(values: any) {
     setError(null);
-    if (meta.needsApiKey && !draft.apiKey?.trim()) {
-      setError("API key is required for this provider.");
-      return;
-    }
-    if (meta.needsBaseUrl && !draft.baseUrl?.trim()) {
-      setError("Base URL is required for this provider.");
-      return;
-    }
-
     setBusy(true);
     try {
+      // Step5 in onboarding adds a "Provider" which in the current backend
+      // maps to creating an entry in the providers table.
+      // However, the unified form works on providerSlug/modelSlug pairs.
+      // For onboarding, we'll add it as a provider if it's a "standard" one,
+      // or as a custom model if it's custom.
+
       const resp = await apiClient.post<CreatedProviderResponse>(ENDPOINTS.providers.root, {
-        kind: draft.kind,
-        name: draft.name || meta.label,
-        apiKey: draft.apiKey,
-        baseUrl: draft.baseUrl || undefined,
-        deploymentName: draft.deploymentName || undefined,
+        kind: values.providerSlug,
+        name: values.name || values.providerSlug,
+        apiKey: values.apiKey,
+        baseUrl: values.apiBase || undefined,
       });
 
-      // POST /api/providers is an upsert — re-submitting the same
-      // provider rotates its key rather than erroring. Dedupe by slug
-      // so the "Added" list doesn't grow a duplicate tile on rotation.
       const alreadyListed = wizard.providers.some(
         (p) => p.name.toLowerCase() === (resp.name || "").toLowerCase(),
       );
@@ -147,20 +123,11 @@ export function Step5Providers({ onNext, onBack }: { onNext: () => void; onBack:
           onboardingActions.addProvider({
             localId: tinyId(),
             serverId: resp.id,
-            kind: draft.kind,
+            kind: values.providerSlug as any,
             name: resp.name,
           }),
         );
       }
-
-      // Reset form for the next add
-      setDraft({
-        kind: "openai",
-        name: "",
-        apiKey: "",
-        baseUrl: "",
-        deploymentName: "",
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add provider");
     } finally {
@@ -168,33 +135,34 @@ export function Step5Providers({ onNext, onBack }: { onNext: () => void; onBack:
     }
   }
 
-  const canContinue = wizard.providers.length > 0;
+  // Non-mandatory now
+  const canContinue = true;
 
   return (
     <WizardCard
       title="Add your LLM providers"
-      subtitle="Bring your own keys. Each key + default model is stored on your account (not in a separate file) and reused across the web, VS Code, and the CLI."
+      subtitle="Bring your own keys. Each key + default model is stored on your account and reused across the web, VS Code, and the CLI."
     >
       {/* Existing providers */}
       {wizard.providers.length > 0 && (
-        <div className="mb-5">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Added
+        <div className="mb-6">
+          <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-description-muted">
+            Added Providers
           </h3>
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {wizard.providers.map((p) => (
               <div
                 key={p.localId}
-                className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-sm"
               >
-                <div className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-emerald-400" />
-                  <span className="text-slate-100">{p.name}</span>
-                  <span className="text-xs text-slate-500">· {PROVIDER_META[p.kind].label}</span>
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <CheckCircleIcon className="h-4 w-4 shrink-0 text-success" />
+                  <span className="truncate font-medium text-foreground">{p.name}</span>
+                  <span className="shrink-0 text-xs text-description-muted">· {p.kind}</span>
                 </div>
                 <button
                   onClick={() => dispatch(onboardingActions.removeProvider(p.localId))}
-                  className="text-slate-500 hover:text-red-400"
+                  className="text-description-muted hover:text-danger"
                 >
                   <XMarkIcon className="h-4 w-4" />
                 </button>
@@ -204,80 +172,22 @@ export function Step5Providers({ onNext, onBack }: { onNext: () => void; onBack:
         </div>
       )}
 
-      {/* New provider form */}
-      <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Add a provider
-        </h3>
+      <div className="space-y-4">
+        <UnifiedModelForm
+          title="Add a provider"
+          submitLabel="Add Provider"
+          onCancel={() => {}}
+          onSave={handleSave}
+        />
 
-        {/* Kind picker */}
-        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {(Object.keys(PROVIDER_META) as Kind[]).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => updateKind(k)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
-                draft.kind === k
-                  ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
-                  : "border-slate-800 text-slate-400 hover:border-slate-600 hover:text-slate-200",
-              )}
-            >
-              <span>{PROVIDER_META[k].logo}</span>
-              <span className="truncate">{PROVIDER_META[k].label}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-2">
-          {meta.needsApiKey && (
-            <input
-              type="password"
-              value={draft.apiKey}
-              onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-              placeholder="API key"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500/60 focus:outline-none"
-            />
-          )}
-          {meta.needsBaseUrl && (
-            <input
-              type="url"
-              value={draft.baseUrl}
-              onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-              placeholder={meta.defaultBase || "https://api.example.com"}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500/60 focus:outline-none"
-            />
-          )}
-          {meta.needsDeployment && (
-            <input
-              type="text"
-              value={draft.deploymentName}
-              onChange={(e) => setDraft({ ...draft, deploymentName: e.target.value })}
-              placeholder="Deployment name (Azure)"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500/60 focus:outline-none"
-            />
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={busy}
-          className="mt-3 inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:opacity-40"
-        >
-          <PlusIcon className="h-4 w-4" />
-          {busy ? "Adding…" : "Add provider"}
-        </button>
+        {wizard.providers.length === 0 && (
+          <p className="px-1 text-center text-xs text-description-muted">
+            You can skip this for now and add providers later in Settings.
+          </p>
+        )}
       </div>
 
       <WizardError message={error} />
-
-      {!canContinue && (
-        <p className="mt-3 text-xs text-amber-400/80">
-          Add at least one provider to continue — the chat won't work without one.
-        </p>
-      )}
 
       <WizardNav onBack={onBack} onNext={onNext} nextDisabled={!canContinue} busy={busy} />
     </WizardCard>

@@ -4,6 +4,7 @@ import { BuiltInToolNames } from "core/tools/builtIn";
 import { useState } from "react";
 import { useAppSelector } from "../../../redux/hooks";
 import { RootState } from "../../../redux/store";
+import { ToolProgressIcon } from "./ToolProgressIcon";
 import FunctionSpecificToolCallDiv from "./FunctionSpecificToolCallDiv";
 import { GroupedToolCallHeader } from "./GroupedToolCallHeader";
 import { McpAppRenderer } from "./MCPAppRenderer";
@@ -27,15 +28,27 @@ export function ToolCallDiv({
 
   if (!toolCallStates?.length) return null;
 
-  const isStreamingComplete = toolCallStates.every(
+  // Filter out internal tools that have dedicated UI elsewhere (e.g. TodoStrip)
+  const filteredToolCallStates = toolCallStates.filter(
+    (tc) =>
+      tc.toolCall.function?.name !== BuiltInToolNames.TodoWrite &&
+      tc.toolCall.function?.name !== BuiltInToolNames.UpdatePlan,
+  );
+
+  if (!filteredToolCallStates.length) return null;
+
+  const isStreamingComplete = filteredToolCallStates.every(
     (toolCall) => toolCall.status !== "generating",
   );
 
-  const shouldShowGroupedUI = toolCallStates.length > 1 && isStreamingComplete;
-  const activeCalls = toolCallStates.filter(
+  const shouldShowGroupedUI =
+    filteredToolCallStates.length > 1 && isStreamingComplete;
+  const activeCalls = filteredToolCallStates.filter(
     (call) => call.status !== "canceled",
   );
-  const pendingCalls = toolCallStates.filter((call) => call.status !== "done");
+  const pendingCalls = filteredToolCallStates.filter(
+    (call) => call.status !== "done",
+  );
 
   const renderToolCall = (toolCallState: ToolCallState) => {
     const tool = availableTools.find(
@@ -65,7 +78,15 @@ export function ToolCallDiv({
         <SimpleToolCallUI
           tool={tool}
           toolCallState={toolCallState}
-          icon={toolCallState.status === "generated" ? ArrowRightIcon : icon}
+          icon={
+            <ToolProgressIcon
+              functionName={functionName}
+              status={toolCallState.status}
+              defaultIcon={
+                toolCallState.status === "generated" ? ArrowRightIcon : icon
+              }
+            />
+          }
           historyIndex={historyIndex}
         />
       );
@@ -92,7 +113,17 @@ export function ToolCallDiv({
 
     return (
       <ToolCallDisplay
-        icon={getStatusIcon(toolCallState.status)}
+        icon={
+          <ToolProgressIcon
+            functionName={functionName}
+            status={toolCallState.status}
+            defaultIcon={
+              toolCallState.status === "generated"
+                ? ArrowRightIcon
+                : getIconByName("WrenchIcon") || ArrowRightIcon
+            }
+          />
+        }
         tool={tool}
         toolCallState={toolCallState}
         historyIndex={historyIndex}
@@ -109,7 +140,7 @@ export function ToolCallDiv({
     return (
       <div className="border-border rounded-lg border px-4 py-3 pb-0">
         <GroupedToolCallHeader
-          toolCallStates={toolCallStates}
+          toolCallStates={filteredToolCallStates}
           activeCalls={pendingCalls.length > 0 ? pendingCalls : activeCalls}
           open={open}
           onToggle={() => setOpen(!open)}
@@ -119,7 +150,7 @@ export function ToolCallDiv({
             open ? "max-h-[50vh] opacity-100" : "max-h-0 opacity-0"
           }`}
         >
-          {toolCallStates.map((toolCallState) => (
+          {filteredToolCallStates.map((toolCallState) => (
             <div className="py-1 pl-6" key={toolCallState.toolCallId}>
               {renderToolCall(toolCallState)}
             </div>
@@ -129,7 +160,7 @@ export function ToolCallDiv({
     );
   }
 
-  return toolCallStates.map((toolCallState) => (
+  return filteredToolCallStates.map((toolCallState) => (
     <div className="py-1" key={toolCallState.toolCallId}>
       {renderToolCall(toolCallState)}
     </div>

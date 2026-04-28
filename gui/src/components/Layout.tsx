@@ -2,7 +2,7 @@ import { OnboardingModes } from "core/protocol/core";
 import { useContext, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { CustomScrollbarDiv } from ".";
+import { CustomScrollbarDiv, vscEditorBackground } from ".";
 import { AuthProvider } from "../context/Auth";
 import { IdeMessengerContext } from "../context/IdeMessenger";
 import { LocalStorageProvider } from "../context/LocalStorage";
@@ -37,6 +37,7 @@ const LayoutTopDiv = styled(CustomScrollbarDiv)`
   height: 100%;
   position: relative;
   overflow-x: hidden;
+  background-color: ${vscEditorBackground};
 `;
 
 const GridDiv = styled.div`

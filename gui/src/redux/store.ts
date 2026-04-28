@@ -47,12 +47,17 @@ const rootReducer = combineReducers({
 
 const saveSubsetFilters = [
   createFilter("session", [
+    "history",
     "id",
     "lastSessionId",
     "title",
 
     // Persist edit mode in case closes in middle
     "mode",
+
+    // Persist active plan and proposal
+    "activePlan",
+    "pendingPlanProposal",
 
     // higher risk to persist
     // codeBlockApplyStates

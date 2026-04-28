@@ -25,6 +25,7 @@ import { bashToolEvents } from "../util/cli.js";
 import { logger } from "../util/logger.js";
 
 import { ActionStatus } from "./components/ActionStatus.js";
+import { CLIPlanStrip } from "./components/CLIPlanStrip.js";
 import { BottomStatusBar } from "./components/BottomStatusBar.js";
 import { StatusLine } from "./StatusLine.js";
 import { CLITodoStrip } from "./components/CLITodoStrip.js";
@@ -469,10 +470,7 @@ const TUIChat: React.FC<TUIChatProps> = ({
           />
         )}
 
-        {/* P8 — sticky TODO strip. Auto-hides when empty; updates live
-            via the core todoTool subscriber bus when the agent calls
-            todo_write. Mounted above ActionStatus so it stays visible
-            even while the assistant is still streaming a response. */}
+        <CLIPlanStrip />
         <CLITodoStrip />
 
         {/* Status — terminal-native equivalent of the IDE's shimmer

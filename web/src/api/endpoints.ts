@@ -37,6 +37,7 @@ export const ENDPOINTS = {
     models: "/api/me/models",
     modelsList: "/api/me/models/list",
     modelsAdd: "/api/me/models/add",
+    modelsDetect: "/api/me/models/detect",
     model: (id: string) => `/api/me/models/${encodeURIComponent(id)}`,
     provider: (slug: string) => `/api/me/providers/${encodeURIComponent(slug)}`,
     /** List of the caller's personal + their org's providers. Use

@@ -455,7 +455,7 @@ export function LoginPage() {
         </div>
 
         {/* Glass card */}
-        <div className="relative rounded-2xl border border-slate-800/80 bg-slate-900/60 p-7 shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <div className="relative rounded-2xl border border-slate-800/80 bg-slate-900/60 p-7 shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-md">
           {/* Top accent line */}
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
 

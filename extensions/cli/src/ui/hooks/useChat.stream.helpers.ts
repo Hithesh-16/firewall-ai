@@ -270,6 +270,16 @@ export function createStreamCallbacks(
         },
       ]);
     },
+    onPlanUpdate: (plan: any) => {
+      try {
+        const {
+          updatePlanState,
+        } = require("core/tools/implementations/planTool.js");
+        updatePlanState(plan);
+      } catch (error) {
+        logger.error("Failed to update plan", { error });
+      }
+    },
   };
 }
 

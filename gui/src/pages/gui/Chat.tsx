@@ -22,7 +22,7 @@ import { PlanPanel } from "./PlanPanel";
 import { useActivePromptTracking } from "../../hooks/useActivePromptTracking";
 import { ErrorBoundary } from "react-error-boundary";
 import styled from "styled-components";
-import { Button, vscBackground } from "../../components";
+import { Button, vscBackground, vscEditorBackground } from "../../components";
 import { useFindWidget } from "../../components/find/FindWidget";
 import TimelineItem from "../../components/gui/TimelineItem";
 import { NewSessionButton } from "../../components/mainInput/belowMainInput/NewSessionButton";
@@ -548,7 +548,7 @@ export function Chat() {
               4. TodoStrip    — current plan (only when agent issued one) */}
         <div
           data-sticky
-          style={{ backgroundColor: vscBackground }}
+          style={{ backgroundColor: vscEditorBackground }}
           className="border-border/60 sticky top-0 z-20 border-b shadow-[0_2px_8px_rgba(0,0,0,0.12)]"
         >
           <TaskHeader />
@@ -563,11 +563,11 @@ export function Chat() {
             isStreaming={isStreaming}
           />
           <TodoStrip />
+          <PlanPanel />
         </div>
         <div className="pt-[8px]" />
         {highlights}
         <PlanProposalCard />
-        <PlanPanel />
         {history
           .map((item, originalIndex) => ({ item, originalIndex }))
           .filter(({ item }) => item.message.role !== "system")

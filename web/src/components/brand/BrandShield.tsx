@@ -23,13 +23,12 @@ export default function BrandShield({ size = 80, pulse = true }: BrandShieldProp
           width: size,
           height: size,
           borderRadius: "1.5rem",
-          background: "linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(6, 182, 212, 0.25))",
+          background: "linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(6, 182, 212, 0.35))",
           border: "1px solid rgba(16, 185, 129, 0.45)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           boxShadow: "0 0 40px rgba(16, 185, 129, 0.25), inset 0 0 20px rgba(16, 185, 129, 0.15)",
-          backdropFilter: "blur(8px)",
         }}
       >
         <ShieldCheckIcon

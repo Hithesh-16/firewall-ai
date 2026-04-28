@@ -11,10 +11,13 @@ import {
   updateProvider,
 } from "../gateway/providerService";
 import {
+  deleteOrgProvider,
+  deleteUserProvider,
   listOrgProviders,
   listUserProviders,
   resolveProviderForUser,
   upsertOrgProvider,
+  upsertUserProvider,
 } from "../gateway/userProviderService";
 import { createGrant } from "../gateway/modelGrantService";
 import {
@@ -269,13 +272,15 @@ export async function registerProviderRoutes(
           }
         }
 
-        // Respond with the shape onboarding expects. The id is the
-        // org_providers row id (listed via GET /api/providers).
+        // Respond with the shape onboarding expects. Use the synthesised
+        // negative ID consistent with the GET /api/providers list so
+        // subsequent calls to /api/providers/:id/models can resolve it.
+        const synthesisedId = -Math.abs(hashSlug(`org:${ctxOrgId}:${slug}`));
         const row = listOrgProviders(ctxOrgId).find(
           (p) => p.providerSlug === slug,
         );
         return reply.status(201).send({
-          id: row?.id ?? 0,
+          id: synthesisedId,
           name: data.name,
           slug,
           baseUrl: resolvedBaseUrl,
@@ -312,7 +317,8 @@ export async function registerProviderRoutes(
       const org = orgId ? listOrgProviders(orgId) : [];
 
       const personalRows = personal.map((p) => ({
-        id: p.id,
+        id:
+          -Math.abs(hashSlug(`user:${userId}:${p.providerSlug}`)) - 2000000000,
         name: p.providerSlug,
         slug: p.providerSlug,
         baseUrl: p.baseUrl ?? "",
@@ -348,8 +354,53 @@ export async function registerProviderRoutes(
     "/api/providers/:id",
     { preHandler: [requireAuth, requireCapability("provider:read")] },
     async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const provider = getProviderById(Number(id));
+      const { id: idStr } = request.params as { id: string };
+      const id = Number(idStr);
+      const user = request.authContext?.user;
+
+      if (id < 0) {
+        // Handle synthesised IDs for org/user scoped providers
+        if (user?.orgId) {
+          const org = listOrgProviders(user.orgId);
+          const match = org.find(
+            (p) =>
+              -Math.abs(hashSlug(`org:${user.orgId}:${p.providerSlug}`)) === id,
+          );
+          if (match) {
+            return {
+              id,
+              name: match.displayName ?? match.providerSlug,
+              slug: match.providerSlug,
+              baseUrl: match.baseUrl ?? "",
+              enabled: match.enabled,
+              createdAt: match.createdAt,
+              updatedAt: match.updatedAt,
+            };
+          }
+        }
+        if (user?.id) {
+          const personal = listUserProviders(user.id);
+          const match = personal.find(
+            (p) =>
+              -Math.abs(hashSlug(`user:${user.id}:${p.providerSlug}`)) -
+                2000000000 ===
+              id,
+          );
+          if (match) {
+            return {
+              id,
+              name: match.providerSlug,
+              slug: match.providerSlug,
+              baseUrl: match.baseUrl ?? "",
+              enabled: match.enabled,
+              createdAt: match.createdAt,
+              updatedAt: match.updatedAt,
+            };
+          }
+        }
+      }
+
+      const provider = getProviderById(id);
       if (!provider) {
         return reply.status(404).send({ error: "Provider not found" });
       }
@@ -440,14 +491,63 @@ export async function registerProviderRoutes(
     "/api/providers/:id",
     { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
-      const { id } = request.params as { id: string };
+      const { id: idStr } = request.params as { id: string };
+      const id = Number(idStr);
+      const user = request.authContext?.user;
+
       const parsed = updateProviderSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply
           .status(400)
           .send({ error: "Invalid payload", details: parsed.error.flatten() });
       }
-      const updated = updateProvider(Number(id), parsed.data);
+
+      if (id < 0) {
+        // Handle synthesised IDs for org/user scoped providers
+        if (user?.orgId) {
+          const org = listOrgProviders(user.orgId);
+          const match = org.find(
+            (p) =>
+              -Math.abs(hashSlug(`org:${user.orgId}:${p.providerSlug}`)) === id,
+          );
+          if (match) {
+            upsertOrgProvider(
+              user.orgId,
+              match.providerSlug,
+              parsed.data.apiKey ?? "",
+              {
+                baseUrl: parsed.data.baseUrl,
+                displayName: parsed.data.name,
+                enabled: parsed.data.enabled,
+              },
+            );
+            return { success: true };
+          }
+        }
+        if (user?.id) {
+          const personal = listUserProviders(user.id);
+          const match = personal.find(
+            (p) =>
+              -Math.abs(hashSlug(`user:${user.id}:${p.providerSlug}`)) -
+                2000000000 ===
+              id,
+          );
+          if (match) {
+            upsertUserProvider(
+              user.id,
+              match.providerSlug,
+              parsed.data.apiKey ?? "",
+              {
+                baseUrl: parsed.data.baseUrl,
+                enabled: parsed.data.enabled,
+              },
+            );
+            return { success: true };
+          }
+        }
+      }
+
+      const updated = updateProvider(id, parsed.data);
       if (!updated) {
         return reply.status(404).send({ error: "Provider not found" });
       }
@@ -466,8 +566,39 @@ export async function registerProviderRoutes(
     "/api/providers/:id",
     { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const deleted = deleteProvider(Number(id));
+      const { id: idStr } = request.params as { id: string };
+      const id = Number(idStr);
+      const user = request.authContext?.user;
+
+      if (id < 0) {
+        // Handle synthesised IDs for org/user scoped providers
+        if (user?.orgId) {
+          const org = listOrgProviders(user.orgId);
+          const match = org.find(
+            (p) =>
+              -Math.abs(hashSlug(`org:${user.orgId}:${p.providerSlug}`)) === id,
+          );
+          if (match) {
+            const success = deleteOrgProvider(user.orgId, match.providerSlug);
+            return { success };
+          }
+        }
+        if (user?.id) {
+          const personal = listUserProviders(user.id);
+          const match = personal.find(
+            (p) =>
+              -Math.abs(hashSlug(`user:${user.id}:${p.providerSlug}`)) -
+                2000000000 ===
+              id,
+          );
+          if (match) {
+            const success = deleteUserProvider(user.id, match.providerSlug);
+            return { success };
+          }
+        }
+      }
+
+      const deleted = deleteProvider(id);
       if (!deleted) {
         return reply.status(404).send({ error: "Provider not found" });
       }
@@ -481,8 +612,24 @@ export async function registerProviderRoutes(
     "/api/providers/:providerId/models",
     { preHandler: [requireAuth, requireCapability("provider:manage")] },
     async (request, reply) => {
-      const { providerId } = request.params as { providerId: string };
-      const provider = getProviderById(Number(providerId));
+      const { providerId: idStr } = request.params as { providerId: string };
+      const id = Number(idStr);
+      const user = request.authContext?.user;
+
+      let provider = null;
+      if (id < 0 && user?.orgId) {
+        const org = listOrgProviders(user.orgId);
+        const match = org.find(
+          (p) =>
+            -Math.abs(hashSlug(`org:${user.orgId}:${p.providerSlug}`)) === id,
+        );
+        if (match) {
+          provider = getProviderBySlug(match.providerSlug, user.orgId);
+        }
+      } else {
+        provider = getProviderById(id);
+      }
+
       if (!provider) {
         return reply.status(404).send({ error: "Provider not found" });
       }
@@ -495,7 +642,7 @@ export async function registerProviderRoutes(
       }
 
       try {
-        const model = addModel(Number(providerId), parsed.data.modelName, {
+        const model = addModel(provider.id, parsed.data.modelName, {
           displayName: parsed.data.displayName,
           inputCostPer1k: parsed.data.inputCostPer1k,
           outputCostPer1k: parsed.data.outputCostPer1k,
@@ -518,12 +665,28 @@ export async function registerProviderRoutes(
     "/api/providers/:providerId/models",
     { preHandler: [requireAuth, requireCapability("provider:read")] },
     async (request, reply) => {
-      const { providerId } = request.params as { providerId: string };
-      const provider = getProviderById(Number(providerId));
+      const { providerId: idStr } = request.params as { providerId: string };
+      const id = Number(idStr);
+      const user = request.authContext?.user;
+
+      let provider = null;
+      if (id < 0 && user?.orgId) {
+        const org = listOrgProviders(user.orgId);
+        const match = org.find(
+          (p) =>
+            -Math.abs(hashSlug(`org:${user.orgId}:${p.providerSlug}`)) === id,
+        );
+        if (match) {
+          provider = getProviderBySlug(match.providerSlug, user.orgId);
+        }
+      } else {
+        provider = getProviderById(id);
+      }
+
       if (!provider) {
         return reply.status(404).send({ error: "Provider not found" });
       }
-      return listModels(Number(providerId));
+      return listModels(provider.id);
     },
   );
 

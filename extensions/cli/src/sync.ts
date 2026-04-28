@@ -90,9 +90,11 @@ export async function syncFromProxy(
     const modelEntries = modelsBody.models.map((m) => {
       const lines2: string[] = [];
       lines2.push(`  - name: ${JSON.stringify(m.displayName || m.modelSlug)}`);
-      lines2.push(`    provider: ${m.providerSlug}`);
+      // Phase H.H2: Map our internal 'custom' slug to Continue's 'openai' adapter
+      const provider = m.providerSlug === "custom" ? "openai" : m.providerSlug;
+      lines2.push(`    provider: ${provider}`);
       lines2.push(`    model: ${m.modelSlug}`);
-      const canonicalBase = canonicalApiBase(m.providerSlug, m.apiBase);
+      const canonicalBase = canonicalApiBase(provider, m.apiBase);
       if (canonicalBase) {
         lines2.push(`    apiBase: ${canonicalBase}`);
       }
@@ -141,11 +143,10 @@ export async function syncFromProxy(
       "config.yaml",
     );
 
-    // Choose which YAML body to write. When the proxy returns an
-    // assistant YAML use it; otherwise build a minimal doc from the
-    // models list. Either way, layer local customisations (personal
-    // rules, MCP servers, prompt file) before writing.
-    const baseYaml = assistantYaml || yamlContent;
+    // Choose which YAML body to write. We use yamlContent because it
+    // correctly combines any remote assistant fields with the fresh
+    // models list from the user_models table.
+    const baseYaml = yamlContent;
     let finalYaml = baseYaml;
     try {
       const yamlMod = await import("yaml");

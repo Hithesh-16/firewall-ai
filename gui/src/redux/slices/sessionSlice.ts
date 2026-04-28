@@ -232,6 +232,7 @@ type SessionState = {
     tasks: Array<{
       content: string;
       status: "pending" | "in_progress" | "completed";
+      phase?: string;
     }>;
     collapsed: boolean;
   } | null;
@@ -249,6 +250,7 @@ type SessionState = {
     tasks: Array<{
       content: string;
       status: "pending" | "in_progress" | "completed";
+      phase?: string;
     }>;
   } | null;
 };
@@ -777,6 +779,8 @@ export const sessionSlice = createSlice({
         state.history = [];
         state.title = NEW_SESSION_TITLE;
         state.id = uuidv4();
+        state.activePlan = null;
+        state.pendingPlanProposal = null;
       }
     },
     updateSessionTitle: (state, { payload }: PayloadAction<string>) => {
@@ -1084,6 +1088,7 @@ export const sessionSlice = createSlice({
         tasks: Array<{
           content: string;
           status: "pending" | "in_progress" | "completed";
+          phase?: string;
         }>;
       }>,
     ) => {
@@ -1120,6 +1125,7 @@ export const sessionSlice = createSlice({
         tasks: Array<{
           content: string;
           status: "pending" | "in_progress" | "completed";
+          phase?: string;
         }>;
       }>,
     ) => {

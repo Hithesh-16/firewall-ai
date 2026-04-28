@@ -11,7 +11,9 @@ import type { AgentSession } from "../../redux/slices/agentSlice";
  */
 export function MissionControl() {
   const agents = useAppSelector((s) => s.agent.activeAgents);
-  const [streamBuffers, setStreamBuffers] = useState<Record<string, string>>({});
+  const [streamBuffers, setStreamBuffers] = useState<Record<string, string>>(
+    {},
+  );
   const bufferRef = useRef<Record<string, string>>({});
   const rafRef = useRef<number | null>(null);
 
@@ -42,7 +44,7 @@ export function MissionControl() {
 
   if (agents.length === 0) {
     return (
-      <div className="text-center py-8 text-sm text-description">
+      <div className="text-description py-8 text-center text-sm">
         No agents running. Use the spawn_agent tool to start parallel tasks.
       </div>
     );
@@ -78,11 +80,11 @@ function AgentStreamCard({
   }, [output]);
 
   return (
-    <div className="rounded-lg border border-border bg-editor overflow-hidden">
+    <div className="border-border bg-editor overflow-hidden rounded-lg border">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+      <div className="border-border flex items-center gap-2 border-b px-3 py-2">
         <div
-          className={`w-2 h-2 rounded-full ${
+          className={`h-2 w-2 rounded-full ${
             agent.status === "running"
               ? "bg-success animate-pulse"
               : agent.status === "failed"
@@ -90,17 +92,19 @@ function AgentStreamCard({
                 : "bg-description-muted"
           }`}
         />
-        <span className="text-xs font-medium text-foreground flex-1 truncate">
+        <span className="text-foreground flex-1 truncate text-xs font-medium">
           {agent.task.slice(0, 80)}
         </span>
-        <span className="text-xs text-description font-mono">{agent.model}</span>
+        <span className="text-description font-mono text-xs">
+          {agent.model}
+        </span>
       </div>
 
       {/* Progress */}
       {agent.status === "running" && agent.progress > 0 && (
-        <div className="h-0.5 bg-secondary-background">
+        <div className="bg-surface-inset h-0.5">
           <div
-            className="h-full bg-success transition-all duration-300"
+            className="bg-success h-full transition-all duration-300"
             style={{ width: `${agent.progress}%` }}
           />
         </div>
@@ -110,7 +114,7 @@ function AgentStreamCard({
       {output && (
         <pre
           ref={outputRef}
-          className="px-3 py-2 text-xs text-description font-mono max-h-32 overflow-y-auto whitespace-pre-wrap"
+          className="text-description max-h-32 overflow-y-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs"
         >
           {output}
         </pre>

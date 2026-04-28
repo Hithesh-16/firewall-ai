@@ -150,6 +150,21 @@ async function handleWhoami() {
   }
 }
 
+function handleApprove() {
+  const { approveProposal } = require("core/tools/implementations/planTool.js");
+  approveProposal();
+  return {
+    output: chalk.green("Plan approved. Proceeding."),
+    newInput: "Proceed with the proposed plan.",
+  };
+}
+
+function handleReject() {
+  const { rejectProposal } = require("core/tools/implementations/planTool.js");
+  rejectProposal();
+  return { output: chalk.red("Plan rejected.") };
+}
+
 async function handleFork() {
   try {
     const currentSession = getCurrentSession();
@@ -499,6 +514,8 @@ const commandHandlers: Record<string, CommandHandler> = {
   share: proxyCommand("share"),
   "security-audit": proxyCommand("security-audit"),
   "security-review": proxyCommand("security-review"),
+  approve: handleApprove,
+  reject: handleReject,
 };
 
 export async function handleSlashCommands(

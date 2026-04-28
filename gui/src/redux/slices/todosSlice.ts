@@ -65,10 +65,11 @@ const todosSlice = createSlice({
     // Wipe the todo list whenever sessionSlice.newSession fires so a
     // previous conversation's list doesn't bleed into a fresh chat.
     // Matched by action type string to avoid a cross-slice import cycle.
-    builder.addMatcher(
-      (action) => action.type === "session/newSession",
-      () => [],
-    );
+    builder.addCase("session/newSession", (state, action: any) => {
+      // Wipe the todo list whenever sessionSlice.newSession fires
+      // so a previous conversation's list doesn't bleed into a fresh chat.
+      return [];
+    });
   },
 });
 

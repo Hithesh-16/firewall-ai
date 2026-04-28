@@ -2,7 +2,7 @@ import { ChevronRightIcon } from "@heroicons/react/24/outline";
 import { ComponentType, useState } from "react";
 
 interface ToggleWithIconProps {
-  icon?: ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon?: ComponentType<React.SVGProps<SVGSVGElement>> | React.ReactNode;
   isToggleable?: boolean;
   open?: boolean;
   onClick?: () => void;
@@ -42,7 +42,30 @@ export function ToggleWithIcon({
       );
     }
 
-    return Icon ? <Icon className="text-description h-4 w-4" /> : null;
+    if (!Icon) return null;
+
+    // If it's already an element (e.g. from getStatusIcon or <ToolProgressIcon />)
+    if (
+      typeof Icon === "object" &&
+      (Icon as any).$$typeof === Symbol.for("react.element")
+    ) {
+      return <div className="text-description h-4 w-4">{Icon as any}</div>;
+    }
+
+    // If it's a component (Function or forwardRef object)
+    const isComponent =
+      typeof Icon === "function" ||
+      (typeof Icon === "object" && (Icon as any).$$typeof);
+
+    if (isComponent) {
+      const IconComponent = Icon as ComponentType<
+        React.SVGProps<SVGSVGElement>
+      >;
+      return <IconComponent className="text-description h-4 w-4" />;
+    }
+
+    // Fallback for strings or other ReactNodes
+    return <div className="text-description h-4 w-4">{Icon as any}</div>;
   }
 
   return (

@@ -174,9 +174,11 @@ export function ModelPicker({
       <div className="relative">
         <Listbox.Button className="border-input-border bg-input text-input-foreground hover:bg-list-hover focus:border-border-focus focus:ring-border-focus relative w-full cursor-pointer rounded-md border py-2 pl-3 pr-10 text-left text-sm focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50">
           <div className="flex flex-col">
-            <span className="text-foreground truncate font-medium">{selected.displayName}</span>
+            <span className="text-foreground truncate font-medium">
+              {selected?.displayName || "Select a model"}
+            </span>
             <span className="text-description-muted truncate font-mono text-[11px]">
-              {selected.model}
+              {selected?.model || ""}
             </span>
           </div>
           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">

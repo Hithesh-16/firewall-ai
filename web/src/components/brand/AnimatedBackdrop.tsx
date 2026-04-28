@@ -79,7 +79,7 @@ export default function AnimatedBackdrop() {
           }}
         />
 
-        {/* Aurora A (emerald) — half the blur, smaller footprint, GPU-promoted. */}
+        {/* Aurora A (emerald) — reduced blur, softened gradient for better performance. */}
         <div
           className="afw-aurora absolute"
           style={{
@@ -89,15 +89,15 @@ export default function AnimatedBackdrop() {
             height: "36rem",
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(16, 185, 129, 0.32) 0%, rgba(16, 185, 129, 0) 60%)",
-            filter: "blur(40px)",
+              "radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, rgba(16, 185, 129, 0.05) 50%, rgba(16, 185, 129, 0) 70%)",
+            filter: "blur(24px)",
             opacity: 0.65,
             willChange: "transform",
             animation: "afw-aurora-a 22s ease-in-out infinite",
           }}
         />
 
-        {/* Aurora B (cyan) */}
+        {/* Aurora B (cyan) — reduced blur, softened gradient. */}
         <div
           className="afw-aurora absolute"
           style={{
@@ -107,8 +107,8 @@ export default function AnimatedBackdrop() {
             height: "32rem",
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(6, 182, 212, 0.28) 0%, rgba(6, 182, 212, 0) 60%)",
-            filter: "blur(40px)",
+              "radial-gradient(circle, rgba(6, 182, 212, 0.26) 0%, rgba(6, 182, 212, 0.04) 50%, rgba(6, 182, 212, 0) 70%)",
+            filter: "blur(24px)",
             opacity: 0.6,
             willChange: "transform",
             animation: "afw-aurora-b 26s ease-in-out infinite",

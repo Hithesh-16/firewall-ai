@@ -1,4 +1,5 @@
 import { db } from "../db/index";
+import sqliteDatabase from "../db/database";
 import { providers } from "../db/schema";
 import { Provider } from "../types";
 import { decrypt, encrypt } from "../vault/encryption";
@@ -166,7 +167,22 @@ export function updateProvider(
 }
 
 export function deleteProvider(id: number): boolean {
+  const provider = getProviderById(id);
+  if (!provider) return false;
+
   const result = db.delete(providers).where(eq(providers.id, id)).run();
+
+  if (result.changes > 0 && provider.orgId) {
+    // Cascade to user_models for all users in this org
+    sqliteDatabase
+      .prepare(
+        `DELETE FROM user_models
+        WHERE provider_slug = ?
+          AND user_id IN (SELECT id FROM users WHERE org_id = ?)`,
+      )
+      .run(provider.slug, provider.orgId);
+  }
+
   return result.changes > 0;
 }
 

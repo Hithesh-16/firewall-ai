@@ -14,7 +14,7 @@ import { toolCallStateToContextItems } from "./utils";
 interface SimpleToolCallUIProps {
   toolCallState: ToolCallState;
   tool: Tool | undefined;
-  icon?: ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon?: ComponentType<React.SVGProps<SVGSVGElement>> | React.ReactNode;
   historyIndex: number;
 }
 

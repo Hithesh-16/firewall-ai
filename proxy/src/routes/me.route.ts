@@ -434,9 +434,12 @@ function buildCanonicalModels(
     const key = `${m.providerSlug}/${m.modelSlug}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    // Phase H.H2: Map our internal 'custom' slug to Continue's 'openai' adapter
+    const providerSlug =
+      m.providerSlug === "custom" ? "openai" : m.providerSlug;
     out.push({
       name: m.displayName || m.modelSlug,
-      providerSlug: m.providerSlug,
+      providerSlug,
       modelSlug: m.modelSlug,
       apiBase: m.apiBase ?? null,
       apiKey: m.apiKey || null,

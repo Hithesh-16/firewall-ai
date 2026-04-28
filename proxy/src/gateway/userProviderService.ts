@@ -151,6 +151,18 @@ export function deleteOrgProvider(
   const result = raw
     .prepare(`DELETE FROM org_providers WHERE org_id = ? AND provider_slug = ?`)
     .run(orgId, providerSlug);
+
+  if (result.changes > 0) {
+    // Cascade to user_models for all users in this org
+    raw
+      .prepare(
+        `DELETE FROM user_models
+          WHERE provider_slug = ?
+            AND user_id IN (SELECT id FROM users WHERE org_id = ?)`,
+      )
+      .run(providerSlug, orgId);
+  }
+
   return result.changes > 0;
 }
 
@@ -230,6 +242,17 @@ export function deleteUserProvider(
       `DELETE FROM user_providers WHERE user_id = ? AND provider_slug = ?`,
     )
     .run(userId, providerSlug);
+
+  if (result.changes > 0) {
+    // Cascade to user_models for this specific user
+    raw
+      .prepare(
+        `DELETE FROM user_models
+          WHERE user_id = ? AND provider_slug = ?`,
+      )
+      .run(userId, providerSlug);
+  }
+
   return result.changes > 0;
 }
 

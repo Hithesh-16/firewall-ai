@@ -282,6 +282,8 @@ function useLiveOutputTokens(
   const baselineRef = useRef<number | null>(null);
   const [tick, setTick] = useState(0);
 
+  const safeCumulative = isNaN(cumulativeOutput) ? 0 : cumulativeOutput;
+
   useEffect(() => {
     if (!isStreaming) {
       baselineRef.current = null;
@@ -289,15 +291,15 @@ function useLiveOutputTokens(
       return;
     }
     if (baselineRef.current === null) {
-      baselineRef.current = cumulativeOutput;
+      baselineRef.current = safeCumulative;
     }
     const id = window.setInterval(() => setTick((t) => t + 1), 120);
     return () => window.clearInterval(id);
-  }, [isStreaming, cumulativeOutput]);
+  }, [isStreaming, safeCumulative]);
 
   if (!isStreaming) return 0;
-  const base = baselineRef.current ?? cumulativeOutput;
-  const real = Math.max(0, cumulativeOutput - base);
+  const base = baselineRef.current ?? safeCumulative;
+  const real = Math.max(0, safeCumulative - base);
   // Visual easing — if the backend hasn't flushed a counter yet, animate
   // a gentle ramp so the bar doesn't freeze at 0 for multi-second gaps.
   // Capped so it can't overshoot plausibility.
@@ -318,8 +320,10 @@ function toneTextClass(tone: BarTone): string {
   }
 }
 
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
+function fmt(n: any): string {
+  const val = Number(n);
+  if (isNaN(val)) return "0";
+  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `${(val / 1_000).toFixed(1)}K`;
+  return val.toLocaleString();
 }

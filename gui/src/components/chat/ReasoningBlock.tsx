@@ -45,7 +45,7 @@ export function ReasoningBlock({
       className={`mb-2 overflow-hidden rounded-md border transition-colors ${
         open
           ? "border-af-accent/30 bg-af-accent/5"
-          : "border-border bg-secondary-background"
+          : "border-border bg-surface-inset"
       }`}
     >
       <button

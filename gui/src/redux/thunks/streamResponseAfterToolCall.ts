@@ -80,7 +80,7 @@ export const streamResponseAfterToolCall = createAsyncThunk<
             state.config.config.ui?.continueAfterToolRejection,
           )
         ) {
-          unwrapResult(await dispatch(streamNormalInput({ depth: depth + 1 })));
+          dispatch(streamNormalInput({ depth: depth + 1 }));
         }
       }),
     );
